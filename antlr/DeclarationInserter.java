@@ -1,3 +1,4 @@
+import java.io.FileNotFoundException;
 import java.util.LinkedList;
 
 import org.antlr.v4.runtime.TokenStream;
@@ -33,36 +34,38 @@ public class DeclarationInserter extends CBaseListener {
 		}
 		numEntries ++;
 		
-		// State maintainance code at the beginning 
-		String initCode = 	"\tint I = 0;          // batch index\n" + 
-							"\tvoid *batch_rips[BATCH_SIZE];       // goto targets\n" +
-							"\tint iMask = 0;      // No packet is done yet";
-
 		// Declare all local variables
 		String lvDeclarations = "";
 		for(VariableDecl vdecl : localVariables) {
 			lvDeclarations = lvDeclarations + "\t" + vdecl.arrayDecl() + "\n";
 		}
 		
+		// State maintainance code at the beginning 
+		String initCode = "";
+		try {
+			initCode = debug.getCode("/Users/akalia/Documents/workspace/fastpp/src/startCode");
+		} catch (FileNotFoundException e) {
+			System.err.println("ERROR: startCode file not found");
+			System.exit(-1);
+		}
+		
 		// State maintainance code at the end
-		String endCode = 	"end:\n" +
-							"\tbatch_rips[I] = &&end;\n" +
-							"\tiMask = SET(iMask, I);\n" + 
-							"\tif(iMask == (1 << BATCH_SIZE) - 1) {\n"+
-							"\t\treturn;\n" +
-	    					"\t}\n"+   
-	    					"\tI = (I + 1) & BATCH_SIZE_;\n"+
-	    					"\tgoto *batch_rips[I];\n";
+		String endCode = "";
+		try {
+			endCode = debug.getCode("/Users/akalia/Documents/workspace/fastpp/src/endCode");
+		} catch (FileNotFoundException e) {
+			System.err.println("ERROR: endCode file not found");
+			System.exit(-1);
+		}
 		
 		debug.println("Inserting local var declarations from function definition: `" + 
 				debug.btrText(ctx.declarator(), tokens));
 		CParser.CompoundStatementContext csx = ctx.compoundStatement();
 		
 		// The first token of the compoundStatement is '{'
-		rewriter.insertAfter(csx.start, "\n" + initCode + "\n\n" + lvDeclarations);
+		rewriter.insertAfter(csx.start, "\n" + lvDeclarations + "\n" + initCode + "\n");
 		
 		// The last statement of the compoundStatement is '}'
 		rewriter.insertBefore(csx.stop, "\n" + endCode + "\n");
 	}
-	
 }

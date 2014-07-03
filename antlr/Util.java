@@ -1,3 +1,7 @@
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.Scanner;
+
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.TokenStream;
 
@@ -29,6 +33,18 @@ class Debug {
 		}
 		
 		return ret;
+	}
+	
+	// Get a String representation of the input code
+	public String getCode(String gotoFilePath) throws FileNotFoundException {
+		Scanner c = new Scanner(new File(gotoFilePath));
+		String res = "";
+		while(c.hasNext()) {
+			res += c.nextLine();
+			res += "\n";
+		}
+		c.close();
+		return res;
 	}
 }
 

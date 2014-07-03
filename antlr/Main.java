@@ -17,6 +17,8 @@ public class Main {
 	public static void main(String args[]) throws FileNotFoundException {
 		String code = getCode(gotoFilePath);
 	
+		checkLocalVariableReuse(code);
+		
 		LinkedList<VariableDecl> localVars = extractLocalVariables(code);
 		code = trimDeclarations(code);
 		code = cleanup(code);
@@ -36,9 +38,28 @@ public class Main {
 		out.close();
 	}
 	
+	private static void checkLocalVariableReuse(String code) {
+		System.out.println("\n\nChecking if input code uses my variable names");
+
+		CharStream charStream = new ANTLRInputStream(code);		
+		CLexer lexer = new CLexer(charStream);
+		CommonTokenStream tokens = new CommonTokenStream(lexer);
+		CParser parser = new CParser(tokens);
+		
+		// Parse and get the root of the parse tree
+		ParserRuleContext tree = parser.compilationUnit();
+
+		ReuseChecker rChecker = new ReuseChecker(parser);
+		
+		ParseTreeWalker walker = new ParseTreeWalker();
+		walker.walk(rChecker, tree);
+		
+		System.out.println("Check passed");
+	}
+
 	private static String deleteForeach(String code,
 			LinkedList<VariableDecl> localVars) {
-		System.out.println("\n\n Deleting foreach");
+		System.out.println("\n\n Deleting foreach loop");
 
 		CharStream charStream = new ANTLRInputStream(code);		
 		CLexer lexer = new CLexer(charStream);
