@@ -59,7 +59,7 @@ public class Main {
 
 	private static String deleteForeach(String code,
 			LinkedList<VariableDecl> localVars) {
-		System.out.println("\n\n Deleting foreach loop");
+		System.out.println("\n\nDeleting foreach loop");
 
 		CharStream charStream = new ANTLRInputStream(code);		
 		CLexer lexer = new CLexer(charStream);
