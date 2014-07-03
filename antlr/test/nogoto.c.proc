@@ -19,15 +19,14 @@ int process_pkts_in_batch(int *pkt_lo)
 
 label_0:
 
-
 	// Like a foreach loop
 	
-		
-		
-		jumper[I] = pkt_lo[batch_index];
+		jumper[I] = pkt_lo[I];
 			
 		for(i[I] = 0; i[I] < DEPTH; i[I]++) {
-			PREFETCH(cache[jumper[I]]);
+			PSS(cache[jumper[I]], 0, 0);
+label_1:
+
 			arr[I] = cache[jumper[I]].slot_arr;
 			best_j[I] = 0;
 
@@ -48,7 +47,6 @@ label_0:
 
 		sum += jumper[I];
 	
-
 end:
     batch_rips[I] = &&end;
     iMask = SET(iMask, I); 

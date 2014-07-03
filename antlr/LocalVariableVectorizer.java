@@ -26,6 +26,13 @@ public class LocalVariableVectorizer extends CBaseListener {
 	@Override
 	public void enterPrimaryExpression(CParser.PrimaryExpressionContext ctx) {
 		String primaryExpression = debug.btrText(ctx, tokens);
+		
+		// Replace all usages of batch_index by I
+		if(primaryExpression.contentEquals("batch_index")) {
+			rewriter.replace(ctx.start, "I");
+			return;
+		}
+		
 		// debug.println("Primary Expression: " + primaryExpression);
 		VariableDecl vd = new VariableDecl("", primaryExpression, "");
 		if(localVariables.contains(vd)) {

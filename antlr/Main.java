@@ -13,8 +13,11 @@ import org.antlr.v4.runtime.tree.ParseTreeWalker;
 
 public class Main {
 	static String gotoFilePath = "/Users/akalia/Documents/workspace/fastpp/test/nogoto.c";
+	static Debug util;
 	
 	public static void main(String args[]) throws FileNotFoundException {
+		util = new Debug();
+		
 		String code = getCode(gotoFilePath);
 		
 		checkLocalVariableReuse(code);
@@ -30,6 +33,7 @@ public class Main {
 		code = deleteForeach(code, localVars);
 		
 		code = insertPrefetches(code);
+		code = cleanup(code);
 		
 		System.out.flush();
 		System.err.println("\nFinal code:");
@@ -165,8 +169,8 @@ public class Main {
 		ParseTreeWalker walker = new ParseTreeWalker();
 		walker.walk(cleaner, tree);
 		
-		return rewriter.getText();
-
+		String cleanCode = rewriter.getText();
+		return util.removeDoubleNewlines(cleanCode);
 	}
 
 	private static String trimDeclarations(String code) {

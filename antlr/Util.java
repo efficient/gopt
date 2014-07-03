@@ -46,6 +46,30 @@ class Debug {
 		c.close();
 		return res;
 	}
+	
+	public String removeDoubleNewlines(String code) {
+		Scanner c = new Scanner(code);
+		String cleanerCode = "";
+		
+		boolean lastBlank = false;
+		while(c.hasNext()) {
+			String nowAdding = c.nextLine();
+			if(nowAdding.matches("[' ', '\t']*")) {
+				if(lastBlank) {
+					continue;
+				} else {
+					cleanerCode = cleanerCode + nowAdding + "\n";
+					lastBlank = true;
+				}
+			} else {
+				cleanerCode = cleanerCode + nowAdding + "\n";
+				lastBlank = false;
+			}
+		}
+		
+		c.close();
+		return cleanerCode;
+	}
 }
 
 class VariableDecl {

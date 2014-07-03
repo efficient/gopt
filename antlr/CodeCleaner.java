@@ -30,16 +30,18 @@ public class CodeCleaner extends CBaseListener {
 		debug.println("Running cleanup from function definition: `" + 
 				debug.btrText(ctx.declarator(), tokens));
 		int numTokens = tokens.size();
-		
-		// Remove orphaned semicolons
+
+		// Remove orphaned semicolons: the closest non-whitespace
+		// token before this semicolon is a newline
 		for(int i = numTokens - 1; i >= 0; i --) {
-			if(tokens.get(i).getText().contentEquals(";")) {
+			String tStr = tokens.get(i).getText();
+			if(tStr.contentEquals(";")) {
 				boolean remove = true;
 				
 				for(int j = i - 1; j >= 0; j --) {
 					String t = tokens.get(j).getText();
 				
-					if(t.contains(" ") || t.contains("\t")) {
+					if(t.matches("[' ', '\t']+")) {
 						continue;
 					} else if(t.contentEquals("\n")) {
 						break;
