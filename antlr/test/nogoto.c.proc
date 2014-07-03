@@ -1,0 +1,53 @@
+// Process BATCH_SIZE pkts starting from lo
+int process_pkts_in_batch(int *pkt_lo)
+{
+	int I = 0;          // batch index
+	void *batch_rips[BATCH_SIZE];       // goto targets
+	int iMask = 0;      // No packet is done yet
+
+	int i[BATCH_SIZE];
+	int jumper[BATCH_SIZE];
+	int *arr[BATCH_SIZE];
+	int best_j[BATCH_SIZE];
+	int j[BATCH_SIZE];
+	int max_diff[BATCH_SIZE];
+
+	// Like a foreach loop
+	
+		
+		
+		jumper[I] = pkt_lo[batch_index];
+			
+		for(i[I] = 0; i[I] < DEPTH; i[I]++) {
+			arr[I] = cache[jumper[I]].slot_arr;
+			best_j[I] = 0;
+
+			max_diff[I] = ABS(arr[I][0] - jumper[I]) % 8;
+
+			for(j[I] = 1; j[I] < SLOTS_PER_BKT; j[I] ++) {
+				if(ABS(arr[I][j[I]] - jumper[I]) % 8 > max_diff[I]) {
+					max_diff[I] = ABS(arr[I][j[I]] - jumper[I]) % 8;
+					best_j[I] = j[I];
+				}
+			}
+			
+			jumper[I] = arr[I][best_j[I]];
+			if(jumper[I] % 16 == 0) {		// GCC will optimize this
+				break;
+			}
+		}
+
+		sum += jumper[I];
+	
+
+end:
+	batch_rips[I] = &&end;
+	iMask = SET(iMask, I);
+	if(iMask == (1 << BATCH_SIZE) - 1) {
+		return;
+	}
+	I = (I + 1) & BATCH_SIZE_;
+	goto *batch_rips[I];
+
+}
+
