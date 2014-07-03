@@ -27,6 +27,7 @@ label_0:
 		jumper[I] = pkt_lo[batch_index];
 			
 		for(i[I] = 0; i[I] < DEPTH; i[I]++) {
+			PREFETCH(cache[jumper[I]]);
 			arr[I] = cache[jumper[I]].slot_arr;
 			best_j[I] = 0;
 

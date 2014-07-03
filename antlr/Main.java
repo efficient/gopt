@@ -16,7 +16,7 @@ public class Main {
 	
 	public static void main(String args[]) throws FileNotFoundException {
 		String code = getCode(gotoFilePath);
-	
+		
 		checkLocalVariableReuse(code);
 		
 		LinkedList<VariableDecl> localVars = extractLocalVariables(code);
@@ -25,8 +25,11 @@ public class Main {
 		code = vectorizeLocalVariables(code, localVars);
 	
 		// This should be done after vectorizing local variable usage
+		// otherwise, the inserted declarations get vectorized
 		code = insertLocalVariableDeclarations(code, localVars);
 		code = deleteForeach(code, localVars);
+		
+		code = insertPrefetches(code);
 		
 		System.out.flush();
 		System.err.println("\nFinal code:");
@@ -38,6 +41,26 @@ public class Main {
 		out.close();
 	}
 	
+	private static String insertPrefetches(String code) {
+		System.out.println("\n\nInserting prefetches");
+
+		CharStream charStream = new ANTLRInputStream(code);		
+		CLexer lexer = new CLexer(charStream);
+		CommonTokenStream tokens = new CommonTokenStream(lexer);
+		TokenStreamRewriter rewriter = new TokenStreamRewriter(tokens);
+		CParser parser = new CParser(tokens);
+		
+		// Parse and get the root of the parse tree
+		ParserRuleContext tree = parser.compilationUnit();
+
+		PrefetchInserter pfInserter = new PrefetchInserter(parser, rewriter);
+		
+		ParseTreeWalker walker = new ParseTreeWalker();
+		walker.walk(pfInserter, tree);
+		
+		return rewriter.getText();
+	}
+
 	private static void checkLocalVariableReuse(String code) {
 		System.out.println("\n\nChecking if input code uses my variable names");
 

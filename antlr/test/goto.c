@@ -7,11 +7,11 @@ int process_pkts_in_batch(int *pkt_lo)
 	int j[BATCH_SIZE];
 	int best_j[BATCH_SIZE];
 	int max_diff[BATCH_SIZE];
-
+	
 	int I = 0;			// batch index
 	void *batch_rips[BATCH_SIZE];		// goto targets
 	int iMask = 0;		// No packet is done yet
-
+	
 	int temp_index;
 	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
 		batch_rips[temp_index] = &&label_0;
