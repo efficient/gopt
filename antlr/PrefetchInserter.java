@@ -42,8 +42,8 @@ public class PrefetchInserter extends CBaseListener {
 			}
 			
 			debug.println("Found PREFETCH. Inserting PSS and label.");
-			rewriter.replace(start, "PSS");
-			rewriter.insertBefore(stop, ", 0, 0");
+			rewriter.replace(start, "FPP_PSS");
+			rewriter.insertBefore(stop, ", label_" + nextLabel);
 			
 			// Find the ";" after the PREFETCH statement. Valid AST ensures that
 			// there is one

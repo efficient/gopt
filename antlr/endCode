@@ -1,6 +1,6 @@
 end:
     batch_rips[I] = &&end;
-    iMask = SET(iMask, I); 
+    iMask = FPP_SET(iMask, I); 
     if(iMask == (1 << BATCH_SIZE) - 1) {
         return;
     }
