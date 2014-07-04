@@ -35,8 +35,8 @@ public class Main {
 		code = insertPrefetches(code);
 		code = cleanup(code);
 		
-		// This needs to be the last pass. Resultant code cannot be parsed
-		// because it contains an #include
+		// This needs to be the last pass. Resultant code cannot
+		// be parsed
 		code = insertIncludeFpp(code);
 		
 		System.out.flush();

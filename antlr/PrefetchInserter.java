@@ -1,9 +1,5 @@
-import java.util.List;
-
 import org.antlr.v4.runtime.TokenStream;
 import org.antlr.v4.runtime.TokenStreamRewriter;
-import org.antlr.v4.runtime.tree.ParseTree;
-
 
 public class PrefetchInserter extends CBaseListener {
 	CParser parser;
