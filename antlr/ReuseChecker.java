@@ -19,6 +19,8 @@ public class ReuseChecker extends CBaseListener {
 		myVars.add("batch_rips");
 		myVars.add("iMask");
 		myVars.add("temp_index");
+		myVars.add("FPP_PSS");
+		myVars.add("FPP_SET");
 	}
 
 	// primaryExpression is a variable, a constant, or an expression in braces.

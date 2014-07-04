@@ -1,4 +1,6 @@
 // Process BATCH_SIZE pkts starting from lo
+nclude "fpp.h"
+#include "fpp.h"
 int process_pkts_in_batch(int *pkt_lo)
 {
 	int i[BATCH_SIZE];
@@ -24,7 +26,7 @@ label_0:
 		jumper[I] = pkt_lo[I];
 			
 		for(i[I] = 0; i[I] < DEPTH; i[I]++) {
-			PSS(cache[jumper[I]], 0, 0);
+			FPP_PSS(cache[jumper[I]], label_1);
 label_1:
 
 			arr[I] = cache[jumper[I]].slot_arr;
@@ -49,7 +51,7 @@ label_1:
 	
 end:
     batch_rips[I] = &&end;
-    iMask = SET(iMask, I); 
+    iMask = FPP_SET(iMask, I); 
     if(iMask == (1 << BATCH_SIZE) - 1) {
         return;
     }
