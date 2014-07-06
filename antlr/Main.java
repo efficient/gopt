@@ -12,7 +12,7 @@ import org.antlr.v4.runtime.TokenStreamRewriter;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 
 public class Main {
-	static String gotoFilePath = "/Users/akalia/Documents/workspace/fastpp/test/nogoto.c";
+	static String gotoFilePath = "/Users/akalia/Documents/workspace/fastpp/test/simple/nogoto.c";
 	static Debug util;
 	
 	public static void main(String args[]) throws FileNotFoundException {
