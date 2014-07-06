@@ -1,1 +1,1 @@
-#define COMPUTE 4
+#define COMPUTE 3

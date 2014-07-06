@@ -25,7 +25,6 @@ int *pkts;
 #define BATCH_SIZE 8
 #define BATCH_SIZE_ 7
 
-
 // Some compute function
 // Increment 'a' by at most COMPUTE * 4: the return value is still random
 int hash(int a)
