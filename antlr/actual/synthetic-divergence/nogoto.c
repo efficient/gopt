@@ -5,6 +5,7 @@
 #include<sys/ipc.h>
 #include<sys/shm.h>
 
+#include "fpp.h"
 #include "param.h"
 
 #define foreach(i, n) for(i = 0; i < n; i ++)
@@ -36,6 +37,7 @@ int process_pkts_in_batch(int *pkt_lo)
 		int jumper = pkt_lo[batch_index];
 			
 		for(i = 0; i < DEPTH; i++) {
+			PREFETCH(&cache[jumper]);
 			int *arr = cache[jumper].slot_arr;
 			int j, best_j = 0;
 
