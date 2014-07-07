@@ -55,6 +55,7 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 		if(hash_index[S1[i]].key == K[i]) {
 			sum += hash_index[S1[i]].value;
 			succ_1 ++;
+			done_mask = FPP_SET(done_mask, i);
 		} else{
 			S2[i] = cityhash(K[i] + 1) % HASH_INDEX_N;
 			__builtin_prefetch(&hash_index[S2[i]], 0, 0);
