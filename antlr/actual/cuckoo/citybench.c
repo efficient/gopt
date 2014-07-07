@@ -6,12 +6,6 @@
 #include "city.h"
 #include "param.h"
 
-// City hash of an unsigned number
-uint32_t cityhash(uint32_t u)
-{
-	return CityHash32((char *) &u, 4);
-}
-
 int main(int argc, char **argv)
 {
 	printf("Starting computing hashes\n");

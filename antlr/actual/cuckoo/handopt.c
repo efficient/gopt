@@ -12,7 +12,7 @@
 #define foreach(i, n) for(i = 0; i < n; i ++)
 
 // Compute an expensive hash using multiple applications of cityhash
-uint32_t cityhash(uint32_t u)
+uint32_t hash(uint32_t u)
 {
 	uint32_t ret = u, i;
 	for(i = 0; i < DEPTH; i ++) {
@@ -50,7 +50,7 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 	// Stage 1: issue prefetches for 1st bucket
 	for(i = 0; i < BATCH_SIZE; i ++) {
 		K[i] = pkt_lo[i];
-		S1[i] = cityhash(K[i]) % HASH_INDEX_N;
+		S1[i] = hash(K[i]) % HASH_INDEX_N;
 		__builtin_prefetch(&hash_index[S1[i]], 0, 0);
 	}
 
@@ -61,7 +61,7 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 			succ_1 ++;
 			done_mask = FPP_SET(done_mask, i);
 		} else{
-			S2[i] = cityhash(K[i] + 1) % HASH_INDEX_N;
+			S2[i] = hash(K[i] + 1) % HASH_INDEX_N;
 			__builtin_prefetch(&hash_index[S2[i]], 0, 0);
 		}
 	}
@@ -106,9 +106,9 @@ int main(int argc, char **argv)
 		
 		// The 2nd hash function for key K is CITYHASH(K + 1)
 		if(rand() % 2 == 0) {
-			hash_bucket_i = cityhash(K) % HASH_INDEX_N;
+			hash_bucket_i = hash(K) % HASH_INDEX_N;
 		} else {
-			hash_bucket_i = cityhash(K + 1) % HASH_INDEX_N;
+			hash_bucket_i = hash(K + 1) % HASH_INDEX_N;
 		}
 
 		// The value for key K is K + i
