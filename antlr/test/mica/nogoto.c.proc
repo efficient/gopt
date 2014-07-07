@@ -1,0 +1,69 @@
+#include "fpp.h"
+void process_pkts_in_batch(LL *pkt_lo)
+{
+	LL key_hash[BATCH_SIZE];
+	int key_tag[BATCH_SIZE];
+	int ht_bucket[BATCH_SIZE];
+	LL *slots[BATCH_SIZE];
+	int found[BATCH_SIZE];
+	int i[BATCH_SIZE];
+	int log_i[BATCH_SIZE];
+
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&label_0;
+	}
+
+label_0:
+
+        key_hash[I] = hash(pkt_lo[I]);
+        
+        key_tag[I] = HASH_TO_TAG(key_hash[I]);
+        ht_bucket[I] = HASH_TO_BUCKET(key_hash[I]);
+        
+        FPP_PSS(&ht_index[ht_bucket[I]], label_1);
+label_1:
+
+        slots[I] = ht_index[ht_bucket[I]].slots;
+        
+        found[I] = 0;
+        
+        for(i[I] = 0; i[I] < SLOTS_PER_BKT; i[I] ++) {
+            
+            // Tag matched
+            if(SLOT_TO_TAG(slots[I][i[I]]) == key_tag[I]) {
+                log_i[I] = SLOT_TO_LOG_I(slots[I][i[I]]);
+                FPP_PSS(&ht_log[log_i[I]], label_2);
+label_2:
+
+                // Log entry also matches
+                if(ht_log[log_i[I]].key == pkt_lo[I]) {
+                    found[I] = 1;
+                    succ ++;
+                    sum += (int) ht_log[log_i[I]].value;
+                    break;
+                } else {
+                    fail_1 ++;
+                }
+            }
+        }
+        
+        if(found[I] == 0) {
+            fail_2 ++;
+        }
+    
+end:
+    batch_rips[I] = &&end;
+    iMask = FPP_SET(iMask, I); 
+    if(iMask == (1 << BATCH_SIZE) - 1) {
+        return;
+    }
+    I = (I + 1) & BATCH_SIZE_;
+    goto *batch_rips[I];
+
+}
+
