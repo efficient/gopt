@@ -9,10 +9,17 @@
 #include "param.h"
 #include "city.h"
 
-// City hash of an unsigned number
-#define CITYHASH(u) (CityHash32((char *) &u, 4))
-
 #define foreach(i, n) for(i = 0; i < n; i ++)
+
+// Compute an expensive hash using multiple applications of cityhash
+uint32_t hash(uint32_t u)
+{
+	uint32_t ret = u, i;
+	for(i = 0; i < DEPTH; i ++) {
+		ret = CityHash32((char *) &ret, 4);
+	}
+	return ret;
+}
 
 struct cuckoo_slot
 {
@@ -40,7 +47,7 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 
 		// Try the first slot
 		uint32_t K = pkt_lo[batch_index];
-		uint32_t S1 = CITYHASH(K) % HASH_INDEX_N;
+		uint32_t S1 = hash(K) % HASH_INDEX_N;
 		PREFETCH(&hash_index[S1]);
 
 		if(hash_index[S1].key == K) {
@@ -48,8 +55,7 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 			succ_1 ++;
 		} else {
 			// Try the second slot
-			uint32_t newK = K + 1;
-			uint32_t S2 = CITYHASH(newK) % HASH_INDEX_N;
+			uint32_t S2 = hash(K + 1) % HASH_INDEX_N;
 			PREFETCH(&hash_index[S2]);
 			if(hash_index[S2].key == K) {
 				sum += hash_index[S2].value;
@@ -88,10 +94,9 @@ int main(int argc, char **argv)
 		
 		// The 2nd hash function for key K is CITYHASH(K + 1)
 		if(rand() % 2 == 0) {
-			hash_bucket_i = CITYHASH(K) % HASH_INDEX_N;
+			hash_bucket_i = hash(K) % HASH_INDEX_N;
 		} else {
-			uint32_t newK = K + 1;
-			hash_bucket_i = CITYHASH(newK) % HASH_INDEX_N;
+			hash_bucket_i = hash(K + 1) % HASH_INDEX_N;
 		}
 
 		// The value for key K is K + i

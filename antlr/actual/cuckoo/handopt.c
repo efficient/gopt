@@ -41,56 +41,42 @@ int fail = 0;
 // batch_index must be declared outside process_pkts_in_batch
 int batch_index = 0;
 
-#include "fpp.h"
-void process_pkts_in_batch(uint32_t *pkt_lo)
+void process_pkts_in_batch(uint32_t *pkt_lo) 
 {
-	uint32_t K[BATCH_SIZE];
-	uint32_t S1[BATCH_SIZE];
-	uint32_t S2[BATCH_SIZE];
+	int i;
+	uint32_t K[BATCH_SIZE], S1[BATCH_SIZE], S2[BATCH_SIZE];
+	uint32_t done_mask = 0;
 
-	int I = 0;			// batch index
-	void *batch_rips[BATCH_SIZE];		// goto targets
-	int iMask = 0;		// No packet is done yet
-
-	int temp_index;
-	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&label_0;
+	// Stage 1: issue prefetches for 1st bucket
+	for(i = 0; i < BATCH_SIZE; i ++) {
+		K[i] = pkt_lo[i];
+		S1[i] = hash(K[i]) % HASH_INDEX_N;
+		__builtin_prefetch(&hash_index[S1[i]], 0, 0);
 	}
 
-label_0:
+	// Stage 2: access 1st bucket, issue 2nd prefetch
+	for(i = 0; i < BATCH_SIZE; i ++) {
+		if(hash_index[S1[i]].key == K[i]) {
+			sum += hash_index[S1[i]].value;
+			succ_1 ++;
+			done_mask = FPP_SET(done_mask, i);
+		} else{
+			S2[i] = hash(K[i] + 1) % HASH_INDEX_N;
+			__builtin_prefetch(&hash_index[S2[i]], 0, 0);
+		}
+	}
 
-        // Try the first slot
-        K[I] = pkt_lo[I];
-        S1[I] = hash(K[I]) % HASH_INDEX_N;
-        FPP_PSS(&hash_index[S1[I]], label_1);
-label_1:
-
-        if(hash_index[S1[I]].key == K[I]) {
-            sum += hash_index[S1[I]].value;
-            succ_1 ++;
-        } else {
-            // Try the second slot
-            S2[I] = hash(K[I] + 1) % HASH_INDEX_N;
-            FPP_PSS(&hash_index[S2[I]], label_2);
-label_2:
-
-            if(hash_index[S2[I]].key == K[I]) {
-                sum += hash_index[S2[I]].value;
-                succ_2 ++;
-            } else {
-                fail ++;
-            }
-        }
-       
-end:
-    batch_rips[I] = &&end;
-    iMask = FPP_SET(iMask, I); 
-    if(iMask == (1 << BATCH_SIZE) - 1) {
-        return;
-    }
-    I = (I + 1) & BATCH_SIZE_;
-    goto *batch_rips[I];
-
+	// Stage 3: access 2nd bucket
+	for(i = 0; i < BATCH_SIZE; i ++) {
+		if(!FPP_ISSET(done_mask, i)) {
+			if(hash_index[S2[i]].key == K[i]) {
+				sum += hash_index[S2[i]].value;
+				succ_2 ++;
+			} else {
+				fail ++;
+			}
+		}
+	}
 }
 
 int main(int argc, char **argv)
