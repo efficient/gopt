@@ -9,10 +9,13 @@
 #include "param.h"
 #include "city.h"
 
-// City hash of an unsigned number
-#define CITYHASH(u) (CityHash32((char *) &u, 4))
-
 #define foreach(i, n) for(i = 0; i < n; i ++)
+
+// City hash of an unsigned number
+uint32_t cityhash(uint32_t u)
+{
+	return CityHash32((char *) &u, 4);
+}
 
 struct cuckoo_slot
 {
@@ -35,11 +38,10 @@ int fail = 0;
 int batch_index = 0;
 
 #include "fpp.h"
-void process_pkts_in_batch(uint32_t *pkt_lo) 
+void process_pkts_in_batch(uint32_t *pkt_lo)
 {
 	uint32_t K[BATCH_SIZE];
 	uint32_t S1[BATCH_SIZE];
-	uint32_t newK[BATCH_SIZE];
 	uint32_t S2[BATCH_SIZE];
 
 	int I = 0;			// batch index
@@ -53,30 +55,29 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 
 label_0:
 
-		// Try the first slot
-		K[I] = pkt_lo[I];
-		S1[I] = CITYHASH(K[I]) % HASH_INDEX_N;
-		FPP_PSS(&hash_index[S1[I]], label_1);
+        // Try the first slot
+        K[I] = pkt_lo[I];
+        S1[I] = cityhash(K[I]) % HASH_INDEX_N;
+        FPP_PSS(&hash_index[S1[I]], label_1);
 label_1:
 
-		if(hash_index[S1[I]].key == K[I]) {
-			sum += hash_index[S1[I]].value;
-			succ_1 ++;
-		} else {
-			// Try the second slot
-			newK[I] = K[I] + 1;
-			S2[I] = CITYHASH(newK[I]) % HASH_INDEX_N;
-			FPP_PSS(&hash_index[S2[I]], label_2);
+        if(hash_index[S1[I]].key == K[I]) {
+            sum += hash_index[S1[I]].value;
+            succ_1 ++;
+        } else {
+            // Try the second slot
+            S2[I] = cityhash(K[I] + 1) % HASH_INDEX_N;
+            FPP_PSS(&hash_index[S2[I]], label_2);
 label_2:
 
-			if(hash_index[S2[I]].key == K[I]) {
-				sum += hash_index[S2[I]].value;
-				succ_2 ++;
-			} else {
-				fail ++;
-			}
-		}
-	
+            if(hash_index[S2[I]].key == K[I]) {
+                sum += hash_index[S2[I]].value;
+                succ_2 ++;
+            } else {
+                fail ++;
+            }
+        }
+       
 end:
     batch_rips[I] = &&end;
     iMask = FPP_SET(iMask, I); 
@@ -115,10 +116,9 @@ int main(int argc, char **argv)
 		
 		// The 2nd hash function for key K is CITYHASH(K + 1)
 		if(rand() % 2 == 0) {
-			hash_bucket_i = CITYHASH(K) % HASH_INDEX_N;
+			hash_bucket_i = cityhash(K) % HASH_INDEX_N;
 		} else {
-			uint32_t newK = K + 1;
-			hash_bucket_i = CITYHASH(newK) % HASH_INDEX_N;
+			hash_bucket_i = cityhash(K + 1) % HASH_INDEX_N;
 		}
 
 		// The value for key K is K + i
