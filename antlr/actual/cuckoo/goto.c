@@ -11,10 +11,14 @@
 
 #define foreach(i, n) for(i = 0; i < n; i ++)
 
-// City hash of an unsigned number
+// Compute an expensive hash using multiple applications of cityhash
 uint32_t cityhash(uint32_t u)
 {
-	return CityHash32((char *) &u, 4);
+	uint32_t ret = u, i;
+	for(i = 0; i < DEPTH; i ++) {
+		ret = CityHash32((char *) &ret, 4);
+	}
+	return ret;
 }
 
 struct cuckoo_slot
