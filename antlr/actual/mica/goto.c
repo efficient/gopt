@@ -10,37 +10,66 @@
 #include "city.h"
 
 // City hash of an unsigned number
-#define CITYHASH(u) (CityHash32((char *) &u, 4))
+#define LL long long
 
 #define foreach(i, n) for(i = 0; i < n; i ++)
 
-struct cuckoo_slot
+// Compute an expensive hash using multiple applications of cityhash
+LL hash(LL key)
 {
-	uint32_t key;
-	uint32_t value;
+	uint32_t lo = (LL) CityHash32((char *) &key, 4);
+	uint32_t hi = (LL) CityHash32((char *) &lo, 4);
+
+	LL hi_LL = (LL) hi;
+	return ((hi_LL << 32) | lo);
+}
+
+struct KV
+{
+	LL key;
+	LL value;
 };
-struct cuckoo_slot *hash_index;
 
+struct KV *ht_log;
 
-// Each packet contains a random integer. The memory address accessed
-// by the packet is determined by an expensive hash of the integer.
-uint32_t *pkts;
+struct IDX_BKT
+{
+	LL slots[SLOTS_PER_BKT];
+};
+struct IDX_BKT *ht_index;
+
+#define INVALID_KV_I ((LL) (HT_LOG_CAP + 1))
+
+// The index into the KV log is stored modulo HT_LOG_CAP
+#define SLOT_TO_LOG_I(s) (s >> 16)
+#define SLOT_TO_TAG(s) ((int) (s & 0xffff))
+
+#define HASH_TO_TAG(h) ((int) (h & 0xffff))
+#define HASH_TO_BUCKET(h) ((int) ((h >> 16) & HT_INDEX_N_))
+
+LL randLL();
+
+// Each packet contains a random 64-bit number.
+LL *pkts;
 
 int sum = 0;
-int succ_1 = 0;
-int succ_2 = 0;
-int fail = 0;
+int succ = 0;
+int fail_1 = 0;			// Tag matches but log entry doesn't
+int fail_2 = 0;			// Pkt not found
 
 // batch_index must be declared outside process_pkts_in_batch
 int batch_index = 0;
 
 #include "fpp.h"
-void process_pkts_in_batch(uint32_t *pkt_lo) 
+void process_pkts_in_batch(LL *pkt_lo)
 {
-	uint32_t K[BATCH_SIZE];
-	uint32_t S1[BATCH_SIZE];
-	uint32_t newK[BATCH_SIZE];
-	uint32_t S2[BATCH_SIZE];
+	LL key_hash[BATCH_SIZE];
+	int key_tag[BATCH_SIZE];
+	int ht_bucket[BATCH_SIZE];
+	LL *slots[BATCH_SIZE];
+	int found[BATCH_SIZE];
+	int i[BATCH_SIZE];
+	int log_i[BATCH_SIZE];
 
 	int I = 0;			// batch index
 	void *batch_rips[BATCH_SIZE];		// goto targets
@@ -53,30 +82,42 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 
 label_0:
 
-		// Try the first slot
-		K[I] = pkt_lo[I];
-		S1[I] = CITYHASH(K[I]) % HASH_INDEX_N;
-		FPP_PSS(&hash_index[S1[I]], label_1);
+        key_hash[I] = hash(pkt_lo[I]);
+        
+        key_tag[I] = HASH_TO_TAG(key_hash[I]);
+        ht_bucket[I] = HASH_TO_BUCKET(key_hash[I]);
+        
+        FPP_PSS(&ht_index[ht_bucket[I]], label_1);
 label_1:
 
-		if(hash_index[S1[I]].key == K[I]) {
-			sum += hash_index[S1[I]].value;
-			succ_1 ++;
-		} else {
-			// Try the second slot
-			newK[I] = K[I] + 1;
-			S2[I] = CITYHASH(newK[I]) % HASH_INDEX_N;
-			FPP_PSS(&hash_index[S2[I]], label_2);
+        slots[I] = ht_index[ht_bucket[I]].slots;
+        
+        found[I] = 0;
+        
+        for(i[I] = 0; i[I] < SLOTS_PER_BKT; i[I] ++) {
+            
+            // Tag matched
+            if(SLOT_TO_TAG(slots[I][i[I]]) == key_tag[I]) {
+                log_i[I] = SLOT_TO_LOG_I(slots[I][i[I]]);
+                FPP_PSS(&ht_log[log_i[I]], label_2);
 label_2:
 
-			if(hash_index[S2[I]].key == K[I]) {
-				sum += hash_index[S2[I]].value;
-				succ_2 ++;
-			} else {
-				fail ++;
-			}
-		}
-	
+                // Log entry also matches
+                if(ht_log[log_i[I]].key == pkt_lo[I]) {
+                    found[I] = 1;
+                    succ ++;
+                    sum += (int) ht_log[log_i[I]].value;
+                    break;
+                } else {
+                    fail_1 ++;
+                }
+            }
+        }
+        
+        if(found[I] == 0) {
+            fail_2 ++;
+        }
+    
 end:
     batch_rips[I] = &&end;
     iMask = FPP_SET(iMask, I); 
@@ -88,42 +129,78 @@ end:
 
 }
 
+
+
 int main(int argc, char **argv)
 {
 	int i, j;
+	long long log_i = 0;		// KV-level index of head of log
 
-	// Allocate a large memory area
-	fprintf(stderr, "Size of hash index = %lu\n", HASH_INDEX_N * sizeof(struct cuckoo_slot));
+	// Hugepages for hash-index
+	fprintf(stderr, "Size of hash index = %lu\n", HT_INDEX_N * sizeof(struct IDX_BKT));
 
-	int sid = shmget(HASH_INDEX_SID, HASH_INDEX_N * sizeof(struct cuckoo_slot), 
+	int sid = shmget(HT_INDEX_SID, HT_INDEX_N * sizeof(struct IDX_BKT), 
 		IPC_CREAT | 0666 | SHM_HUGETLB);
 	if(sid < 0) {
-		fprintf(stderr, "Could not create cuckoo hash index\n");
+		fprintf(stderr, "Could not create MICA-style hash index\n");
 		exit(-1);
 	}
-	hash_index = shmat(sid, 0, 0);
+	ht_index = shmat(sid, 0, 0);
 
-	// Allocate the packets and put them into the hash index randomly
-	printf("Putting packets into hash index randomly\n");
-	pkts = (uint32_t *) malloc(NUM_PKTS * sizeof(int));
-	for(i = 0; i < NUM_PKTS; i++) {
-		uint32_t K = (uint32_t) rand();
-		pkts[i] = K;
-		
-		// With 1/2 probability, put into 1st bucket
-		uint32_t hash_bucket_i = 0;
-		
-		// The 2nd hash function for key K is CITYHASH(K + 1)
-		if(rand() % 2 == 0) {
-			hash_bucket_i = CITYHASH(K) % HASH_INDEX_N;
-		} else {
-			uint32_t newK = K + 1;
-			hash_bucket_i = CITYHASH(newK) % HASH_INDEX_N;
+	// Mark all ht_index slots invalid
+	for(i = 0; i < HT_INDEX_N; i ++) {
+		LL *slots = ht_index[i].slots;
+		for(j = 0; j < SLOTS_PER_BKT; j ++) {
+			slots[j] = INVALID_KV_I << 16;
 		}
+	}
 
-		// The value for key K is K + i
-		hash_index[hash_bucket_i].key = K;
-		hash_index[hash_bucket_i].value = K + i;
+	// Hugepages for circular log
+	fprintf(stderr, "Size of log = %lu\n", HT_LOG_CAP * sizeof(struct KV));
+
+	sid = shmget(HT_LOG_SID, HT_LOG_CAP * sizeof(struct KV),
+		IPC_CREAT | 0666 | SHM_HUGETLB);
+	if(sid < 0) {
+		fprintf(stderr, "Could not create MICA-style circular log\n");
+		exit(-1);
+	}
+	ht_log = shmat(sid, 0, 0);
+		
+	// Allocate the packets and put them into the hash index
+	printf("Putting packets into hash index\n");
+	pkts = (LL *) malloc(NUM_PKTS * sizeof(LL));
+
+	for(i = 0; i < NUM_PKTS; i++) {
+		// Generate a new key-value pair, this will be put at log_i
+		LL K = randLL();
+		LL V = K + 1;
+		
+		LL key_hash = hash(K);	
+
+		int key_tag = HASH_TO_TAG(key_hash);
+		int ht_bucket = HASH_TO_BUCKET(key_hash);
+	
+		LL *slots = ht_index[ht_bucket].slots;
+		for(j = 0; j < SLOTS_PER_BKT; j ++) {
+			if(SLOT_TO_LOG_I(slots[j]) == INVALID_KV_I) {
+				// Found an empty slot
+				slots[j] = key_tag | ((log_i & HT_LOG_CAP_) << 16);
+				break;
+			}
+		}
+		
+		if(j == SLOTS_PER_BKT) {
+			// Did not find an empty slot, pick one slot at random
+			int replace = rand() & SLOTS_PER_BKT_;
+			slots[replace] = key_tag | ((log_i & HT_LOG_CAP_) << 16);
+		}
+	
+		ht_log[log_i & HT_LOG_CAP_].key = K;
+		ht_log[log_i & HT_LOG_CAP_].value = V;
+		
+		log_i ++;
+
+		pkts[i] = K;
 	}
 
 	printf("Starting lookups\n");
@@ -135,7 +212,14 @@ int main(int argc, char **argv)
 	}
 
 	clock_gettime(CLOCK_REALTIME, &end);
-	printf("Time = %f sum = %d, succ_1 = %d, succ_2 = %d, fail = %d\n", 
+	printf("Time = %f sum = %d, succ = %d, fail_1 = %d, fail_2 = %d\n", 
 		(end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1000000000,
-		sum, succ_1, succ_2, fail);
+		sum, succ, fail_1, fail_2);
+}
+
+LL randLL()
+{
+	LL rand1 = (LL) lrand48();
+	LL rand2 = (LL) lrand48();
+	return (rand1 << 32) ^ rand2;
 }

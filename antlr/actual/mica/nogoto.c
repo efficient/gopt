@@ -39,11 +39,13 @@ struct IDX_BKT
 struct IDX_BKT *ht_index;
 
 #define INVALID_KV_I ((LL) (HT_LOG_CAP + 1))
-#define SLOT_TO_LOG_I(s) (s >> 16)		// Index of KV-item in the log, not an offset
+
+// The index into the KV log is stored modulo HT_LOG_CAP
+#define SLOT_TO_LOG_I(s) (s >> 16)
 #define SLOT_TO_TAG(s) ((int) (s & 0xffff))
 
 #define HASH_TO_TAG(h) ((int) (h & 0xffff))
-#define HASH_TO_BUCKET(h) ((int) (h >> 16) % HT_INDEX_N)
+#define HASH_TO_BUCKET(h) ((int) ((h >> 16) & HT_INDEX_N_))
 
 LL randLL();
 
@@ -66,7 +68,7 @@ void process_pkts_in_batch(LL *pkt_lo)
 		int key_tag = HASH_TO_TAG(key_hash);
 		int ht_bucket = HASH_TO_BUCKET(key_hash);
 
-		PREFETCH(&ht_index[bucket]);
+		PREFETCH(&ht_index[ht_bucket]);
 		LL *slots = ht_index[ht_bucket].slots;
 
 		int i, found = 0;
@@ -81,6 +83,7 @@ void process_pkts_in_batch(LL *pkt_lo)
 				// Log entry also matches
 				if(ht_log[log_i].key == pkt_lo[batch_index]) {
 					found = 1;
+					succ ++;
 					sum += (int) ht_log[log_i].value;
 					break;
 				} else {
@@ -89,7 +92,7 @@ void process_pkts_in_batch(LL *pkt_lo)
 			}
 		}
 
-		if(i == SLOTS_PER_BKT) {
+		if(found == 0) {
 			fail_2 ++;
 		}
 	}
@@ -148,21 +151,23 @@ int main(int argc, char **argv)
 		for(j = 0; j < SLOTS_PER_BKT; j ++) {
 			if(SLOT_TO_LOG_I(slots[j]) == INVALID_KV_I) {
 				// Found an empty slot
-				slots[j] = key_tag | (log_i << 16);
+				slots[j] = key_tag | ((log_i & HT_LOG_CAP_) << 16);
 				break;
 			}
 		}
 		
 		if(j == SLOTS_PER_BKT) {
-			// Did not find an empty slot, pick one at random
-			int replace = rand() % SLOTS_PER_BKT;
-			slots[replace] = key_tag | (log_i << 16);
+			// Did not find an empty slot, pick one slot at random
+			int replace = rand() & SLOTS_PER_BKT_;
+			slots[replace] = key_tag | ((log_i & HT_LOG_CAP_) << 16);
 		}
 	
-		ht_log[log_i % HT_LOG_CAP].key = K;
-		ht_log[log_i % HT_LOG_CAP].value = V;
+		ht_log[log_i & HT_LOG_CAP_].key = K;
+		ht_log[log_i & HT_LOG_CAP_].value = V;
 		
 		log_i ++;
+
+		pkts[i] = K;
 	}
 
 	printf("Starting lookups\n");
