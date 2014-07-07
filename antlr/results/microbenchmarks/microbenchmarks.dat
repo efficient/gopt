@@ -3,5 +3,6 @@ Optimization	nogoto			goto
 "locals"		1.70			.81
 "synthetic"		5.73			3.34
 "cuckoo"		1.82			.70
+"mica-r0"		2.22			1.01
 
 # 32 byte echoes to show that 30.42 million echoes per second can be done
