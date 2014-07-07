@@ -1,0 +1,20 @@
+set terminal postscript enhanced font "Times,28" solid
+set output 'microbenchmarks.ps'
+
+set style data histogram
+set style histogram cluster gap 2
+
+set style fill solid border -1
+set size ratio .5
+
+set key above height 2
+set key font ",28"
+set key samplen 5
+
+set ylabel "Time for packet processing (s)" offset 1
+set grid 
+
+set boxwidth 1
+
+plot 'microbenchmarks.dat' using 2:xtic(1) title col lw 2 lc rgb "#EEEEEE", \
+	'' using 3:xtic(1) title col lw 2 lc rgb "#AAAAAA", \

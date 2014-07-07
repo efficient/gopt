@@ -1,0 +1,7 @@
+Optimization	nogoto			goto
+"simple"		2.95			1.97
+"locals"		1.70			.81
+"synthetic"		5.73			3.34
+"cuckoo"		1.82			.70
+
+# 32 byte echoes to show that 30.42 million echoes per second can be done
