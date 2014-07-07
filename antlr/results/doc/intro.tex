@@ -1,9 +1,15 @@
-The \texttt{fastpp} compiler takes a packet-processing function as input and 
+The fastpp compiler takes a packet-processing function as input and 
 transforms it to a new function with the \texttt{goto} optimzation. This document 
-describes the constraints on the input function $\mathscr{F}$.
+describes the constraints on the input function $F$.
 
 \begin{enumerate}
-\item $\mathscr{F}$ should process a batch of input packets. The reservered macro
+\item $F$ should process a batch of input packets. The reservered macro
 \texttt{BATCH\_SIZE} defines the size of the batch processed by one invocation
-of $\mathscr{F}$.
+of $F$. $F$ should begin with a \texttt{foreach} loop. The first line of $F$ should be
+\texttt{foreach(batch\_index, BATCH\_SIZE)}. The \texttt{foreach} construct
+translates to a standard for loop: 
+\texttt{for(batch\_index = 0; batch\_index < BATCH\_SIZE; batch\_index ++)}.
+
+
+
 \end{enumerate}
