@@ -11,43 +11,6 @@
 
 #include "utility.h"
 
-uint32_t 
-get_num_cpus()
-{
-    return get_nprocs();
-}
-
-int
-bind_cpu(uint32_t cpu)
-{
-    uint32_t n = get_num_cpus();
-    int ret;
-
-    if (cpu >= n) {
-        errno = -EINVAL;
-        return -1;
-    }
-
-    cpu_set_t cmask;
-
-    CPU_ZERO(&cmask);
-    CPU_SET(cpu, &cmask);
-
-    ret = sched_setaffinity(0, sizeof(cmask), &cmask);
-
-    return ret;
-}
-
-void 
-prefetch(const void *object, uint64_t size)
-{
-    uint64_t offset = ((uint64_t)object) & 0x3fUL;
-    const char *p = (const char *)object - offset;
-    uint64_t i;
-    for (i = 0; i < offset + size; i += 64)
-        _mm_prefetch(p + i, _MM_HINT_T0);
-}
-
 uint64_t
 time_elapsed(struct timeval *start, struct timeval *end)
 {

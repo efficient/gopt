@@ -8,15 +8,6 @@ extern "C" {
 #include <sys/time.h>
 #include <stdint.h>
 
-uint32_t
-get_num_cpus();
-
-int
-bind_cpu(uint32_t cpu);
-
-void 
-prefetch(const void *object, uint64_t size);
-
 uint64_t
 time_elapsed(struct timeval *start, struct timeval *end);
 
