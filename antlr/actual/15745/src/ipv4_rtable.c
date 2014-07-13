@@ -145,7 +145,7 @@ ipv4_rtable_lookup(struct ipv4_rtable *rtable, uint32_t addr)
 
 int batch_index;
 
-uint8_t
+void
 ipv4_rtable_lookup_nogoto(struct ipv4_rtable *rtable, uint32_t *addr_array, uint8_t *port_id_array)
 {
 	foreach(batch_index, BATCH_SIZE) {
@@ -173,7 +173,36 @@ ipv4_rtable_lookup_nogoto(struct ipv4_rtable *rtable, uint32_t *addr_array, uint
 		total_queries++;
 		port_id_array[batch_index] = port_id;
 	}
+}
 
+void
+ipv4_rtable_lookup_goto(struct ipv4_rtable *rtable, uint32_t *addr_array, uint8_t *port_id_array)
+{
+	foreach(batch_index, BATCH_SIZE) {
+		int shift;
+		unsigned entry_id = 0;
+		struct ipv4_rtable_entry *rtable_entries = (struct ipv4_rtable_entry *) rtable->entries;
+		uint8_t port_id = rtable->fallback_port_id;
+	
+		// Go over "addr" 4 bits at a time, starting from MSB
+		for (shift = 32 - IPV4_RTABLE_ENTRY_NUM_BITS; shift >= 0; shift -= IPV4_RTABLE_ENTRY_NUM_BITS) {
+			uint32_t x = (addr_array[batch_index] >> shift) & ((1 << IPV4_RTABLE_ENTRY_NUM_BITS) - 1);
+	
+			total_memory_accesses++;
+			if (rtable_entries[entry_id].port_id != rtable->fallback_port_id) {
+				port_id = rtable_entries[entry_id].port_id;
+			}
+	
+			if (rtable_entries[entry_id].children[x]) {
+				entry_id = rtable_entries[entry_id].children[x];
+			} else {
+				break;
+			}
+		}
+
+		total_queries++;
+		port_id_array[batch_index] = port_id;
+	}
 }
 
 void

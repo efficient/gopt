@@ -13,8 +13,7 @@
 unsigned n = 1 << 24;
 struct ipv4_rib_entry *rib_entries;
 
-unsigned num_addrs = 100000;
-
+unsigned num_addrs = (4 * 1024 * 1024);
 
 void
 generate_rib_entries(struct ipv4_rib_entry **rib_entries_ptr, unsigned n)
@@ -49,7 +48,7 @@ generate_rib_entries(struct ipv4_rib_entry **rib_entries_ptr, unsigned n)
 int main(int argc, char **argv)
 {
 	unsigned i, j, k;
-	double naive_rate, mem_rate, nogoto_rate;
+	double naive_rate, mem_rate, nogoto_rate, goto_rate;
 
 	printf("sizeof ipv4_entry = %lu\n", sizeof(struct ipv4_rtable_entry));
 
@@ -71,6 +70,7 @@ int main(int argc, char **argv)
 	uint8_t *naive_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
 	uint8_t *mem_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
 	uint8_t *nogoto_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
+	uint8_t *goto_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
 
 	struct timeval start, end;
 
@@ -92,7 +92,7 @@ int main(int argc, char **argv)
 	gettimeofday(&end, 0);
 	mem_rate = (double) num_addrs / time_elapsed(&start, &end);
 
-	// Antlr lookups
+	// Nogoto lookups
 	gettimeofday(&start, 0);
 	for (j = 0; j < num_addrs; j += BATCH_SIZE) {
 		ipv4_rtable_lookup_nogoto(table, addr_array + j, nogoto_port_id_array + j);
@@ -100,10 +100,19 @@ int main(int argc, char **argv)
 	gettimeofday(&end, 0);
 	nogoto_rate = (double) num_addrs / time_elapsed(&start, &end);
 	
+	// Nogoto lookups
+	gettimeofday(&start, 0);
+	for (j = 0; j < num_addrs; j += BATCH_SIZE) {
+		ipv4_rtable_lookup_goto(table, addr_array + j, goto_port_id_array + j);
+	}
+	gettimeofday(&end, 0);
+	goto_rate = (double) num_addrs / time_elapsed(&start, &end);
+
 	// Compare output
 	for (k = 0; k < num_addrs; k ++) {
 		assert(naive_port_id_array[k] == mem_port_id_array[k]);
 		assert(nogoto_port_id_array[k] == mem_port_id_array[k]);
+		assert(goto_port_id_array[k] == mem_port_id_array[k]);
 	}
 
 	printf("\tDone\n");
@@ -115,6 +124,7 @@ int main(int argc, char **argv)
 	printf("\tNaive rate:\t %8.3lf Mpps\n", naive_rate);
 	printf("\tHandopt rate:\t %8.3lf Mpps\n", mem_rate);
 	printf("\tNogoto rate:\t %8.3lf Mpps\n", nogoto_rate);
+	printf("\tGoto rate:\t %8.3lf Mpps\n", goto_rate);
 
 	return 0;
 }
