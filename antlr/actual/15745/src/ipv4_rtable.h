@@ -27,7 +27,7 @@ uint8_t
 ipv4_rtable_lookup(struct ipv4_rtable *rtable, uint32_t addr);
 
 void
-ivp4_rtable_lookup_multi(struct ipv4_rtable *table, unsigned n, uint32_t *addr_array, uint8_t *port_id_array);
+ivp4_rtable_lookup_multi(struct ipv4_rtable *table, uint32_t *addr_array, uint8_t *port_id_array);
 
 void
 ipv4_rtable_print_statistics();

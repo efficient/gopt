@@ -8,18 +8,13 @@
 #include "ipv4_rtable.h"
 #include "cpu_ticks.h"
 #include "utility.h"
+#include "fpp.h"
 
 unsigned n = 1 << 24;
 struct ipv4_rib_entry *rib_entries;
 
 unsigned num_addrs = 100000;
 
-/* unsigned num_burst_sizes = 16; */
-/* unsigned burst_size_array[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}; */
-unsigned num_burst_sizes = 4;
-unsigned burst_size_array[] = {4, 8, 12, 16};
-
-double naive_rate[32], mem_rate[32];
 
 void
 generate_rib_entries(struct ipv4_rib_entry **rib_entries_ptr, unsigned n)
@@ -53,9 +48,10 @@ generate_rib_entries(struct ipv4_rib_entry **rib_entries_ptr, unsigned n)
 
 int main(int argc, char **argv)
 {
-	printf("sizeof ipv4_entry = %lu\n", sizeof(struct ipv4_rtable_entry));
-
 	unsigned i, j, k;
+	double naive_rate, mem_rate, nogoto_rate;
+
+	printf("sizeof ipv4_entry = %lu\n", sizeof(struct ipv4_rtable_entry));
 
 	generate_rib_entries(&rib_entries, n);
 
@@ -74,43 +70,51 @@ int main(int argc, char **argv)
 
 	uint8_t *naive_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
 	uint8_t *mem_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
+	uint8_t *nogoto_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
 
 	struct timeval start, end;
 
-	for (i = 0; i < num_burst_sizes; i++) {
-		printf("batch-size: %d", burst_size_array[i]);
+	printf("Batch size = %d\n", BATCH_SIZE);
 
-		// Basic lookups
-		gettimeofday(&start, 0);
-		for (j = 0; j < num_addrs; j ++) {
-			naive_port_id_array[j] = ipv4_rtable_lookup(table, addr_array[j]);
-		}
-		gettimeofday(&end, 0);
-		naive_rate[i] = (double) num_addrs / time_elapsed(&start, &end);
-
-		// Batched lookups
-		gettimeofday(&start, 0);
-		for (j = 0; j < num_addrs; j += burst_size_array[i]) {
-			ipv4_rtable_lookup_multi(table, burst_size_array[i], addr_array + j, mem_port_id_array + j);
-		}
-		gettimeofday(&end, 0);
-		mem_rate[i] = (double) num_addrs / time_elapsed(&start, &end);
-
-		// Compare output
-		for (k = 0; k < burst_size_array[i]; k ++) {
-			assert(naive_port_id_array[k] == mem_port_id_array[k]);
-		}
-
-		printf("\tdone\n");
+	// Basic lookups
+	gettimeofday(&start, 0);
+	for (j = 0; j < num_addrs; j ++) {
+		naive_port_id_array[j] = ipv4_rtable_lookup(table, addr_array[j]);
 	}
+	gettimeofday(&end, 0);
+	naive_rate = (double) num_addrs / time_elapsed(&start, &end);
+
+	// Batched lookups
+	gettimeofday(&start, 0);
+	for (j = 0; j < num_addrs; j += BATCH_SIZE) {
+		ipv4_rtable_lookup_multi(table, addr_array + j, mem_port_id_array + j);
+	}
+	gettimeofday(&end, 0);
+	mem_rate = (double) num_addrs / time_elapsed(&start, &end);
+
+	// Antlr lookups
+	gettimeofday(&start, 0);
+	for (j = 0; j < num_addrs; j += BATCH_SIZE) {
+		ipv4_rtable_lookup_nogoto(table, addr_array + j, nogoto_port_id_array + j);
+	}
+	gettimeofday(&end, 0);
+	nogoto_rate = (double) num_addrs / time_elapsed(&start, &end);
+	
+	// Compare output
+	for (k = 0; k < num_addrs; k ++) {
+		assert(naive_port_id_array[k] == mem_port_id_array[k]);
+		assert(nogoto_port_id_array[k] == mem_port_id_array[k]);
+	}
+
+	printf("\tDone\n");
 
 	ipv4_rtable_print_statistics();
 
 	/* printf("                 cpu                  memory-optimized\n"); */
-	for (i = 0; i < num_burst_sizes; i++) {
-		printf("size %2d packets, rate %8.3lf Mpps", burst_size_array[i], naive_rate[i]);
-		printf("      %8.3lf Mpps\n", mem_rate[i]);
-	}
+	printf("Batch size:\t %d\n\n", BATCH_SIZE);
+	printf("\tNaive rate:\t %8.3lf Mpps\n", naive_rate);
+	printf("\tHandopt rate:\t %8.3lf Mpps\n", mem_rate);
+	printf("\tNogoto rate:\t %8.3lf Mpps\n", nogoto_rate);
 
 	return 0;
 }
