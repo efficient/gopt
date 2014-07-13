@@ -12,13 +12,6 @@
 unsigned n = 1 << 24;
 struct ipv4_rib_entry *rib_entries;
 
-struct testsuit {
-    struct ipv4_rtable *table;
-    uint32_t *addr_array;
-    uint8_t *naive_port_id_array;
-    uint8_t *mem_port_id_array;
-};
-
 unsigned num_addrs = 100000;
 
 /* unsigned num_burst_sizes = 16; */
@@ -26,8 +19,6 @@ unsigned num_addrs = 100000;
 unsigned num_burst_sizes = 4;
 unsigned burst_size_array[] = {4, 8, 12, 16};
 
-unsigned num_testsuits = 3;
-struct testsuit testsuits[10];
 double naive_rate[32], mem_rate[32];
 
 void
@@ -62,77 +53,64 @@ generate_rib_entries(struct ipv4_rib_entry **rib_entries_ptr, unsigned n)
 
 int main(int argc, char **argv)
 {
-    printf("sizeof ipv4_entry = %lu\n", sizeof(struct ipv4_rtable_entry));
+	printf("sizeof ipv4_entry = %lu\n", sizeof(struct ipv4_rtable_entry));
 
-    unsigned i, j, k;
-    uint32_t addr;
+	unsigned i, j, k;
 
-    srand(time(0));
+	generate_rib_entries(&rib_entries, n);
 
-    for (i = 0; i < num_testsuits; i++) {
-        generate_rib_entries(&rib_entries, n);
+	struct ipv4_rtable *table = ipv4_rtable_create(rib_entries, n, 0);
 
-        struct ipv4_rtable *table = ipv4_rtable_create(rib_entries, n, 0);
+	free(rib_entries);
 
-        testsuits[i].table = table;
-        assert(testsuits[i].table);
+	uint32_t *addr_array = (uint32_t *) malloc(sizeof(uint32_t) * num_addrs);
+	for (i = 0; i < num_addrs; i++) {
+		uint32_t addr = 0;
+		for (k = 0; k < 4; k++) {
+			addr = (addr << 8) | (rand() % 256);
+		}
+		addr_array[i] = addr;
+	}
 
-        free(rib_entries);
+	uint8_t *naive_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
+	uint8_t *mem_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
 
-        testsuits[i].addr_array = (uint32_t *) malloc(sizeof(uint32_t) * num_addrs);
-        for (j = 0; j < num_addrs; j++) {
-            addr = 0;
-            for (k = 0; k < 4; k++)
-                addr = (addr << 8) | (rand() % 256);
-            testsuits[i].addr_array[j] = addr;
-        }
-        testsuits[i].naive_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
-        testsuits[i].mem_port_id_array = (uint8_t *) malloc(sizeof(uint8_t) * num_addrs);
-    }
+	struct timeval start, end;
 
-    unsigned test, num_tests = 10;
-    struct timeval start, end;
+	for (i = 0; i < num_burst_sizes; i++) {
+		printf("batch-size: %d", burst_size_array[i]);
 
-    for (i = 0; i < num_burst_sizes; i++) {
-        printf("batch-size: %d", burst_size_array[i]);
-        
 		// Basic lookups
-        gettimeofday(&start, 0);
-        for (test = 0; test < num_tests; test++) {
-            for (j = 0; j < num_testsuits; j++)
-                for (k = 0; k < num_addrs; k++)
-                    testsuits[j].naive_port_id_array[k] = ipv4_rtable_lookup(testsuits[j].table, testsuits[j].addr_array[k]);
-        }
-        gettimeofday(&end, 0);
-        naive_rate[i] = (double)(num_addrs * num_tests * num_testsuits) / time_elapsed(&start, &end);
+		gettimeofday(&start, 0);
+		for (j = 0; j < num_addrs; j ++) {
+			naive_port_id_array[j] = ipv4_rtable_lookup(table, addr_array[j]);
+		}
+		gettimeofday(&end, 0);
+		naive_rate[i] = (double) num_addrs / time_elapsed(&start, &end);
 
 		// Batched lookups
-        gettimeofday(&start, 0);
-        for (test = 0; test < num_tests; test++) {
-            for (j = 0; j < num_testsuits; j++)
-                for (k = 0; k < num_addrs; k += burst_size_array[i])
-                    ipv4_rtable_lookup_multi(testsuits[j].table, burst_size_array[i], testsuits[j].addr_array + k, testsuits[j].mem_port_id_array + k);
-        }
-        gettimeofday(&end, 0);
-        mem_rate[i] = (double)((num_addrs / burst_size_array[i]) * burst_size_array[i] * num_tests * num_testsuits) / time_elapsed(&start, &end);
+		gettimeofday(&start, 0);
+		for (j = 0; j < num_addrs; j += burst_size_array[i]) {
+			ipv4_rtable_lookup_multi(table, burst_size_array[i], addr_array + j, mem_port_id_array + j);
+		}
+		gettimeofday(&end, 0);
+		mem_rate[i] = (double) num_addrs / time_elapsed(&start, &end);
 
-		// Compare performance
-        for (j = 0; j < num_testsuits; j++) {
-            for (k = 0; k < burst_size_array[i]; k++) {
-                assert(testsuits[j].naive_port_id_array[k] == testsuits[j].mem_port_id_array[k]);
-            }
+		// Compare output
+		for (k = 0; k < burst_size_array[i]; k ++) {
+			assert(naive_port_id_array[k] == mem_port_id_array[k]);
 		}
 
-        printf("\tdone\n");
-    }
+		printf("\tdone\n");
+	}
 
-    ipv4_rtable_print_statistics();
+	ipv4_rtable_print_statistics();
 
-    /* printf("                 cpu                  memory-optimized\n"); */
-    for (i = 0; i < num_burst_sizes; i++) {
-        printf("size %2d packets, rate %8.3lf Mpps", burst_size_array[i], naive_rate[i]);
-        printf("      %8.3lf Mpps\n", mem_rate[i]);
-    }
+	/* printf("                 cpu                  memory-optimized\n"); */
+	for (i = 0; i < num_burst_sizes; i++) {
+		printf("size %2d packets, rate %8.3lf Mpps", burst_size_array[i], naive_rate[i]);
+		printf("      %8.3lf Mpps\n", mem_rate[i]);
+	}
 
-    return 0;
+	return 0;
 }
