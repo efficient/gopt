@@ -171,20 +171,8 @@ ipv4_rtable_lookup_multi(struct ipv4_rtable *rtable, unsigned n, uint32_t *addr_
                     port_id_array_internal[i] = rtable_entries[eiai].port_id;
                 if (rtable_entries[eiai].children[x]) {
                     eiai = rtable_entries[eiai].children[x];
-                    /* if (shift <= 32) { */
-                        /* void *addr = &rtable_entries[eiai]; */
-                        /* asm volatile ("movl (%0), %%eax\n\t" */
-                        /*               : */
-                        /*               : "r"(addr) */
-                        /*               : "eax"); */
-                        /* addr = ((char *)&rtable_entries[eiai]) + 64; */
-                        /* asm volatile ("movl (%0), %%eax\n\t" */
-                        /*               : */
-                        /*               : "r"(addr) */
-                        /*               : "eax"); */
                         _mm_prefetch(&rtable_entries[eiai], _MM_HINT_T0);
                         _mm_prefetch(((char *)&rtable_entries[eiai]) + 64, _MM_HINT_T0);
-                    /* } */
                     entry_id_array[i] = eiai;
                 } else {
                     finished[i] = 1;
