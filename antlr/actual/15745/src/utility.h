@@ -17,12 +17,6 @@ bind_cpu(uint32_t cpu);
 void 
 prefetch(const void *object, uint64_t size);
 
-void *
-get_file_data(char *file, uint32_t *file_size_pointer, uint32_t additional_size);
-
-void 
-free_file_data(void *file_data);
-
 uint64_t
 time_elapsed(struct timeval *start, struct timeval *end);
 
