@@ -20,19 +20,15 @@ struct testsuit {
 };
 
 unsigned num_addrs = 100000;
+
 /* unsigned num_burst_sizes = 16; */
 /* unsigned burst_size_array[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}; */
 unsigned num_burst_sizes = 4;
 unsigned burst_size_array[] = {4, 8, 12, 16};
+
 unsigned num_testsuits = 3;
 struct testsuit testsuits[10];
 double naive_rate[32], mem_rate[32];
-
-void
-usage(char *program)
-{
-    printf("usage: %s\n", program);
-}
 
 void
 generate_rib_entries(struct ipv4_rib_entry **rib_entries_ptr, unsigned n)
@@ -100,6 +96,7 @@ int main(int argc, char **argv)
     for (i = 0; i < num_burst_sizes; i++) {
         printf("batch-size: %d", burst_size_array[i]);
         
+		// Basic lookups
         gettimeofday(&start, 0);
         for (test = 0; test < num_tests; test++) {
             for (j = 0; j < num_testsuits; j++)
@@ -109,6 +106,7 @@ int main(int argc, char **argv)
         gettimeofday(&end, 0);
         naive_rate[i] = (double)(num_addrs * num_tests * num_testsuits) / time_elapsed(&start, &end);
 
+		// Batched lookups
         gettimeofday(&start, 0);
         for (test = 0; test < num_tests; test++) {
             for (j = 0; j < num_testsuits; j++)
@@ -118,10 +116,12 @@ int main(int argc, char **argv)
         gettimeofday(&end, 0);
         mem_rate[i] = (double)((num_addrs / burst_size_array[i]) * burst_size_array[i] * num_tests * num_testsuits) / time_elapsed(&start, &end);
 
-        for (j = 0; j < num_testsuits; j++)
+		// Compare performance
+        for (j = 0; j < num_testsuits; j++) {
             for (k = 0; k < burst_size_array[i]; k++) {
                 assert(testsuits[j].naive_port_id_array[k] == testsuits[j].mem_port_id_array[k]);
             }
+		}
 
         printf("\tdone\n");
     }
