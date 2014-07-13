@@ -170,6 +170,14 @@ int main(int argc, char **argv)
 		pkts[i] = K;
 	}
 
+	printf("Shuffling packets so that log accesses are random\n");
+	for(i = 0; i < NUM_PKTS; i ++) {
+		int j = rand() % (i + 1);
+		LL temp = pkts[i];
+		pkts[i] = pkts[j];
+		pkts[j] = temp;
+	}
+
 	printf("Starting lookups\n");
 	struct timespec start, end;
 	clock_gettime(CLOCK_REALTIME, &start);
