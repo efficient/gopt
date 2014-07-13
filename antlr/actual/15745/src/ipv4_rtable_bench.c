@@ -66,20 +66,7 @@ generate_rib_entries(struct ipv4_rib_entry **rib_entries_ptr, unsigned n)
 
 int main(int argc, char **argv)
 {
-    int ch;
-
-    while ((ch = getopt(argc, argv, "n:")) != -1) {
-        switch (ch) {
-        case 'n':
-            n = atoi(optarg);
-            break;
-        default:
-            usage(argv[0]);
-            exit(-1);
-        }
-    }
-
-    printf("%lu\n", sizeof(struct ipv4_rtable_entry));
+    printf("sizeof ipv4_entry = %lu\n", sizeof(struct ipv4_rtable_entry));
 
     unsigned i, j, k;
     uint32_t addr;
