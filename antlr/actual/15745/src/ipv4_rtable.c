@@ -3,6 +3,8 @@
 #include <string.h>
 #include <assert.h>
 #include <xmmintrin.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 
 #include "ipv4_rtable.h"
 #include "utility.h"
@@ -87,12 +89,27 @@ ipv4_rtable_create(struct ipv4_rib_entry *rib_entries, unsigned n, uint8_t fallb
         entry->port_id = rib_entries[i].port_id;
     }
 
-    struct ipv4_rtable *rtable = (struct ipv4_rtable *) malloc(sizeof(struct ipv4_rtable) + num_entries * sizeof(struct ipv4_rtable_entry));
+	// Create hugepage area for ipv4_rtable
+	unsigned long bytes_required = sizeof(struct ipv4_rtable) + 
+		(num_entries * sizeof(struct ipv4_rtable_entry));
+	unsigned bytes_assigned = 1;
+	while(bytes_assigned < bytes_required) {
+		bytes_assigned *= 2;
+	}
+
+	int sid = shmget(IPV4_RTABLE_SID, bytes_assigned, IPC_CREAT | 0666 | SHM_HUGETLB);
+	if(sid < 0) {
+		fprintf(stderr, "shmget failed for ipv4_rtable\n");
+		exit(-1);
+	}
+
+	struct ipv4_rtable *rtable = (struct ipv4_rtable *) shmat(sid, 0, 0);
+
     rtable->entries = (struct ipv4_rtable_entry *) ((char *) rtable + sizeof(struct ipv4_rtable));
     struct ipv4_rtable_entry *rtable_entries = (struct ipv4_rtable_entry *) rtable->entries;
 
     printf("num_entries: %u\n", num_entries);
-    printf("memory: %.2lf MB\n", (double) (sizeof(struct ipv4_rtable) + num_entries * sizeof(struct ipv4_rtable_entry)) / 1024 / 1024);
+    printf("memory: %.2lf MB\n", (double) (bytes_assigned) / (1024 * 1024));
 
     rtable->n = num_entries;
     rtable->fallback_port_id = fallback_port_id;
@@ -267,8 +284,8 @@ ipv4_rtable_lookup_multi(struct ipv4_rtable *rtable, uint32_t *addr_array, uint8
 					port_id_array_internal[i] = rtable_entries[eiai].port_id;
 				if (rtable_entries[eiai].children[x]) {
 					eiai = rtable_entries[eiai].children[x];
-					_mm_prefetch(&rtable_entries[eiai], _MM_HINT_T0);
-					_mm_prefetch(((char *)&rtable_entries[eiai]) + 64, _MM_HINT_T0);
+					//_mm_prefetch(&rtable_entries[eiai], _MM_HINT_T0);
+					//_mm_prefetch(((char *)&rtable_entries[eiai]) + 64, _MM_HINT_T0);
 					entry_id_array[i] = eiai;
 				} else {
 					finished[i] = 1;

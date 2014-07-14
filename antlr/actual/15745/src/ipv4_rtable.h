@@ -2,6 +2,8 @@
 
 #define IPV4_RTABLE_ENTRY_NUM_BITS (4)
 
+#define IPV4_RTABLE_SID 1		// shmid
+
 struct ipv4_rib_entry {
     uint32_t addr;
     uint32_t netmask_num_bits;
