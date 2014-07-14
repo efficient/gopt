@@ -76,7 +76,8 @@ void process_pkts_in_batch(LL *pkt_lo)
 		for(i = 0; i < SLOTS_PER_BKT; i ++) {
 
 			// Tag matched
-			if(SLOT_TO_TAG(slots[i]) == key_tag) {
+			if(SLOT_TO_TAG(slots[i]) == key_tag && 
+				SLOT_TO_LOG_I(slots[i]) != INVALID_KV_I) {
 				int log_i = SLOT_TO_LOG_I(slots[i]);
 				PREFETCH(&ht_log[log_i]);
 				
