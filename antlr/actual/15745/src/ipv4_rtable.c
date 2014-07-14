@@ -20,6 +20,9 @@ static struct ipv4_rtable_writeable_entry *head;
 static uint64_t total_memory_accesses = 0;
 static uint64_t total_queries = 0;
 
+// goto stats
+static uint64_t total_catapults = 0;
+
 static struct ipv4_rtable_writeable_entry *
 ipv4_rtable_writeable_entry_alloc(unsigned *entry_id, uint8_t port_id)
 {
@@ -143,7 +146,7 @@ ipv4_rtable_lookup(struct ipv4_rtable *rtable, uint32_t addr)
 	return port_id;
 }
 
-int batch_index;
+int batch_index, nop = 0;
 
 void
 ipv4_rtable_lookup_nogoto(struct ipv4_rtable *rtable, uint32_t *addr_array, uint8_t *port_id_array)
@@ -158,7 +161,11 @@ ipv4_rtable_lookup_nogoto(struct ipv4_rtable *rtable, uint32_t *addr_array, uint
 		for (shift = 32 - IPV4_RTABLE_ENTRY_NUM_BITS; shift >= 0; shift -= IPV4_RTABLE_ENTRY_NUM_BITS) {
 			uint32_t x = (addr_array[batch_index] >> shift) & ((1 << IPV4_RTABLE_ENTRY_NUM_BITS) - 1);
 	
-			total_memory_accesses++;
+			if(shift < 24) {
+				PREFETCH(&rtable_entries[entry_id]);
+				nop ++;
+			}
+
 			if (rtable_entries[entry_id].port_id != rtable->fallback_port_id) {
 				port_id = rtable_entries[entry_id].port_id;
 			}
@@ -170,7 +177,6 @@ ipv4_rtable_lookup_nogoto(struct ipv4_rtable *rtable, uint32_t *addr_array, uint
 			}
 		}
 
-		total_queries++;
 		port_id_array[batch_index] = port_id;
 	}
 }
@@ -178,31 +184,61 @@ ipv4_rtable_lookup_nogoto(struct ipv4_rtable *rtable, uint32_t *addr_array, uint
 void
 ipv4_rtable_lookup_goto(struct ipv4_rtable *rtable, uint32_t *addr_array, uint8_t *port_id_array)
 {
-	foreach(batch_index, BATCH_SIZE) {
-		int shift;
-		unsigned entry_id = 0;
-		struct ipv4_rtable_entry *rtable_entries = (struct ipv4_rtable_entry *) rtable->entries;
-		uint8_t port_id = rtable->fallback_port_id;
-	
-		// Go over "addr" 4 bits at a time, starting from MSB
-		for (shift = 32 - IPV4_RTABLE_ENTRY_NUM_BITS; shift >= 0; shift -= IPV4_RTABLE_ENTRY_NUM_BITS) {
-			uint32_t x = (addr_array[batch_index] >> shift) & ((1 << IPV4_RTABLE_ENTRY_NUM_BITS) - 1);
-	
-			total_memory_accesses++;
-			if (rtable_entries[entry_id].port_id != rtable->fallback_port_id) {
-				port_id = rtable_entries[entry_id].port_id;
-			}
-	
-			if (rtable_entries[entry_id].children[x]) {
-				entry_id = rtable_entries[entry_id].children[x];
-			} else {
-				break;
-			}
-		}
+	int shift[BATCH_SIZE];
+	unsigned entry_id[BATCH_SIZE];
+	struct ipv4_rtable_entry *rtable_entries[BATCH_SIZE];
+	uint8_t port_id[BATCH_SIZE];
+	uint32_t x[BATCH_SIZE];
 
-		total_queries++;
-		port_id_array[batch_index] = port_id;
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&label_0;
 	}
+
+label_0:
+
+        entry_id[I] = 0;
+        rtable_entries[I] = (struct ipv4_rtable_entry *) rtable->entries;
+        port_id[I] = rtable->fallback_port_id;
+        
+        // Go over "addr" 4 bits at a time, starting from MSB
+        for (shift[I] = 32 - IPV4_RTABLE_ENTRY_NUM_BITS; shift[I] >= 0; shift[I] -= IPV4_RTABLE_ENTRY_NUM_BITS) {
+            x[I] = (addr_array[I] >> shift[I]) & ((1 << IPV4_RTABLE_ENTRY_NUM_BITS) - 1);
+            
+            if(shift[I] < 24) {
+                FPP_PSS(&rtable_entries[I][entry_id[I]], label_1);
+label_1:
+
+                nop ++;
+            }
+            
+            if (rtable_entries[I][entry_id[I]].port_id != rtable->fallback_port_id) {
+                port_id[I] = rtable_entries[I][entry_id[I]].port_id;
+            }
+            
+            if (rtable_entries[I][entry_id[I]].children[x[I]]) {
+                entry_id[I] = rtable_entries[I][entry_id[I]].children[x[I]];
+            } else {
+                break;
+            }
+        }
+        
+        port_id_array[I] = port_id[I];
+    
+end:
+	total_catapults ++;
+    batch_rips[I] = &&end;
+    iMask = FPP_SET(iMask, I); 
+    if(iMask == (1 << BATCH_SIZE) - 1) {
+        return;
+    }
+    I = (I + 1) & BATCH_SIZE_;
+    goto *batch_rips[I];
+
 }
 
 void
@@ -252,6 +288,7 @@ ipv4_rtable_print_statistics()
 {
     printf("total memory accesses: %lld\n", (long long) total_memory_accesses);
     printf("total queries: %lld\n", (long long) total_queries);
+    printf("total catapults: %lld\n", (long long) total_catapults);
     printf("average memory accesses: %.2lf\n", (double) total_memory_accesses / total_queries);
 }
 
