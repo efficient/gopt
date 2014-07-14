@@ -100,7 +100,7 @@ int main(int argc, char **argv)
 	gettimeofday(&end, 0);
 	nogoto_rate = (double) num_addrs / time_elapsed(&start, &end);
 	
-	// Nogoto lookups
+	// goto lookups
 	gettimeofday(&start, 0);
 	for (j = 0; j < num_addrs; j += BATCH_SIZE) {
 		ipv4_rtable_lookup_goto(table, addr_array + j, goto_port_id_array + j);

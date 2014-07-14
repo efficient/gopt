@@ -4,7 +4,7 @@
 // Prefetch, Save, and Switch
 #define FPP_PSS(addr, label) \
 do {\
-	__builtin_prefetch(addr); \
+	__builtin_prefetch(addr, 0, 0); \
 	batch_rips[I] = &&label; \
 	I = (I + 1) & BATCH_SIZE_;	\
 	goto *batch_rips[I]; \
