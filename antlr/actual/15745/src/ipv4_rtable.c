@@ -179,7 +179,7 @@ ipv4_rtable_lookup_nogoto(struct ipv4_rtable *rtable, uint32_t *addr_array, uint
 			uint32_t x = (addr_array[batch_index] >> shift) & ((1 << IPV4_RTABLE_ENTRY_NUM_BITS) - 1);
 	
 			if(shift < 24) {
-				PREFETCH(&rtable_entries[entry_id]);
+				FPP_EXPENSIVE(&rtable_entries[entry_id]);
 				nop ++;
 			}
 
@@ -213,10 +213,10 @@ ipv4_rtable_lookup_goto(struct ipv4_rtable *rtable, uint32_t *addr_array, uint8_
 
 	int temp_index;
 	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&label_0;
+		batch_rips[temp_index] = &&fpp_start;
 	}
 
-label_0:
+fpp_start:
 
         entry_id[I] = 0;
         rtable_entries[I] = (struct ipv4_rtable_entry *) rtable->entries;
@@ -227,8 +227,8 @@ label_0:
             x[I] = (addr_array[I] >> shift[I]) & ((1 << IPV4_RTABLE_ENTRY_NUM_BITS) - 1);
             
             if(shift[I] < 24) {
-                FPP_PSS(&rtable_entries[I][entry_id[I]], label_1);
-label_1:
+                FPP_PSS(&rtable_entries[I][entry_id[I]], fpp_label_1);
+fpp_label_1:
 
                 nop ++;
             }
@@ -245,10 +245,9 @@ label_1:
         }
         
         port_id_array[I] = port_id[I];
-    
-end:
-	total_catapults ++;
-    batch_rips[I] = &&end;
+       
+fpp_end:
+    batch_rips[I] = &&fpp_end;
     iMask = FPP_SET(iMask, I); 
     if(iMask == (1 << BATCH_SIZE) - 1) {
         return;
@@ -257,6 +256,7 @@ end:
     goto *batch_rips[I];
 
 }
+
 
 void
 ipv4_rtable_lookup_multi(struct ipv4_rtable *rtable, uint32_t *addr_array, uint8_t *port_id_array)
