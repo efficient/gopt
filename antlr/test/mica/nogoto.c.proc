@@ -15,18 +15,18 @@ void process_pkts_in_batch(LL *pkt_lo)
 
 	int temp_index;
 	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&label_0;
+		batch_rips[temp_index] = &&fpp_start;
 	}
 
-label_0:
+fpp_start:
 
         key_hash[I] = hash(pkt_lo[I]);
         
         key_tag[I] = HASH_TO_TAG(key_hash[I]);
         ht_bucket[I] = HASH_TO_BUCKET(key_hash[I]);
         
-        FPP_PSS(&ht_index[ht_bucket[I]], label_1);
-label_1:
+        FPP_PSS(&ht_index[ht_bucket[I]], fpp_label_1);
+fpp_label_1:
 
         slots[I] = ht_index[ht_bucket[I]].slots;
         
@@ -35,10 +35,11 @@ label_1:
         for(i[I] = 0; i[I] < SLOTS_PER_BKT; i[I] ++) {
             
             // Tag matched
-            if(SLOT_TO_TAG(slots[I][i[I]]) == key_tag[I]) {
+            if(SLOT_TO_TAG(slots[I][i[I]]) == key_tag[I] &&
+               SLOT_TO_LOG_I(slots[I][i[I]]) != INVALID_KV_I) {
                 log_i[I] = SLOT_TO_LOG_I(slots[I][i[I]]);
-                FPP_PSS(&ht_log[log_i[I]], label_2);
-label_2:
+                FPP_PSS(&ht_log[log_i[I]], fpp_label_2);
+fpp_label_2:
 
                 // Log entry also matches
                 if(ht_log[log_i[I]].key == pkt_lo[I]) {
@@ -53,11 +54,11 @@ label_2:
         }
         
         if(found[I] == 0) {
-            fail_2 ++;
-        }
-    
-end:
-    batch_rips[I] = &&end;
+            fail_2 ++; 
+        }   
+       
+fpp_end:
+    batch_rips[I] = &&fpp_end;
     iMask = FPP_SET(iMask, I); 
     if(iMask == (1 << BATCH_SIZE) - 1) {
         return;

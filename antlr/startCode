@@ -4,7 +4,7 @@
 
 	int temp_index;
 	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&label_0;
+		batch_rips[temp_index] = &&fpp_start;
 	}
 
-label_0:
+fpp_start:
