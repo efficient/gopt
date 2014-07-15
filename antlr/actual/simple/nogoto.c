@@ -6,9 +6,7 @@
 #include<sys/shm.h>
 
 #include "param.h"
-
-#define foreach(i, n) for(i = 0; i < n; i ++)
-#define PREFETCH(x) {}
+#include "fpp.h"
 
 int sum = 0;
 
@@ -21,9 +19,6 @@ int *ht_log;
 // by the packet is determined by an expensive hash of the integer.
 int *pkts;
 #define NUM_PKTS (16 * 1024 * 1024)
-
-#define BATCH_SIZE 8
-#define BATCH_SIZE_ 7
 
 // Some compute function
 // Increment 'a' by at most COMPUTE * 4: the return value is still random
@@ -48,7 +43,7 @@ int process_pkts_in_batch(int *pkt_lo)
 	foreach(batch_index, BATCH_SIZE) {
 
 		int mem_addr = hash(pkt_lo[batch_index]) & LOG_CAP_;
-		PREFETCH(&ht_log[mem_addr]);
+		FPP_EXPENSIVE(&ht_log[mem_addr]);
 		sum += ht_log[mem_addr];
 	}
 }

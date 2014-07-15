@@ -6,9 +6,7 @@
 #include<sys/shm.h>
 
 #include "param.h"
-
-#define foreach(i, n) for(i = 0; i < n; i ++)
-#define PREFETCH(x)		// Just a hint
+#include "fpp.h"
 
 int sum = 0;
 
@@ -21,9 +19,6 @@ int *ht_log;
 // by the packet is determined by an expensive hash of the integer.
 int *pkts;
 #define NUM_PKTS (16 * 1024 * 1024)
-
-#define BATCH_SIZE 8
-#define BATCH_SIZE_ 7
 
 // Some compute function
 // Increment 'a' by at most COMPUTE * 4: the return value is still random
@@ -42,7 +37,6 @@ int hash(int a)
 int batch_index = 0;
 
 // Process BATCH_SIZE pkts starting from lo
-#include "fpp.h"
 int process_pkts_in_batch(int *pkt_lo)
 {
 	int mem_addr[BATCH_SIZE];
@@ -53,21 +47,21 @@ int process_pkts_in_batch(int *pkt_lo)
 
 	int temp_index;
 	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&label_0;
+		batch_rips[temp_index] = &&fpp_start;
 	}
 
-label_0:
+fpp_start:
 
-	// Like a foreach loop
-	
-		mem_addr[I] = hash(pkt_lo[I]) & LOG_CAP_;
-		FPP_PSS(&ht_log[mem_addr[I]], label_1);
-label_1:
+    // Like a foreach loop
+    
+        mem_addr[I] = hash(pkt_lo[I]) & LOG_CAP_;
+        FPP_PSS(&ht_log[mem_addr[I]], fpp_label_1);
+fpp_label_1:
 
-		sum += ht_log[mem_addr[I]];
-	
-end:
-    batch_rips[I] = &&end;
+        sum += ht_log[mem_addr[I]];
+    
+fpp_end:
+    batch_rips[I] = &&fpp_end;
     iMask = FPP_SET(iMask, I); 
     if(iMask == (1 << BATCH_SIZE) - 1) {
         return;
