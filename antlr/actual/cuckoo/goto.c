@@ -9,8 +9,6 @@
 #include "param.h"
 #include "city.h"
 
-#define foreach(i, n) for(i = 0; i < n; i ++)
-
 // Compute an expensive hash using multiple applications of cityhash
 uint32_t hash(uint32_t u)
 {
@@ -41,7 +39,6 @@ int fail = 0;
 // batch_index must be declared outside process_pkts_in_batch
 int batch_index = 0;
 
-#include "fpp.h"
 void process_pkts_in_batch(uint32_t *pkt_lo)
 {
 	uint32_t K[BATCH_SIZE];
@@ -54,16 +51,16 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 
 	int temp_index;
 	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&label_0;
+		batch_rips[temp_index] = &&fpp_start;
 	}
 
-label_0:
+fpp_start:
 
         // Try the first slot
         K[I] = pkt_lo[I];
         S1[I] = hash(K[I]) % HASH_INDEX_N;
-        FPP_PSS(&hash_index[S1[I]], label_1);
-label_1:
+        FPP_PSS(&hash_index[S1[I]], fpp_label_1);
+fpp_label_1:
 
         if(hash_index[S1[I]].key == K[I]) {
             sum += hash_index[S1[I]].value;
@@ -71,8 +68,8 @@ label_1:
         } else {
             // Try the second slot
             S2[I] = hash(K[I] + 1) % HASH_INDEX_N;
-            FPP_PSS(&hash_index[S2[I]], label_2);
-label_2:
+            FPP_PSS(&hash_index[S2[I]], fpp_label_2);
+fpp_label_2:
 
             if(hash_index[S2[I]].key == K[I]) {
                 sum += hash_index[S2[I]].value;
@@ -82,8 +79,8 @@ label_2:
             }
         }
        
-end:
-    batch_rips[I] = &&end;
+fpp_end:
+    batch_rips[I] = &&fpp_end;
     iMask = FPP_SET(iMask, I); 
     if(iMask == (1 << BATCH_SIZE) - 1) {
         return;
