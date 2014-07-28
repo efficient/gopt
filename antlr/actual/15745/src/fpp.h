@@ -1,4 +1,5 @@
-#define PREFETCH(x)	{}					// Just a hint
+#define FPP_EXPENSIVE(x)	{}					// Just a hint
+#define FPP_ISSET(n, i) (n & (1 << i))
 #define FPP_SET(n, i) (n | (1 << i))	// Set the ith bit of n
 	
 // Prefetch, Save, and Switch

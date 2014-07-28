@@ -9,8 +9,6 @@
 #include "param.h"
 #include "city.h"
 
-#define foreach(i, n) for(i = 0; i < n; i ++)
-
 // Compute an expensive hash using multiple applications of cityhash
 uint32_t hash(uint32_t u)
 {
@@ -48,7 +46,7 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 		// Try the first slot
 		uint32_t K = pkt_lo[batch_index];
 		uint32_t S1 = hash(K) % HASH_INDEX_N;
-		PREFETCH(&hash_index[S1]);
+		FPP_EXPENSIVE(&hash_index[S1]);
 
 		if(hash_index[S1].key == K) {
 			sum += hash_index[S1].value;
@@ -56,7 +54,7 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 		} else {
 			// Try the second slot
 			uint32_t S2 = hash(K + 1) % HASH_INDEX_N;
-			PREFETCH(&hash_index[S2]);
+			FPP_EXPENSIVE(&hash_index[S2]);
 			if(hash_index[S2].key == K) {
 				sum += hash_index[S2].value;
 				succ_2 ++;

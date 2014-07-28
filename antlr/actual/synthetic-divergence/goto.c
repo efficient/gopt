@@ -6,6 +6,7 @@
 #include<sys/shm.h>
 
 #include "param.h"
+#include "fpp.h"
 
 struct cache_bkt		/* 64 bytes */
 {
@@ -13,20 +14,7 @@ struct cache_bkt		/* 64 bytes */
 };
 struct cache_bkt *cache;
 
-#define ISSET(n, i) (n & (1 << i))	// Is the ith bit of n == 1
-#define SET(n, i) (n | (1 << i))	// Is the ith bit of n == 1
-
 #define ABS(a) (a > 0 ? a : -1 * a)
-
-// Prefetch, Save, and Switch
-#define PSS(addr, label) \
-do {\
-	__builtin_prefetch(addr); \
-	batch_rips[I] = &&label; \
-	I = (I + 1) & BATCH_SIZE_;	\
-	goto *batch_rips[I]; \
-} while(0)
-	 
 
 // Each packet contains a random integer. The memory address accessed
 // by the packet is determined by an expensive hash of the integer.
@@ -34,8 +22,10 @@ int *pkts;
 
 int sum = 0;
 
+// batch_index must be declared outside process_pkts_in_batch
+int batch_index = 0;
+
 // Process BATCH_SIZE pkts starting from lo
-#include "fpp.h"
 int process_pkts_in_batch(int *pkt_lo)
 {
 	int i[BATCH_SIZE];
@@ -51,41 +41,41 @@ int process_pkts_in_batch(int *pkt_lo)
 
 	int temp_index;
 	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&label_0;
+		batch_rips[temp_index] = &&fpp_start;
 	}
 
-label_0:
+fpp_start:
 
-	// Like a foreach loop
-	
-		jumper[I] = pkt_lo[I];
-			
-		for(i[I] = 0; i[I] < DEPTH; i[I]++) {
-			FPP_PSS(&cache[jumper[I]], label_1);
-label_1:
+    // Like a foreach loop
+    
+        jumper[I] = pkt_lo[I];
+        
+        for(i[I] = 0; i[I] < DEPTH; i[I]++) {
+            FPP_PSS(&cache[jumper[I]], fpp_label_1);
+fpp_label_1:
 
-			arr[I] = cache[jumper[I]].slot_arr;
-			best_j[I] = 0;
-
-			max_diff[I] = ABS(arr[I][0] - jumper[I]) % 8;
-
-			for(j[I] = 1; j[I] < SLOTS_PER_BKT; j[I] ++) {
-				if(ABS(arr[I][j[I]] - jumper[I]) % 8 > max_diff[I]) {
-					max_diff[I] = ABS(arr[I][j[I]] - jumper[I]) % 8;
-					best_j[I] = j[I];
-				}
-			}
-			
-			jumper[I] = arr[I][best_j[I]];
-			if(jumper[I] % 16 == 0) {		// GCC will optimize this
-				break;
-			}
-		}
-
-		sum += jumper[I];
-	
-end:
-    batch_rips[I] = &&end;
+            arr[I] = cache[jumper[I]].slot_arr;
+            best_j[I] = 0;
+            
+            max_diff[I] = ABS(arr[I][0] - jumper[I]) % 8;
+            
+            for(j[I] = 1; j[I] < SLOTS_PER_BKT; j[I] ++) {
+                if(ABS(arr[I][j[I]] - jumper[I]) % 8 > max_diff[I]) {
+                    max_diff[I] = ABS(arr[I][j[I]] - jumper[I]) % 8;
+                    best_j[I] = j[I];
+                }
+            }
+            
+            jumper[I] = arr[I][best_j[I]];
+            if(jumper[I] % 16 == 0) {      // GCC will optimize this
+                break;
+            }
+        }
+        
+        sum += jumper[I];
+       
+fpp_end:
+    batch_rips[I] = &&fpp_end;
     iMask = FPP_SET(iMask, I); 
     if(iMask == (1 << BATCH_SIZE) - 1) {
         return;

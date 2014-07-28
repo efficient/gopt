@@ -1,9 +1,6 @@
 #define SLOTS_PER_BKT 8
 #define SLOTS_PER_BKT_ 7
 
-#define BATCH_SIZE 8
-#define BATCH_SIZE_ 7
-
 #define NUM_PKTS (16 * 1024 * 1024)
 
 #define HT_INDEX_SID 1

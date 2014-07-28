@@ -6,9 +6,7 @@
 #include<sys/shm.h>
 
 #include "param.h"
-
-// Each packet contains a random integer. The memory address accessed
-// by the packet is determined by an expensive hash of the integer.
+#include "fpp.h"
 
 int sum = 0;
 
@@ -17,11 +15,10 @@ int *ht_log;
 #define LOG_CAP_ ((128 * 1024 * 1024) - 1)
 #define LOG_SID 1
 
+// Each packet contains a random integer. The memory address accessed
+// by the packet is determined by an expensive hash of the integer.
 int *pkts;
 #define NUM_PKTS (16 * 1024 * 1024)
-
-#define BATCH_SIZE 8
-#define BATCH_SIZE_ 7
 
 // Some compute function
 // Increment 'a' by at most COMPUTE * 4: the return value is still random
@@ -36,8 +33,11 @@ int hash(int a)
 	return ret;
 }
 
+// batch_index must be declared outside process_pkts_in_batch
+int batch_index = 0;
+
 // Process BATCH_SIZE pkts starting from lo
-#include "fpp.h"
+// Process BATCH_SIZE pkts starting from lo
 int process_pkts_in_batch(int *pkt_lo)
 {
 	int a_1[BATCH_SIZE];
@@ -67,41 +67,41 @@ int process_pkts_in_batch(int *pkt_lo)
 
 	int temp_index;
 	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&label_0;
+		batch_rips[temp_index] = &&fpp_start;
 	}
 
-label_0:
+fpp_start:
 
-	// Like a foreach loop
-	
-		a_1[I] = hash(pkt_lo[I]) & LOG_CAP_;
-		a_2[I] = hash(a_1[I]) & LOG_CAP_;
-		a_3[I] = hash(a_2[I]) & LOG_CAP_;
-		a_4[I] = hash(a_3[I]) & LOG_CAP_;
-		a_5[I] = hash(a_4[I]) & LOG_CAP_;
-		a_6[I] = hash(a_5[I]) & LOG_CAP_;
-		a_7[I] = hash(a_6[I]) & LOG_CAP_;
-		a_8[I] = hash(a_7[I]) & LOG_CAP_;
-		a_9[I] = hash(a_8[I]) & LOG_CAP_;
-		a_10[I] = hash(a_9[I]) & LOG_CAP_;
-		a_11[I] = hash(a_10[I]) & LOG_CAP_;
-		a_12[I] = hash(a_11[I]) & LOG_CAP_;
-		a_13[I] = hash(a_12[I]) & LOG_CAP_;
-		a_14[I] = hash(a_13[I]) & LOG_CAP_;
-		a_15[I] = hash(a_14[I]) & LOG_CAP_;
-		a_16[I] = hash(a_15[I]) & LOG_CAP_;
-		a_17[I] = hash(a_16[I]) & LOG_CAP_;
-		a_18[I] = hash(a_17[I]) & LOG_CAP_;
-		a_19[I] = hash(a_18[I]) & LOG_CAP_;
-		a_20[I] = hash(a_19[I]) & LOG_CAP_;
-		
-		FPP_PSS(&ht_log[a_20[I]], label_1);
-label_1:
+    // Like a foreach loop
+    
+        a_1[I] = hash(pkt_lo[I]) & LOG_CAP_;
+        a_2[I] = hash(a_1[I]) & LOG_CAP_;
+        a_3[I] = hash(a_2[I]) & LOG_CAP_;
+        a_4[I] = hash(a_3[I]) & LOG_CAP_;
+        a_5[I] = hash(a_4[I]) & LOG_CAP_;
+        a_6[I] = hash(a_5[I]) & LOG_CAP_;
+        a_7[I] = hash(a_6[I]) & LOG_CAP_;
+        a_8[I] = hash(a_7[I]) & LOG_CAP_;
+        a_9[I] = hash(a_8[I]) & LOG_CAP_;
+        a_10[I] = hash(a_9[I]) & LOG_CAP_;
+        a_11[I] = hash(a_10[I]) & LOG_CAP_;
+        a_12[I] = hash(a_11[I]) & LOG_CAP_;
+        a_13[I] = hash(a_12[I]) & LOG_CAP_;
+        a_14[I] = hash(a_13[I]) & LOG_CAP_;
+        a_15[I] = hash(a_14[I]) & LOG_CAP_;
+        a_16[I] = hash(a_15[I]) & LOG_CAP_;
+        a_17[I] = hash(a_16[I]) & LOG_CAP_;
+        a_18[I] = hash(a_17[I]) & LOG_CAP_;
+        a_19[I] = hash(a_18[I]) & LOG_CAP_;
+        a_20[I] = hash(a_19[I]) & LOG_CAP_;
+        
+        FPP_PSS(&ht_log[a_20[I]], fpp_label_1);
+fpp_label_1:
 
-		sum += ht_log[a_20[I]];
-	
-end:
-    batch_rips[I] = &&end;
+        sum += ht_log[a_20[I]];
+       
+fpp_end:
+    batch_rips[I] = &&fpp_end;
     iMask = FPP_SET(iMask, I); 
     if(iMask == (1 << BATCH_SIZE) - 1) {
         return;
