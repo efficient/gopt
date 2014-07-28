@@ -61,7 +61,7 @@ int process_pkts_in_batch(int *pkt_lo)
 			jumper[b_i] = arr[best_j];
 			if(jumper[b_i] % 16 == 0) {
 				iMask = FPP_SET(iMask, b_i);
-			} else {
+			} else if (i != DEPTH - 1) {
 				__builtin_prefetch(&cache[jumper[b_i]], 0, 0);
 			}
 		}
