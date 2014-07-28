@@ -15,7 +15,7 @@
 uint32_t hash(uint32_t u)
 {
 	uint32_t ret = u, i;
-	for(i = 0; i < DEPTH; i ++) {
+	for(i = 0; i < COMPUTE; i ++) {
 		ret = CityHash32((char *) &ret, 4);
 	}
 	return ret;
