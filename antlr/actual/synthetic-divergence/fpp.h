@@ -16,3 +16,13 @@ do {\
 #define BATCH_SIZE_ 7
 
 #define foreach(i, n) for(i = 0; i < n; i ++)
+
+long long get_cycles()
+{
+	unsigned low, high;
+	unsigned long long val;
+	asm volatile ("rdtsc" : "=a" (low), "=d" (high));
+	val = high;
+	val = (val << 32) | low;
+	return val;
+}
