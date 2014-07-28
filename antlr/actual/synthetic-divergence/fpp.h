@@ -1,5 +1,6 @@
 #define PREFETCH(x)	{}					// Just a hint
 #define FPP_SET(n, i) (n | (1 << i))	// Set the ith bit of n
+#define FPP_ISSET(n, i) (n & (1 << i))
 	
 // Prefetch, Save, and Switch
 #define FPP_PSS(addr, label) \

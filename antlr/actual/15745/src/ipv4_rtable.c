@@ -284,8 +284,8 @@ ipv4_rtable_lookup_multi(struct ipv4_rtable *rtable, uint32_t *addr_array, uint8
 					port_id_array_internal[i] = rtable_entries[eiai].port_id;
 				if (rtable_entries[eiai].children[x]) {
 					eiai = rtable_entries[eiai].children[x];
-					//_mm_prefetch(&rtable_entries[eiai], _MM_HINT_T0);
-					//_mm_prefetch(((char *)&rtable_entries[eiai]) + 64, _MM_HINT_T0);
+					_mm_prefetch(&rtable_entries[eiai], _MM_HINT_T0);
+					_mm_prefetch(((char *)&rtable_entries[eiai]) + 64, _MM_HINT_T0);
 					entry_id_array[i] = eiai;
 				} else {
 					finished[i] = 1;

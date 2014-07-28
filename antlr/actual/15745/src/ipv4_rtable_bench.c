@@ -11,6 +11,7 @@
 #include "fpp.h"
 
 unsigned n = 1 << 24;
+//unsigned n = 1 << 16;		// L2 cache version
 struct ipv4_rib_entry *rib_entries;
 
 unsigned num_addrs = (4 * 1024 * 1024);
