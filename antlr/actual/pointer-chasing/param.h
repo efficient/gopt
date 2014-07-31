@@ -1,5 +1,5 @@
-#define DEPTH 2
-#define NUM_PKTS (16 * 1024 * 1024)
+#define DEPTH 200
+#define NUM_PKTS (1 * 1024 * 1024)
 
 #define LOG_SID 1
 #define LOG_CAP (128 * 1024 * 1024)		// Number of ints in the log
