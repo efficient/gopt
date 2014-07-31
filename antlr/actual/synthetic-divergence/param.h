@@ -8,5 +8,5 @@
 #define NUM_BS_ ((8 * 1024 * 1024) - 1)
 
 // Make the cache fit inside L3
-//#define NUM_BS (131072)		// Number of cache buckets (avoiding BKTS)
-//#define NUM_BS_ (131071)
+//#define NUM_BS (128 * 1024)		// Number of cache buckets (avoiding BKTS)
+//#define NUM_BS_ ((128 * 1024) - 1)

@@ -8,13 +8,7 @@
 #include "param.h"
 #include "fpp.h"
 
-struct cache_bkt		/* 64 bytes */
-{
-	int slot_arr[SLOTS_PER_BKT];
-};
-struct cache_bkt *cache;
-
-#define ABS(a) (a > 0 ? a : -1 * a)
+int *ht_log;
 
 // Each packet contains a random integer. The memory address accessed
 // by the packet is determined by an expensive hash of the integer.
@@ -35,23 +29,7 @@ int process_pkts_in_batch(int *pkt_lo)
 		int jumper = pkt_lo[batch_index];
 			
 		for(i = 0; i < DEPTH; i++) {
-			FPP_EXPENSIVE(&cache[jumper]);
-			int *arr = cache[jumper].slot_arr;
-			int j, best_j = 0;
-
-			int max_diff = ABS(arr[0] - jumper) % 8;
-
-			for(j = 1; j < SLOTS_PER_BKT; j ++) {
-				if(ABS(arr[j] - jumper) % 8 > max_diff) {
-					max_diff = ABS(arr[j] - jumper) % 8;
-					best_j = j;
-				}
-			}
-			
-			jumper = arr[best_j];
-			if(jumper % 16 == 0) {		// GCC will optimize this
-				break;
-			}
+			jumper = ht_log[jumper];
 		}
 
 		sum += jumper;
@@ -63,30 +41,27 @@ int main(int argc, char **argv)
 	int i, j;
 
 	// Allocate a large memory area
-	fprintf(stderr, "Size of cache = %lu\n", NUM_BS * sizeof(struct cache_bkt));
+	fprintf(stderr, "Size of ht_log = %lu\n", LOG_CAP * sizeof(int));
 
-	int sid = shmget(CACHE_SID, NUM_BS * sizeof(struct cache_bkt), 
-		IPC_CREAT | 0666 | SHM_HUGETLB);
+	int sid = shmget(LOG_SID, LOG_CAP * sizeof(int), IPC_CREAT | 0666 | SHM_HUGETLB);
 	if(sid < 0) {
-		fprintf(stderr, "Could not create cache\n");
+		fprintf(stderr, "Could not create ht_log\n");
 		exit(-1);
 	}
-	cache = shmat(sid, 0, 0);
+	ht_log = shmat(sid, 0, 0);
 
-	// Fill in the cache with index into itself
-	for(i = 0; i < NUM_BS; i ++) {
-		for(j = 0; j < SLOTS_PER_BKT; j++) {
-			cache[i].slot_arr[j] = rand() & NUM_BS_;
-		}
+	// Fill in the ht_log with index into itself
+	for(i = 0; i < LOG_CAP; i ++) {
+		ht_log[i] = rand() & LOG_CAP_;
 	}
 
 	// Allocate the packets
 	pkts = (int *) malloc(NUM_PKTS * sizeof(int));
 	for(i = 0; i < NUM_PKTS; i++) {
-		pkts[i] = rand() & NUM_BS_;
+		pkts[i] = rand() & LOG_CAP_;
 	}
 
-	fprintf(stderr, "Finished creating cache and packets\n");
+	fprintf(stderr, "Finished creating ht_log and packets\n");
 
 	long long start, end;
 	start = get_cycles();

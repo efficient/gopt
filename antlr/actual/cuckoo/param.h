@@ -1,6 +1,6 @@
 #define SLOTS_PER_BKT 8
 
-#define DEPTH 2
+#define COMPUTE 2
 #define NUM_PKTS (16 * 1024 * 1024)
 
 #define HASH_INDEX_SID 1

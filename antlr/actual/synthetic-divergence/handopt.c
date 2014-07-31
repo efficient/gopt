@@ -61,7 +61,7 @@ int process_pkts_in_batch(int *pkt_lo)
 			jumper[b_i] = arr[best_j];
 			if(jumper[b_i] % 16 == 0) {
 				iMask = FPP_SET(iMask, b_i);
-			} else {
+			} else if (i != DEPTH - 1) {
 				__builtin_prefetch(&cache[jumper[b_i]], 0, 0);
 			}
 		}
@@ -104,15 +104,20 @@ int main(int argc, char **argv)
 
 	fprintf(stderr, "Finished creating cache and packets\n");
 
-	struct timespec start, end;
-	clock_gettime(CLOCK_REALTIME, &start);
+	long long start, end;
+	start = get_cycles();
 
 	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
 		process_pkts_in_batch(&pkts[i]);
 	}
+	
+	end = get_cycles();
 
-	clock_gettime(CLOCK_REALTIME, &end);
-	printf("Time = %f sum = %d\n", 
-		(end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1000000000,
-		sum);
+	// xia-router2 frequency = 2.7 Ghz
+	long long ns = ((long long) (end - start) / 2.7);
+
+	printf("Total time = %f s, sum = %d\n", ns / 1000000000.0, sum);
+	printf("Average time per batch = %lld ns\n", ns / (NUM_PKTS / BATCH_SIZE));
+	printf("Average time per packet = %lld ns \n", ns / NUM_PKTS);
+
 }
