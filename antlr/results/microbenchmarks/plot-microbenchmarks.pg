@@ -11,6 +11,8 @@ set key above height 3.5
 set key font ",20"
 set key samplen 5
 
+set ytics 1
+
 set ylabel "Time for packet processing (s)" offset 1
 set grid 
 
@@ -18,3 +20,4 @@ set boxwidth 1
 
 plot 'microbenchmarks.dat' using 2:xtic(1) title col lw 2 lc rgb "#EEEEEE", \
 	'' using 3:xtic(1) title col lw 2 lc rgb "#AAAAAA", \
+	'' using 4:xtic(1) title col lw 2 lc rgb "#888888", \
