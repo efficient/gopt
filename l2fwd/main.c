@@ -128,7 +128,7 @@ main(int argc, char **argv)
 			}
 	
 			if(rte_lcore_is_enabled(my_lcore_id) == 0) {
-				red_printf("Queue %d on port %d wants disabled lcore %d\n", 
+				red_printf("\tQueue %d on port %d wants disabled lcore %d! Exiting!\n", 
 					queue_id, port_id, my_lcore_id);
 				exit(-1);
 			}
