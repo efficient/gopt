@@ -6,9 +6,7 @@
 #include<sys/shm.h>
 
 #include "param.h"
-
-// Each packet contains a random integer. The memory address accessed
-// by the packet is determined by an expensive hash of the integer.
+#include "fpp.h"
 
 int sum = 0;
 
@@ -17,13 +15,10 @@ int *ht_log;
 #define LOG_CAP_ ((128 * 1024 * 1024) - 1)
 #define LOG_SID 1
 
+// Each packet contains a random integer. The memory address accessed
+// by the packet is determined by an expensive hash of the integer.
 int *pkts;
-#define NUM_PKTS (32 * 1024 * 1024)
-
-#define BATCH_SIZE 8
-#define BATCH_SIZE_ 7
-
-int batch_index = 0;
+#define NUM_PKTS (16 * 1024 * 1024)
 
 // Some compute function
 // Increment 'a' by at most COMPUTE * 4: the return value is still random
@@ -37,6 +32,9 @@ int hash(int a)
 
 	return ret;
 }
+
+// batch_index must be declared outside process_pkts_in_batch
+int batch_index = 0;
 
 // Process BATCH_SIZE pkts starting from lo
 int process_pkts_in_batch(int *pkt_lo)

@@ -10,14 +10,14 @@ xge4,5,6,7 are attached to CPU1 (1,3,5,7,9,11,13,15)
 
 [network connection]
 
-xia-router0:xge0 - xia-router2:xge0
-xia-router0:xge1 - xia-router2:xge1
+xia-router0:xge0 - xia-router2:xge0		CHECK
+xia-router0:xge1 - xia-router2:xge1		CHECK
 xia-router1:xge0 - xia-router2:xge2
 xia-router1:xge1 - xia-router2:xge3
-xia-router0:xge2 - xia-router2:xge4
-xia-router0:xge3 - xia-router2:xge5
-xia-router1:xge2 - xia-router2:xge6
-xia-router1:xge3 - xia-router2:xge7
+xia-router0:xge2 - xia-router2:xge4		CHECK
+xia-router0:xge3 - xia-router2:xge5		CHECK
+xia-router1:xge2 - xia-router2:xge6		CHECK
+xia-router1:xge3 - xia-router2:xge7		CHECK
 
 MAC addresses:
 
