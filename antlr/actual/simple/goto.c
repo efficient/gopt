@@ -4,6 +4,7 @@
 #include<time.h>
 #include<sys/ipc.h>
 #include<sys/shm.h>
+#include<assert.h>
 
 #include "param.h"
 #include "fpp.h"
@@ -81,7 +82,9 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Could not create ht_log\n");
 		exit(-1);
 	}
+
 	ht_log = shmat(sid, 0, 0);
+	assert(ht_log != NULL);
 	for(i = 0; i < LOG_CAP; i ++) {
 		ht_log[i] = i;
 	}
