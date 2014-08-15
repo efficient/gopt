@@ -1,6 +1,6 @@
 #include "main.h"
 
-#define MAX_MAX_SRV_BURST 40
+#define MAX_SRV_BURST 16
 // Only immutable information should be global
 // xia-router2 xge0,1,2,3,4,5,6,7
 LL src_mac_arr[8] = {0x6c10bb211b00, 0x6d10bb211b00, 0x64d2bd211b00, 0x65d2bd211b00,
@@ -12,14 +12,14 @@ LL dst_mac_arr[8] = {0x36d3bd211b00, 0x37d3bd211b00, 0x44d7a3211b00, 0x45d7a3211
 	
 void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 {
-	int i, j, max_srv_burst = 4;
+	int i, j;
 	LL nb_tx[RTE_MAX_ETHPORTS] = {0}, nb_rx[RTE_MAX_ETHPORTS] = {0}, nb_tx_all_ports = 0;
 
 	int *port_arr = get_active_ports(XIA_R2_PORT_MASK);
 	int port_index = 0;
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 
-	struct rte_mbuf *rx_pkts_burst[MAX_MAX_SRV_BURST];	// Large enough for burst collection
+	struct rte_mbuf *rx_pkts_burst[MAX_SRV_BURST];
 
 	int lcore_id = rte_lcore_id();						// Lcore on which this server process runs
 	int socket_id = rte_lcore_to_socket_id(lcore_id);
@@ -36,7 +36,7 @@ void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 	struct ipv4_hdr *ip_hdr;
 	void *src_mac, *dst_mac;
 
-	int batch_addr[MAX_MAX_SRV_BURST];
+	int batch_addr[MAX_SRV_BURST];
 
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
 	int hdr_size = 36;
@@ -60,10 +60,9 @@ void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 		
 		// Lcores *cannot* wait for a particular number of packets from a port. If we do this,
 		// the port mysteriously runs out of RX descriptors.
-		while(nb_rx_new < max_srv_burst && tries < 5) {
+		while(nb_rx_new < MAX_SRV_BURST && tries < 5) {
 			nb_rx_new += rte_eth_rx_burst(port_id, queue_id, &rx_pkts_burst[nb_rx_new], 
-				max_srv_burst - nb_rx_new);
-
+				MAX_SRV_BURST - nb_rx_new);
 			tries ++;
 		}
 		
@@ -84,8 +83,14 @@ void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 			
 			src_mac = &eth_hdr->s_addr.addr_bytes[0];
 			*((uint64_t *) src_mac) = src_mac_arr[port_id];
+
 			dst_mac = &eth_hdr->d_addr.addr_bytes[0];
-			*((uint64_t *) dst_mac) = dst_mac_arr[port_id];
+			//if((fastrand(&rss_seed) & 0xff) >= 0) {
+				*((uint64_t *) dst_mac) = dst_mac_arr[port_id];
+			//} else {
+			//	*((uint64_t *) dst_mac) = 0xdeadbeef;
+			//}
+
 			eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
 	
 			// These 3 fields of ip_hdr are required for RSS
@@ -155,8 +160,6 @@ void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 			memset(nb_tx, 0, RTE_MAX_ETHPORTS * sizeof(LL));
 			nb_tx_all_ports = 0;
 			
-			max_srv_burst = max_srv_burst + 4 > MAX_MAX_SRV_BURST ? 4 : max_srv_burst + 4;
-
 			printf("\n");
 		}
 

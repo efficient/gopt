@@ -1,6 +1,6 @@
 #include "main.h"
-#define MAX_CLT_BURST 16
-#define RX_SAMPLE_SIZE 1		// The client verifies the RX pkts sometimes
+#define MAX_CLT_TX_BURST 1
+#define MAX_CLT_RX_BURST 1
 
 void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 {
@@ -17,7 +17,7 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 
 	int i;
 
-	struct rte_mbuf *rx_pkts_burst[MAX_CLT_BURST], *tx_pkts_burst[MAX_CLT_BURST];
+	struct rte_mbuf *rx_pkts_burst[MAX_CLT_RX_BURST], *tx_pkts_burst[MAX_CLT_TX_BURST];
 
 	int lcore_id = rte_lcore_id();
 
@@ -48,7 +48,7 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 
 	while (1) {
 
-		for(i = 0; i < MAX_CLT_BURST; i ++) {
+		for(i = 0; i < MAX_CLT_TX_BURST; i ++) {
 			tx_pkts_burst[i] = rte_pktmbuf_alloc(l2fwd_pktmbuf_pool[lcore_id]);
 			CPE(tx_pkts_burst[i] == NULL, "tx_alloc failed\n");
 			
@@ -80,17 +80,17 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 			tsc[0] = rte_rdtsc();		// 48 -> 56
 		}
 
-		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, tx_pkts_burst, MAX_CLT_BURST);
+		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, tx_pkts_burst, MAX_CLT_TX_BURST);
 		nb_tx += nb_tx_new;
-		for(i = nb_tx_new; i < MAX_CLT_BURST; i++) {
+		for(i = nb_tx_new; i < MAX_CLT_TX_BURST; i++) {
 			rte_pktmbuf_free(tx_pkts_burst[i]);
 		}
 
-		// RX sampling for application-level verification and latency sampling
-		if((fastrand(&rss_seed) & 0xfff) == 0xfff) {
-			int nb_rx_new = rte_eth_rx_burst(port_id, queue_id, rx_pkts_burst, RX_SAMPLE_SIZE);
+		// RX drain
+		while(1) {
+			int nb_rx_new = rte_eth_rx_burst(port_id, queue_id, rx_pkts_burst, MAX_CLT_RX_BURST);
 			if(nb_rx_new == 0) {
-				continue;
+				break;
 			}
 
 			nb_rx += nb_rx_new;
@@ -127,9 +127,9 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 			double nanoseconds = C_FAC * (cur_tsc - prev_tsc);
 			prev_tsc = cur_tsc;
 
-			printf("Lcore = %d, TX per sec = %f, Avg. latency = %.2f us | Fails = %lld, nb_rx = %lld\n",
+			printf("Lcore = %d, TX per sec = %f, Avg. latency = %.2f us, samples = %lld | Fails = %lld, nb_rx = %lld\n",
 				lcore_id, nb_tx / (nanoseconds / GHZ_CPS),
-				(C_FAC * (latency_tot / (rx_samples + .01))) / 1000, nb_fails, nb_rx);
+				(C_FAC * (latency_tot / (rx_samples + .01))) / 1000, rx_samples, nb_fails, nb_rx);
 			
 			nb_tx = 0;
 
