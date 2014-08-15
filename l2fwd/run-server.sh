@@ -8,5 +8,4 @@ sudo ipcrm -M 1			# BASE_HT_LOG_SHM_KEY = 1
 #sudo ./build/l2fwd -c 0xAA55 -n 4
 sudo ./build/l2fwd -c 0xAA -n 4
 
-# AA55 means cores 0, 2, 4, 6 (socket 0) and cores 9, 11, 13, 15
-# 55 means cores 0, 2, 4, 6 (socket 0)
+# AA = lcores 1, 3, 5, 7

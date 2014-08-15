@@ -97,7 +97,7 @@
 #define BASE_HT_LOG_SHM_KEY 1
 
 // All xia hardware specific features need to be prefixed by XIA_
-#define XIA_R0_PORT_MASK 0xf	// xge0,1,2,3
+#define XIA_R0_PORT_MASK 0xc	// xge2,3
 #define XIA_R0_CPS 2270000000	// Client cycles per second
 
 #define XIA_R2_PORT_MASK 0xf0	// xge4,5,6,7

@@ -16,7 +16,7 @@
 		
 		Assuming that each lcore only accesses all ports on its socket, the
 		number of queues on a port is equal to the number of active lcores on
-		its socket.
+		its socket: this is being done right now.
 
 	At a client:
 		Lcore-to-port mapping is fixed and is defined as lcore_to_port[] in 
