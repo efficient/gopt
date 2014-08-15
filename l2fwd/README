@@ -47,6 +47,9 @@
         1. The 24 Mpps per-NIC limit is for RX.
         2. xia-router0/1 are Westmere machines with an I/O hub.
 
+	* Latency:
+		Minimum average RTT is around 22 us (similar to MICA's average latency).
+
 4. Packet formatting
 	The Ethernet and IPv4 header take the 1st 34 bytes of a packet. Assume 36
 	for alignment. This leaves us 24 bytes for data.
