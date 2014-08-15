@@ -35,7 +35,7 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 	LL prev_tsc = 0, cur_tsc = 0;
 	prev_tsc = rte_rdtsc();
 
-	LL nb_tx = 0, nb_rx = 0, nb_rx_free = 0, nb_fails = 0;
+	LL nb_tx = 0, nb_rx = 0, nb_fails = 0;
 	struct ether_hdr *eth_hdr;
 	struct ipv4_hdr *ip_hdr;
 	void *src_mac, *dst_mac;
@@ -118,7 +118,6 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 				}
 
 				rte_pktmbuf_free(rx_pkts_burst[i]);
-				nb_rx_free ++;
 			}
 		}
 
@@ -128,9 +127,9 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 			double nanoseconds = C_FAC * (cur_tsc - prev_tsc);
 			prev_tsc = cur_tsc;
 
-			printf("Lcore = %d, TX per sec = %f, RX samples = %lld, Latency = %.2f us | Fails = %lld, nb_rx = %lld, nb_rx_free = %lld\n",
-				lcore_id, nb_tx / (nanoseconds / GHZ_CPS), rx_samples,
-				C_FAC * (latency_tot / (rx_samples + .01)) / 1000, nb_fails, nb_rx, nb_rx_free);
+			printf("Lcore = %d, TX per sec = %f, Avg. latency = %.2f us | Fails = %lld, nb_rx = %lld\n",
+				lcore_id, nb_tx / (nanoseconds / GHZ_CPS),
+				(C_FAC * (latency_tot / (rx_samples + .01))) / 1000, nb_fails, nb_rx);
 			
 			nb_tx = 0;
 
