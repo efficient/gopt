@@ -1,6 +1,6 @@
 #include "main.h"
-#define MAX_CLT_TX_BURST 8
-#define MAX_CLT_RX_BURST 8
+#define MAX_CLT_TX_BURST 16
+#define MAX_CLT_RX_BURST 16
 
 void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 {

@@ -48,7 +48,7 @@
         2. xia-router0/1 are Westmere machines with an I/O hub.
 
 	* Latency:
-		Minimum average RTT is around 22 us (similar to MICA's average latency).
+		Minimum average RTT is around 16 us.
 
 4. Packet formatting
 	The Ethernet and IPv4 header take the 1st 34 bytes of a packet. Assume 36
@@ -59,3 +59,10 @@
 	44-47:		The server's response
 	48-55:		The client's timestamp when it sent the packet.
 
+
+5. Running on xia-router* systems:
+	* Reboot the machines
+	* At xia-router`i`, run systemish/scripts/dpdk/xia-router`i`-init.sh
+	* Mount the fastpp directory on xia-router1 and xia-router0 via sshfs
+	* At xia-router2: ./run-servers.sh
+	* At xia-router1 and xia-router2: ./run-client.sh [0,1]
