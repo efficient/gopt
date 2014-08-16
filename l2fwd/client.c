@@ -1,6 +1,6 @@
 #include "main.h"
-#define MAX_CLT_TX_BURST 1
-#define MAX_CLT_RX_BURST 1
+#define MAX_CLT_TX_BURST 16
+#define MAX_CLT_RX_BURST 16
 
 void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 {
@@ -29,7 +29,6 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 
 	// This is a valid queue_id because all client ports have 3 queues
 	int queue_id = lcore_id % 3;
-
 	red_printf("Client: lcore: %d, port: %d, queue: %d\n", lcore_id, port_id, queue_id);
 
 	LL prev_tsc = 0, cur_tsc = 0;
@@ -38,7 +37,7 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 	LL nb_tx = 0, nb_rx = 0, nb_fails = 0;
 	struct ether_hdr *eth_hdr;
 	struct ipv4_hdr *ip_hdr;
-	void *src_mac, *dst_mac;
+	uint8_t *src_mac_ptr, *dst_mac_ptr;
 
 	LL rx_samples = 0, latency_tot = 0;
 	uint64_t rss_seed = 0xdeadbeef;
@@ -55,10 +54,16 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 			eth_hdr = rte_pktmbuf_mtod(tx_pkts_burst[i], struct ether_hdr *);
 			ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 		
-			src_mac = &eth_hdr->s_addr.addr_bytes[0];
-			*((uint64_t *) src_mac) = src_mac_arr[client_id][port_id];
-			dst_mac = &eth_hdr->d_addr.addr_bytes[0];
-			*((uint64_t *) dst_mac) = dst_mac_arr[client_id][port_id];
+			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
+			if((fastrand(&rss_seed) & 0xff) == 0) {
+				set_mac(src_mac_ptr, src_mac_arr[client_id][port_id]);
+			} else {
+				set_mac(src_mac_ptr, 0xdeadbeef);
+			}
+
+			dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
+			set_mac(dst_mac_ptr, dst_mac_arr[client_id][port_id]);
+
 			eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
 	
 			// These 3 fields of ip_hdr are required for RSS

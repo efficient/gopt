@@ -34,7 +34,7 @@ void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 
 	struct ether_hdr *eth_hdr;
 	struct ipv4_hdr *ip_hdr;
-	void *src_mac, *dst_mac;
+	void *src_mac_ptr, *dst_mac_ptr;
 
 	int batch_addr[MAX_SRV_BURST];
 
@@ -78,18 +78,13 @@ void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 			if(i != nb_rx_new - 1) {
 				rte_prefetch0(rte_pktmbuf_mtod(rx_pkts_burst[i + 1], void *));
 			}
+
 			eth_hdr = rte_pktmbuf_mtod(rx_pkts_burst[i], struct ether_hdr *);
     		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 			
-			src_mac = &eth_hdr->s_addr.addr_bytes[0];
-			*((uint64_t *) src_mac) = src_mac_arr[port_id];
-
-			dst_mac = &eth_hdr->d_addr.addr_bytes[0];
-			//if((fastrand(&rss_seed) & 0xff) >= 0) {
-				*((uint64_t *) dst_mac) = dst_mac_arr[port_id];
-			//} else {
-			//	*((uint64_t *) dst_mac) = 0xdeadbeef;
-			//}
+			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
+			dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
+			swap_mac(src_mac_ptr, dst_mac_ptr);
 
 			eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
 	

@@ -242,3 +242,39 @@ int client_port_queue_to_lcore(int port_id, int queue_id)
 
 	return mapping[port_id][queue_id];
 }
+
+void set_mac(uint8_t *mac_ptr, LL mac_addr)
+{
+   	mac_ptr[0] = mac_addr & 0xFF;
+    mac_ptr[1] = (mac_addr >> 8) & 0xFF;
+    mac_ptr[2] = (mac_addr >> 16) & 0xFF;
+    mac_ptr[3] = (mac_addr >> 24) & 0xFF;
+    mac_ptr[4] = (mac_addr >> 32) & 0xFF;
+    mac_ptr[5] = (mac_addr >> 40) & 0xFF;
+}
+
+void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr)
+{
+	int i = 0;
+	for(i = 0; i < 6; i ++) {
+		uint8_t temp = src_mac_ptr[i];
+		src_mac_ptr[i] = dst_mac_ptr[i];
+		dst_mac_ptr[i] = temp;
+	}
+}
+
+void print_ether_hdr(struct ether_hdr *eth_hdr)
+{
+	int i;
+	printf("Ether hdr:\n");
+	printf("\tDst mac: ");
+	for(i = 0; i < 6; i ++) {
+		printf("%x ", eth_hdr->d_addr.addr_bytes[i]);
+	}
+	printf("\n\tSrc mac: ");
+	for(i = 0; i < 6; i ++) {
+		printf("%x ", eth_hdr->s_addr.addr_bytes[i]);
+	}
+	printf("\n");
+}
+

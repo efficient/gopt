@@ -129,4 +129,8 @@ int *shm_alloc(int key, int cap);
 inline uint32_t fastrand(uint64_t* seed);
 void micro_sleep(int us, double cycles_to_ns_fac);
 
+void set_mac(uint8_t *mac_ptr, LL mac_addr);
+void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr);
+void print_ether_hdr(struct ether_hdr *eth_hdr);
+
 #define NUM_ACCESSES 0
