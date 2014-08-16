@@ -1,6 +1,6 @@
 #include "main.h"
-#define MAX_CLT_TX_BURST 16
-#define MAX_CLT_RX_BURST 16
+#define MAX_CLT_TX_BURST 8
+#define MAX_CLT_RX_BURST 8
 
 void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 {
@@ -90,6 +90,8 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 		for(i = nb_tx_new; i < MAX_CLT_TX_BURST; i++) {
 			rte_pktmbuf_free(tx_pkts_burst[i]);
 		}
+
+		micro_sleep(2, C_FAC);
 
 		// RX drain
 		while(1) {
