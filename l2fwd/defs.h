@@ -1,3 +1,5 @@
+// Defs for reference. XXX: This header file is unused.
+
 /**
  * A packet message buffer.
  */
