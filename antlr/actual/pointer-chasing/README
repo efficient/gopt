@@ -1,19 +1,18 @@
-no-batch:
-	For each packet, perform DEPTH number of dependent lookups.
+For each packet, perform DEPTH number of dependent lookups.
 	
-	When the lookups for packets are independent, there can be several
-	memory accesses in flight due to loop unrolling.
+When the lookups for packets are independent, there can be several
+memory accesses in flight due to loop unrolling.
 	
-	As DEPTH becomes larger, fewer memory accesses for a packet can
-	be overlapped with memory accesses for a different packet.
+As DEPTH becomes larger, fewer memory accesses for a packet can
+be overlapped with memory accesses for a different packet.
 
-	Cost of a memory access with increasing DEPTH:
+Cost of a memory access with increasing DEPTH:
 	
-		DEPTH				Cost (ns)
-		1					11 ns
-		4					14 ns
-		16 					34 ns
-		80					77 ns
-		160 				85 ns
-		...
-		Inf					90 ns
+	DEPTH				Cost (ns)
+	1					11 ns
+	4					14 ns
+	16 					34 ns
+	80					77 ns
+	160 				85 ns
+	...
+	Inf					90 ns
