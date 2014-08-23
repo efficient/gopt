@@ -10,8 +10,7 @@
 
 int *ht_log;
 
-// Each packet contains a random integer. The memory address accessed
-// by the packet is determined by an expensive hash of the integer.
+// Each packet contains a random integer
 int *pkts;
 
 int sum = 0;
@@ -86,7 +85,6 @@ int main(int argc, char **argv)
 	long long ns = ((long long) (end - start) / 2.7);
 
 	printf("Total time = %f s, sum = %d\n", ns / 1000000000.0, sum);
-	printf("Average time per batch = %lld ns\n", ns / (NUM_PKTS / BATCH_SIZE));
-	printf("Average time per packet = %lld ns \n", ns / NUM_PKTS);
+	printf("Average time per mem access = %lld ns \n", ns / (NUM_PKTS * DEPTH));
 
 }

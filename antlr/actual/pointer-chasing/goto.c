@@ -21,19 +21,42 @@ int batch_index = 0;
 // Process BATCH_SIZE pkts starting from lo
 int process_pkts_in_batch(int *pkt_lo)
 {
-	// Like a foreach loop
-	foreach(batch_index, BATCH_SIZE) {
-		
-		int i;
-		int jumper = pkt_lo[batch_index];
-			
-		for(i = 0; i < DEPTH; i++) {
-			FPP_EXPENSIVE(&ht_log[jumper]);
-			jumper = ht_log[jumper];
-		}
+	int i[BATCH_SIZE];
+	int jumper[BATCH_SIZE];
 
-		sum += jumper;
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&fpp_start;
 	}
+
+fpp_start:
+
+    // Like a foreach loop
+    
+        jumper[I] = pkt_lo[I];
+        
+        for(i[I] = 0; i[I] < DEPTH; i[I]++) {
+            FPP_PSS(&ht_log[jumper[I]], fpp_label_1);
+fpp_label_1:
+
+            jumper[I] = ht_log[jumper[I]];
+        }
+        
+        sum += jumper[I];
+       
+fpp_end:
+    batch_rips[I] = &&fpp_end;
+    iMask = FPP_SET(iMask, I); 
+    if(iMask == (1 << BATCH_SIZE) - 1) {
+        return;
+    }
+    I = (I + 1) & BATCH_SIZE_;
+    goto *batch_rips[I];
+
 }
 
 int main(int argc, char **argv)
