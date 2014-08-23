@@ -1,6 +1,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<pthread.h>
+#include<papi.h>
 #include<time.h>
 #include<sys/ipc.h>
 #include<sys/shm.h>
@@ -61,10 +62,11 @@ fpp_end:
 
 int main(int argc, char **argv)
 {
-	long long ins_count = 0;
-	int i, j;
-	
-	papi_start();
+	int i, j, retval;
+
+	// Variables for PAPI
+	float real_time, proc_time, ipc;
+	long long ins;
 
 	// Allocate a large memory area
 	fprintf(stderr, "Size of ht_log = %lu\n", LOG_CAP * sizeof(int));
@@ -89,31 +91,22 @@ int main(int argc, char **argv)
 
 	fprintf(stderr, "Finished creating ht_log and packets\n");
 
-	long long start, end;
-	start = get_cycles();
-
-	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
-
-#if USE_PAPI == 1
-		papi_mark();
-#endif
-		process_pkts_in_batch(&pkts[i]);
-
-#if USE_PAPI == 1
-		ins_count += papi_mark() - PAPI_MARK_OVERHEAD;
-#endif
+	// Init PAPI_TOT_INS and PAPI_TOT_CYC counters
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+		printf("retval: %d\n", retval);
+		exit(1);
 	}
 	
-	end = get_cycles();
+	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
+		process_pkts_in_batch(&pkts[i]);
+	}
 
-	// xia-router2 frequency = 2.7 Ghz
-	long long ns = ((long long) (end - start) / 2.7);
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+		printf("retval: %d\n", retval);
+		exit(1);
+	}
 
-	printf("Total time = %f s, sum = %d\n", ns / 1000000000.0, sum);
-	printf("Average time per mem access = %lld ns \n", ns / (NUM_PKTS * DEPTH));
-
-#if USE_PAPI == 1
-	printf("Average instructions per batch = %lld \n", ins_count / (NUM_PKTS / BATCH_SIZE));
-#endif
-
+	printf("Sum = %d\n", sum);
+	red_printf("Real_time: %fs, Total instructions: %lld, Total cycles = %lld, IPC: %f\n", 
+		real_time, ins, (long long) (ins / ipc), ipc);
 }
