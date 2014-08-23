@@ -26,3 +26,8 @@ long long get_cycles()
 	val = (val << 32) | low;
 	return val;
 }
+
+#define USE_PAPI 1			// Measure instructions with PAPI?
+#define PAPI_MARK_OVERHEAD 264
+void papi_start();
+long long papi_mark();

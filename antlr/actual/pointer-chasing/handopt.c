@@ -47,7 +47,10 @@ int process_pkts_in_batch(int *pkt_lo)
 
 int main(int argc, char **argv)
 {
+	long long ins_count = 0;
 	int i, j;
+	
+	papi_start();
 
 	// Allocate a large memory area
 	fprintf(stderr, "Size of ht_log = %lu\n", LOG_CAP * sizeof(int));
@@ -76,7 +79,15 @@ int main(int argc, char **argv)
 	start = get_cycles();
 
 	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
+
+#if USE_PAPI == 1
+		papi_mark();
+#endif
 		process_pkts_in_batch(&pkts[i]);
+
+#if USE_PAPI == 1
+		ins_count += papi_mark() - PAPI_MARK_OVERHEAD;
+#endif
 	}
 	
 	end = get_cycles();
@@ -86,5 +97,9 @@ int main(int argc, char **argv)
 
 	printf("Total time = %f s, sum = %d\n", ns / 1000000000.0, sum);
 	printf("Average time per mem access = %lld ns \n", ns / (NUM_PKTS * DEPTH));
+
+#if USE_PAPI == 1
+	printf("Average instructions per batch = %lld \n", ins_count / (NUM_PKTS / BATCH_SIZE));
+#endif
 
 }
