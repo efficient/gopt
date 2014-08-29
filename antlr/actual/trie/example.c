@@ -5,16 +5,33 @@
 
 #include "trie.h"
 
-int main(int argc, char **argv) {
-    trie_t *t = trie_init();
+#define NUM_WORDS 235885
+#define MAX_WORD_LEN 26
 
-    //Load the words from stopwords.txt into a trie
-    trie_load(t, "stopwords.txt");
+int main(int argc, char **argv) 
+{
+	int i;
+	trie_t *t = trie_init();
 
-    printf("'foo': %s\n", trie_exists(t, "foo") ? "yes" : "no");
-    printf("'among': %s\n", trie_exists(t, "among") ? "yes" : "no");
+	char **words = malloc(NUM_WORDS * sizeof(void *));
+	for(i = 0; i < NUM_WORDS; i ++) {
+		words[i] = malloc(MAX_WORD_LEN * sizeof(char));
+	}
+	
+	for(i = 0; i < NUM_WORDS; i ++) {
+		scanf("%s", words[i]);
+		trie_add(t, words[i]);
+	}
 
-    trie_free(t);
+	printf("'foo': %s\n", trie_exists(t, "foo") ? "yes" : "no");
+	printf("'among': %s\n", trie_exists(t, "among") ? "yes" : "no");
 
-    return 0;
+	for(i = 0; i < NUM_WORDS; i ++) {
+		free(words[i]);
+	}
+	free(words);
+
+	trie_free(t);
+
+	return 0;
 }
