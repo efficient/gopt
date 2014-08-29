@@ -63,39 +63,6 @@ int trie_load(trie_t *t, char *file) {
     return words;
 }
 
-void trie_strip(trie_t *t, char *src, char *dest) {
-    if (src == NULL) {
-        return;
-    }
-    if (dest == NULL) {
-        dest = src;
-    }
-    int c, i = 0, last_break = 0, in_trie = 1;
-    trie_t *root = t;
-
-    while ((c = dest[i++] = *src++)) {
-        if (c == ' ' || c == '\n' || c == '\t' || c == '\r') {
-            t = root;
-            if (in_trie) {
-                i = last_break;
-            } else {
-                in_trie = 1;
-                last_break = i;
-            }
-            continue;
-        }
-        if (!in_trie) {
-            continue;
-        }
-        if (t->chars[c] == NULL) {
-            in_trie = 0;
-        } else {
-            t = t->chars[c];
-            in_trie = 1;
-        }
-    }
-}
-
 void trie_free(trie_t *t) {
     for (int i = /*skip sentinel*/ 1; i < TRIE_SIZE; i++) {
         if (t->chars[i] != NULL) {
