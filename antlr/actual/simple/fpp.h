@@ -15,3 +15,5 @@ do {\
 #define BATCH_SIZE_ 7
 
 #define foreach(i, n) for(i = 0; i < n; i ++)
+
+void red_printf(const char *format, ...);
