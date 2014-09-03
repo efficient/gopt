@@ -5,15 +5,12 @@
 #include <stdint.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
-#include <stdarg.h>
 #include <unistd.h>
 #include <assert.h>
 
 #include <rte_common.h>
 #include <rte_cycles.h>
 #include <rte_prefetch.h>
-#include <rte_lcore.h>
-#include <rte_branch_prediction.h>
 #include <rte_ip.h>
 #include <rte_ethdev.h>
 #include <rte_mempool.h>
@@ -48,14 +45,9 @@
 #define NUM_RX_DESC 512
 #define NUM_TX_DESC 512
 
-#define MAX_RX_QUEUE_PER_LCORE 16
-#define MAX_TX_QUEUE_PER_PORT 16
-
 #define ISSET(a, i) (a & (1 << i))
 #define MAX(a, b) (a > b ? a : b)
 #define htons(n) (((((unsigned short)(n) & 0xFF)) << 8) | (((unsigned short)(n) & 0xFF00) >> 8))
-
-
 
 #define CPE2(val, msg, error, fault) \
 	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg, error, fault);}
