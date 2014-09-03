@@ -20,6 +20,8 @@
 #include "fpp.h"
 #include "cuckoo.h"
 
+#define GOTO 1
+
 #define LL long long
 
 // sizeof(rte_mbuf) = 64, RTE_PKTMBUF_HEADROOM = 128

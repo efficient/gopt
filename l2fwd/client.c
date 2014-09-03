@@ -91,7 +91,11 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 			rte_pktmbuf_free(tx_pkts_burst[i]);
 		}
 
-		micro_sleep(6.5, C_FAC);
+#if GOTO == 1
+		micro_sleep(2.8, C_FAC);
+#else
+		micro_sleep(6.2, C_FAC);
+#endif
 
 		// RX drain
 		while(1) {

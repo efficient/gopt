@@ -10,10 +10,94 @@ LL src_mac_arr[8] = {0x6c10bb211b00, 0x6d10bb211b00, 0x64d2bd211b00, 0x65d2bd211
 LL dst_mac_arr[8] = {0x36d3bd211b00, 0x37d3bd211b00, 0x44d7a3211b00, 0x45d7a3211b00,
 					 0xa8d6a3211b00, 0xa9d6a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00};
 
-void process_pkts_in_batch(struct rte_mbuf **pkts,
+void process_pkts_in_batch_goto(struct rte_mbuf **pkts,
 	int nb_pkts, uint64_t *rss_seed, struct cuckoo_slot *ht_index);
 
-void process_pkts_in_batch(struct rte_mbuf **pkts, 
+void process_pkts_in_batch_nogoto(struct rte_mbuf **pkts,
+	int nb_pkts, uint64_t *rss_seed, struct cuckoo_slot *ht_index);
+
+void process_pkts_in_batch_goto(struct rte_mbuf **pkts,
+	int nb_pkts, uint64_t *rss_seed, struct cuckoo_slot *ht_index)
+{
+	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
+	int hdr_size = 36;
+
+	struct ether_hdr *eth_hdr[BATCH_SIZE];
+	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
+	void *dst_mac_ptr[BATCH_SIZE];
+	void *src_mac_ptr[BATCH_SIZE];
+	int *req[BATCH_SIZE];
+	int K[BATCH_SIZE];
+	int S1[BATCH_SIZE];
+	int S2[BATCH_SIZE];
+
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&fpp_start;
+	}
+
+fpp_start:
+
+	// Boilerplate for TX pkt
+
+	if(I != nb_pkts - 1) {
+		rte_prefetch0(pkts[I + 1]->pkt.data);
+	}
+
+	eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
+	ip_hdr[I] = (struct ipv4_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
+
+	src_mac_ptr[I] = &eth_hdr[I]->s_addr.addr_bytes[0];
+	dst_mac_ptr[I] = &eth_hdr[I]->d_addr.addr_bytes[0];
+	swap_mac(src_mac_ptr[I], dst_mac_ptr[I]);
+
+	eth_hdr[I]->ether_type = htons(ETHER_TYPE_IPv4);
+
+	// These 3 fields of ip_hdr are required for RSS
+	ip_hdr[I]->src_addr = fastrand(rss_seed);
+	ip_hdr[I]->dst_addr = fastrand(rss_seed);
+	ip_hdr[I]->version_ihl = 0x40 | 0x05;
+
+	pkts[I]->pkt.nb_segs = 1;
+	pkts[I]->pkt.pkt_len = 60;
+	pkts[I]->pkt.data_len = 60;
+
+	// Actual code for data access
+	req[I] = (int *) ((char *) pkts[I]->pkt.data + hdr_size);
+
+	K[I] = req[I][1];
+	S1[I] = hash(K[I]) & HASH_INDEX_N_;
+	FPP_PSS(&ht_index[S1[I]], fpp_label_1, nb_pkts);
+fpp_label_1:
+
+	if(ht_index[S1[I]].key == K[I]) {
+		req[I][2] = ht_index[S1[I]].value;
+	} else {
+		// Try the second slot
+		S2[I] = hash(K[I] + 1) & HASH_INDEX_N_;
+		FPP_PSS(&ht_index[S2[I]], fpp_label_2, nb_pkts);
+fpp_label_2:
+
+		if(ht_index[S2[I]].key == K[I]) {
+			req[I][2] = ht_index[S2[I]].value;
+		}   
+	}   
+
+fpp_end:
+	batch_rips[I] = &&fpp_end;
+	iMask = FPP_SET(iMask, I); 
+	if(iMask == (1 << nb_pkts) - 1) {
+		return;
+	}
+	I = (I + 1) < nb_pkts ? I + 1 : 0;
+	goto *batch_rips[I];
+}
+
+void process_pkts_in_batch_nogoto(struct rte_mbuf **pkts, 
 	int nb_pkts, uint64_t *rss_seed, struct cuckoo_slot *ht_index)
 {
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
@@ -28,10 +112,10 @@ void process_pkts_in_batch(struct rte_mbuf **pkts,
 		void *src_mac_ptr, *dst_mac_ptr;
 
 		if(batch_index != nb_pkts - 1) {
-			rte_prefetch0(rte_pktmbuf_mtod(pkts[batch_index + 1], void *));
+			rte_prefetch0(pkts[batch_index + 1]->pkt.data);
 		}
 
-		eth_hdr = rte_pktmbuf_mtod(pkts[batch_index], struct ether_hdr *);
+		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
 		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 
 		src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
@@ -50,11 +134,11 @@ void process_pkts_in_batch(struct rte_mbuf **pkts,
 		pkts[batch_index]->pkt.data_len = 60;
 
 		// Actual code for data access
-		int *req = (int *) (rte_pktmbuf_mtod(pkts[batch_index], char *) + hdr_size);
+		int *req = (int *) ((char *) pkts[batch_index]->pkt.data + hdr_size);
 
 		int K = req[1];
 		int S1 = hash(K) & HASH_INDEX_N_;
-		FPP_EXPENSIVE(&hash_index[S1]);
+		FPP_EXPENSIVE(&ht_index[S1]);
 
 		if(ht_index[S1].key == K) {
 			req[2] = ht_index[S1].value;
@@ -124,7 +208,11 @@ void run_server(struct cuckoo_slot *ht_index)
 	
 		nb_rx[port_id] += nb_rx_new;
 
-		process_pkts_in_batch(rx_pkts_burst, nb_rx_new, &rss_seed, ht_index);
+#if GOTO == 1
+		process_pkts_in_batch_goto(rx_pkts_burst, nb_rx_new, &rss_seed, ht_index);
+#else
+		process_pkts_in_batch_nogoto(rx_pkts_burst, nb_rx_new, &rss_seed, ht_index);
+#endif
 		
 		// Measurements for burst size averaging
 		brst_sz_msr[MSR_SAMPLES] ++;
