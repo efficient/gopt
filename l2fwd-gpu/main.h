@@ -3,18 +3,46 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
+#include <sys/types.h>
+#include <sys/queue.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <setjmp.h>
+#include <stdarg.h>
+#include <ctype.h>
+#include <errno.h>
+#include <getopt.h>
 #include <unistd.h>
 #include <assert.h>
 
 #include <rte_common.h>
+#include <rte_log.h>
+#include <rte_memory.h>
+#include <rte_memcpy.h>
+#include <rte_memzone.h>
+#include <rte_tailq.h>
+#include <rte_eal.h>
+#include <rte_per_lcore.h>
+#include <rte_launch.h>
+#include <rte_atomic.h>
 #include <rte_cycles.h>
 #include <rte_prefetch.h>
+#include <rte_lcore.h>
+#include <rte_per_lcore.h>
+#include <rte_branch_prediction.h>
+#include <rte_interrupts.h>
+#include <rte_pci.h>
+#include <rte_random.h>
+#include <rte_debug.h>
+#include <rte_ether.h>
 #include <rte_ip.h>
+#include <rte_udp.h>
 #include <rte_ethdev.h>
+#include <rte_ring.h>
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
+#include <rte_byteorder.h>
 
 #include "sizes.h"
 
@@ -45,9 +73,14 @@
 #define NUM_RX_DESC 512
 #define NUM_TX_DESC 512
 
+#define MAX_RX_QUEUE_PER_LCORE 16
+#define MAX_TX_QUEUE_PER_PORT 16
+
 #define ISSET(a, i) (a & (1 << i))
 #define MAX(a, b) (a > b ? a : b)
 #define htons(n) (((((unsigned short)(n) & 0xFF)) << 8) | (((unsigned short)(n) & 0xFF00) >> 8))
+
+
 
 #define CPE2(val, msg, error, fault) \
 	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg, error, fault);}

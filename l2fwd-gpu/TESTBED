@@ -1,0 +1,46 @@
+[xia-router0/1]
+
+xge0,1 are attached to CPU 0 (0,2,4,6,8,10)
+xge2,3 are attached to CPU 1 (1,3,5,7,9,11)
+
+[xia-router2]
+
+xge0,1,2,3 are attached to CPU0 (0,2,4,6,8,10,12,14)
+xge4,5,6,7 are attached to CPU1 (1,3,5,7,9,11,13,15)
+
+[network connection]
+
+xia-router0:xge0 - xia-router2:xge0		CHECK
+xia-router0:xge1 - xia-router2:xge1		CHECK
+xia-router1:xge0 - xia-router2:xge2
+xia-router1:xge1 - xia-router2:xge3
+xia-router0:xge2 - xia-router2:xge4		CHECK
+xia-router0:xge3 - xia-router2:xge5		CHECK
+xia-router1:xge2 - xia-router2:xge6		CHECK
+xia-router1:xge3 - xia-router2:xge7		CHECK
+
+MAC addresses:
+
+xia-router2:
+xge0: 00:1B:21:BB:10:6C
+xge1: 00:1B:21:BB:10:6D
+xge2: 00:1B:21:BD:D2:64
+xge3: 00:1B:21:BD:D2:65
+
+xge4: 68:05:CA:10:A6:C8
+xge5: 68:05:CA:10:A6:C9
+xge6: 68:05:CA:10:A6:A2
+xge7: 68:05:CA:10:A6:A3
+
+xia-router0:
+xge0: 00:1b:21:bd:d3:36
+xge1: 00:1b:21:bd:d3:37
+xge2: 00:1B:21:A3:D6:A8
+xge3: 00:1B:21:A3:D6:A9
+
+xia-router1:
+xge0: 00:1B:21:A3:D7:44
+xge1: 00:1B:21:A3:D7:45
+xge2: 00:1B:21:A3:D7:0A
+xge3: 00:1B:21:A3:D7:0B
+
