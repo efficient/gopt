@@ -1,0 +1,68 @@
+1. Enabling lcores or ports:
+	Lcores are enabled through DPDK command line arguments. Ports are enabled
+	through variables XIA_R2_PORT_MASK (for the server) and XIA_R0_PORT_MASK
+	for the client.
+
+2. Number of queues on a port and mapping between queues and lcores
+
+	All queues on a port should be accessed. RSS will push packets to unused
+	queues causing RX descriptor exhaustion. Why does this happen when we're
+	not issuing rx_burst() for those queues?
+	
+	At the server:
+		Each lcore should access all ports on its socket. This is not how it
+		is done right now. Currently, each lcore accesses all ports regardless
+		of the port's socket. This needs to be fixed ASAP.
+		
+		Assuming that each lcore only accesses all ports on its socket, the
+		number of queues on a port is equal to the number of active lcores on
+		its socket: this is being done right now.
+
+	At a client:
+		Lcore-to-port mapping is fixed and is defined as lcore_to_port[] in 
+		client.c. The following constraints hold:
+			1. Each lcore only accesses one port.
+			2. Each port is accessed by 3 lcores.
+
+		So, each port is initialized with 3 queues. The code knows which lcores
+		will use these queues using the client_port_queue_to_lcore() function.
+		It is required that the lcore returned by this function be enabled.
+
+	For xia-router0/1 (Westmere machines), ports connect to the I/O hub and
+	don't have a socket. However, we assume that xge0/1 are connected to
+	socket 0 and xge2/3 are connected to socket 1, and we use a special function
+	to find the socket: get_socket_id_from_macaddr().
+
+3. Performance comments:
+
+    * The code uses socket #1 on all machines. This is because the NIC for xge2,3 
+	on xia-router2 uses a PCIe 2.0 x4 link.
+    
+    * xia-router0 can only generate 13.8 Mpps each on xge2 and xge3. This is OK because
+    all this load goes to xge4 and xge5 on xia-router2 which can only handle a total of
+    24 Mpps (~11.9 Mpps each on xge4 and xge5).
+    
+    * xia-router0/1 can generate 14.88 Mpps on both ports of a NIC. This is strange
+    because we believed that the per-NIC limit was 24 Mpps. Possible reasons:
+        1. The 24 Mpps per-NIC limit is for RX.
+        2. xia-router0/1 are Westmere machines with an I/O hub.
+
+	* Latency:
+		Minimum average RTT is around 16 us.
+
+4. Packet formatting
+	The Ethernet and IPv4 header take the 1st 34 bytes of a packet. Assume 36
+	for alignment. This leaves us 24 bytes for data.
+
+	36-39:		lcore_id of the client that sent this packet
+	40-43:		The log address for the server to start accesses from
+	44-47:		The server's response
+	48-55:		The client's timestamp when it sent the packet.
+
+
+5. Running on xia-router* systems:
+	* Reboot the machines
+	* At xia-router`i`, run systemish/scripts/dpdk/xia-router`i`-init.sh
+	* Mount the fastpp directory on xia-router1 and xia-router0 via sshfs
+	* At xia-router2: ./run-servers.sh
+	* At xia-router1 and xia-router2: ./run-client.sh [0,1]
