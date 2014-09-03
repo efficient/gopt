@@ -1,8 +1,14 @@
 #include "cuckoo.h"
 
+#define COMPUTE 1
+
 uint32_t hash(uint32_t u)
 {
-	return CityHash32((char *) &u, 4);
+	int i, ret = u;
+	for(i = 0; i < COMPUTE; i ++) {
+		ret =  CityHash32((char *) &ret, 4);
+	}
+	return ret;
 }
 
 void cuckoo_init(int **entries, struct cuckoo_slot **ht_index)

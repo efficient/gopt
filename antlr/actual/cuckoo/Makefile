@@ -5,6 +5,7 @@ all:
 	gcc -O3 -o goto goto.c city.c -lrt
 	gcc -O3 -o handopt handopt.c city.c -lrt
 	gcc -O3 -o citybench citybench.c city.c -lrt
+	gcc -O3 -o murmurbench murmurbench.c  murmur3.c -lrt
 
 clean:
 	rm -f *.o goto nogoto
