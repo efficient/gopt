@@ -27,9 +27,6 @@ void process_pkts_in_batch_goto(struct rte_mbuf **pkts,
 	void *dst_mac_ptr[BATCH_SIZE];
 	void *src_mac_ptr[BATCH_SIZE];
 	int *req[BATCH_SIZE];
-	int K[BATCH_SIZE];
-	int S1[BATCH_SIZE];
-	int S2[BATCH_SIZE];
 
 	int I = 0;			// batch index
 	void *batch_rips[BATCH_SIZE];		// goto targets
@@ -69,23 +66,10 @@ fpp_start:
 	// Actual code for data access
 	req[I] = (int *) ((char *) pkts[I]->pkt.data + hdr_size);
 
-	K[I] = req[I][1];
-	S1[I] = hash(K[I]) & HASH_INDEX_N_;
-	FPP_PSS(&ht_index[S1[I]], fpp_label_1, nb_pkts);
+	FPP_PSS(&ht_index[req[I][1] & NUM_ENTRIES_], fpp_label_1, nb_pkts);
 fpp_label_1:
 
-	if(ht_index[S1[I]].key == K[I]) {
-		req[I][2] = ht_index[S1[I]].value;
-	} else {
-		// Try the second slot
-		S2[I] = hash(K[I] + 1) & HASH_INDEX_N_;
-		FPP_PSS(&ht_index[S2[I]], fpp_label_2, nb_pkts);
-fpp_label_2:
-
-		if(ht_index[S2[I]].key == K[I]) {
-			req[I][2] = ht_index[S2[I]].value;
-		}   
-	}   
+	req[I][2] = ht_index[req[I][1] & NUM_ENTRIES_].value;
 
 fpp_end:
 	batch_rips[I] = &&fpp_end;
@@ -136,20 +120,8 @@ void process_pkts_in_batch_nogoto(struct rte_mbuf **pkts,
 		// Actual code for data access
 		int *req = (int *) ((char *) pkts[batch_index]->pkt.data + hdr_size);
 
-		int K = req[1];
-		int S1 = hash(K) & HASH_INDEX_N_;
-		FPP_EXPENSIVE(&ht_index[S1]);
-
-		if(ht_index[S1].key == K) {
-			req[2] = ht_index[S1].value;
-		} else {
-			// Try the second slot
-			int S2 = hash(K + 1) & HASH_INDEX_N_;
-			FPP_EXPENSIVE(&ht_index[S2]);
-			if(ht_index[S2].key == K) {
-				req[2] = ht_index[S2].value;
-			}
-		}
+		FPP_EXPENSIVE(&ht_index[req[1] & NUM_ENTRIES_]);
+		req[2] = ht_index[req[1] & NUM_ENTRIES_].value;
 	}
 }
 

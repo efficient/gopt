@@ -78,7 +78,7 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 			// Add request, lcore_id, and timestamp
 			int *req = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size);
 			req[0] = lcore_id;							// 36 -> 40
-			req[1] = entries[fastrand(&rss_seed) & NUM_ENTRIES_];	// 40 -> 44
+			req[1] = fastrand(&rss_seed) & NUM_ENTRIES_;	// 40 -> 44
 			// Bytes 44 -> 48 are reserved for response (req[2])
 			
 			LL *tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size + 12);
@@ -90,12 +90,6 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 		for(i = nb_tx_new; i < MAX_CLT_TX_BURST; i++) {
 			rte_pktmbuf_free(tx_pkts_burst[i]);
 		}
-
-#if GOTO == 1
-		micro_sleep(2, C_FAC);
-#else
-		micro_sleep(2, C_FAC);
-#endif
 
 		// RX drain
 		while(1) {

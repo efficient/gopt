@@ -20,7 +20,7 @@
 #include "fpp.h"
 #include "cuckoo.h"
 
-#define GOTO 1
+#define GOTO 0
 
 #define LL long long
 
