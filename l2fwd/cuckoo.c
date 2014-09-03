@@ -27,17 +27,17 @@ void cuckoo_init(int **entries, struct cuckoo_slot **ht_index)
 	*entries = malloc(NUM_ENTRIES * sizeof(int));
 
 	for(i = 0; i < NUM_ENTRIES; i++) {
-		uint32_t K = (uint32_t) rand();
+		int K = rand();
 		(*entries)[i] = K;
 		
 		// With 1/2 probability, put into 1st bucket
-		uint32_t hash_bucket_i = 0;
+		int hash_bucket_i = 0;
 		
 		// The 2nd hash function for key K is CITYHASH(K + 1)
 		if(rand() % 2 == 0) {
-			hash_bucket_i = hash(K) % HASH_INDEX_N;
+			hash_bucket_i = hash(K) & HASH_INDEX_N_;
 		} else {
-			hash_bucket_i = hash(K + 1) % HASH_INDEX_N;
+			hash_bucket_i = hash(K + 1) & HASH_INDEX_N_;
 		}
 
 		// The value for key K is K + i

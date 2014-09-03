@@ -20,7 +20,7 @@
 #include "fpp.h"
 #include "cuckoo.h"
 
-#define GOTO 1
+#define GOTO 0
 
 #define LL long long
 
@@ -62,10 +62,6 @@
 // Cycles to nanoseconds conversion constants
 #define C_FAC ((double) GHZ_CPS / XIA_R0_CPS)
 #define S_FAC ((double) GHZ_CPS / XIA_R2_CPS)
-
-#define LOG_CAP M_256
-#define LOG_CAP_ M_256_
-#define BASE_HT_LOG_SHM_KEY 1
 
 // All xia hardware specific features need to be prefixed by XIA_
 #define XIA_R0_PORT_MASK 0xc	// xge2,3

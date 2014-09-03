@@ -101,10 +101,6 @@ int *shm_alloc(int key, int cap)
 
 	int *data = (int *) shmat(ht_log_sid, 0, 0);
 
-	int i;
-	for(i = 0; i < cap; i++) {
-		data[i] = rand() & LOG_CAP_;
-	}
 	return data;
 }
 
