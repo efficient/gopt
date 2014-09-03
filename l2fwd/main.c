@@ -1,6 +1,7 @@
 #include "main.h"
 int is_client = -1, client_id;
-int *ht_log;
+struct cuckoo_slot *ht_index;
+int *entries;
 
 // Disable all offload features
 static const struct rte_eth_conf port_conf = {
@@ -48,9 +49,9 @@ static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, ht_log, l2fwd_pktmbuf_pool);
+		run_client(client_id, entries, l2fwd_pktmbuf_pool);
 	} else {
-		run_server(ht_log, l2fwd_pktmbuf_pool);
+		run_server(ht_index);
 	}
 	return 1;
 }
@@ -71,9 +72,9 @@ main(int argc, char **argv)
 	}
 
 	// Don't move this allocation: must be before EAL's ops
-	red_printf("Setting up log..\n");
-	ht_log = shm_alloc(BASE_HT_LOG_SHM_KEY, LOG_CAP);
-	printf("\tSetting up log done!\n");
+	red_printf("Creating cuckoo index..\n");
+	cuckoo_init(&entries, &ht_index);
+	red_printf("\tSetting up cuckoo index done!\n");
 
 	ret = rte_eal_init(argc, argv);
 	CPE(ret < 0, "Invalid EAL arguments\n");

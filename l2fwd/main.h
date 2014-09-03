@@ -17,6 +17,8 @@
 #include <rte_mbuf.h>
 
 #include "sizes.h"
+#include "fpp.h"
+#include "cuckoo.h"
 
 #define LL long long
 
@@ -89,12 +91,13 @@ void print_mac(int port_id, struct ether_addr macaddr);
 void check_all_ports_link_status(uint8_t port_num, int portmask);
 void print_buf(char *A, int n);
 
-void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool);
-void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool);
+void run_server(struct cuckoo_slot *ht_index);
+void run_client(int client_id, int *cuckoo_entries,
+	 struct rte_mempool **l2fwd_pktmbuf_pool);
 int *shm_alloc(int key, int cap);
 
 inline uint32_t fastrand(uint64_t* seed);
-void micro_sleep(int us, double cycles_to_ns_fac);
+void micro_sleep(double us, double cycles_to_ns_fac);
 
 void set_mac(uint8_t *mac_ptr, LL mac_addr);
 void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr);

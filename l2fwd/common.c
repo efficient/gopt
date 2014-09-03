@@ -115,7 +115,7 @@ inline uint32_t fastrand(uint64_t* seed)
 }
 
 // FAC is a cycles-to-nanoseconds conversion factor
-void micro_sleep(int us, double cycles_to_ns_fac)
+void micro_sleep(double us, double cycles_to_ns_fac)
 {
 	LL required_diff = (us * 1000) / cycles_to_ns_fac;
 	LL start_tsc = rte_rdtsc();

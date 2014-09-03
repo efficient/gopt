@@ -11,7 +11,7 @@ include $(RTE_SDK)/mk/rte.vars.mk
 APP = l2fwd
 
 # all source are stored in SRCS-y
-SRCS-y := main.c common.c server.c client.c
+SRCS-y := main.c common.c server.c client.c cuckoo.c city.c
 
 CFLAGS += -O3
 CFLAGS += $(WERROR_FLAGS) -Wno-unused-parameter	-Wno-unused-result	#mempool in run_server() is unused

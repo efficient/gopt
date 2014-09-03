@@ -9,10 +9,69 @@ LL src_mac_arr[8] = {0x6c10bb211b00, 0x6d10bb211b00, 0x64d2bd211b00, 0x65d2bd211
 // xia-router0 xge0,1    xia-router1 xge0,1    xia-router0 xge2,3    xia-router1 xge2,3
 LL dst_mac_arr[8] = {0x36d3bd211b00, 0x37d3bd211b00, 0x44d7a3211b00, 0x45d7a3211b00,
 					 0xa8d6a3211b00, 0xa9d6a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00};
-	
-void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
+
+void process_pkts_in_batch(struct rte_mbuf **pkts,
+	int nb_pkts, uint64_t *rss_seed, struct cuckoo_slot *ht_index);
+
+void process_pkts_in_batch(struct rte_mbuf **pkts, 
+	int nb_pkts, uint64_t *rss_seed, struct cuckoo_slot *ht_index)
 {
-	int i, j;
+	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
+	int hdr_size = 36;
+
+	int batch_index = 0;
+
+	foreach(batch_index, nb_pkts) {
+		// Boilerplate for TX pkt
+		struct ether_hdr *eth_hdr;
+		struct ipv4_hdr *ip_hdr;
+		void *src_mac_ptr, *dst_mac_ptr;
+
+		if(batch_index != nb_pkts - 1) {
+			rte_prefetch0(rte_pktmbuf_mtod(pkts[batch_index + 1], void *));
+		}
+
+		eth_hdr = rte_pktmbuf_mtod(pkts[batch_index], struct ether_hdr *);
+		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
+
+		src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
+		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
+		swap_mac(src_mac_ptr, dst_mac_ptr);
+
+		eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
+
+		// These 3 fields of ip_hdr are required for RSS
+		ip_hdr->src_addr = fastrand(rss_seed);
+		ip_hdr->dst_addr = fastrand(rss_seed);
+		ip_hdr->version_ihl = 0x40 | 0x05;
+
+		pkts[batch_index]->pkt.nb_segs = 1;
+		pkts[batch_index]->pkt.pkt_len = 60;
+		pkts[batch_index]->pkt.data_len = 60;
+
+		// Actual code for data access
+		int *req = (int *) (rte_pktmbuf_mtod(pkts[batch_index], char *) + hdr_size);
+
+		int K = req[1];
+		int S1 = hash(K) & HASH_INDEX_N_;
+		FPP_EXPENSIVE(&hash_index[S1]);
+
+		if(ht_index[S1].key == K) {
+			req[2] = ht_index[S1].value;
+		} else {
+			// Try the second slot
+			int S2 = hash(K + 1) & HASH_INDEX_N_;
+			FPP_EXPENSIVE(&ht_index[S2]);
+			if(ht_index[S2].key == K) {
+				req[2] = ht_index[S2].value;
+			}
+		}
+	}
+}
+
+void run_server(struct cuckoo_slot *ht_index)
+{
+	int i;
 	LL nb_tx[RTE_MAX_ETHPORTS] = {0}, nb_rx[RTE_MAX_ETHPORTS] = {0}, nb_tx_all_ports = 0;
 
 	int *port_arr = get_active_ports(XIA_R2_PORT_MASK);
@@ -32,14 +91,6 @@ void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 
 	printf("Server on lcore %d. Queue Id = %d\n", lcore_id, queue_id);
 
-	struct ether_hdr *eth_hdr;
-	struct ipv4_hdr *ip_hdr;
-	void *src_mac_ptr, *dst_mac_ptr;
-
-	int batch_addr[MAX_SRV_BURST];
-
-	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
-	int hdr_size = 36;
 	uint64_t rss_seed = 0xdeadbeef;
 
 	// Init measurement variables
@@ -72,41 +123,9 @@ void run_server(int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
 		}
 	
 		nb_rx[port_id] += nb_rx_new;
+
+		process_pkts_in_batch(rx_pkts_burst, nb_rx_new, &rss_seed, ht_index);
 		
-		for(i = 0; i < nb_rx_new; i++) {
-			// Boilerplate for TX pkt
-			if(i != nb_rx_new - 1) {
-				rte_prefetch0(rte_pktmbuf_mtod(rx_pkts_burst[i + 1], void *));
-			}
-
-			eth_hdr = rte_pktmbuf_mtod(rx_pkts_burst[i], struct ether_hdr *);
-    		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
-			
-			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
-			dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
-			swap_mac(src_mac_ptr, dst_mac_ptr);
-
-			eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
-	
-			// These 3 fields of ip_hdr are required for RSS
-    		ip_hdr->src_addr = fastrand(&rss_seed);
-    		ip_hdr->dst_addr = fastrand(&rss_seed);
-			ip_hdr->version_ihl = 0x40 | 0x05;
-
-			rx_pkts_burst[i]->pkt.nb_segs = 1;
-			rx_pkts_burst[i]->pkt.pkt_len = 60;
-			rx_pkts_burst[i]->pkt.data_len = 60;
-
-			// Actual code for data access
-			int *req = (int *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) + hdr_size);
-			batch_addr[i] = req[1] & LOG_CAP_;	// Automatic sanitization
-
-			for(j = 0; j < NUM_ACCESSES; j++) {
-				batch_addr[i] = ht_log[batch_addr[i]];
-			}
-			req[2] = batch_addr[i];
-		}
-	
 		// Measurements for burst size averaging
 		brst_sz_msr[MSR_SAMPLES] ++;
 		brst_sz_msr[MSR_TOT] += nb_rx_new;

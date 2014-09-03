@@ -2,7 +2,7 @@
 #define MAX_CLT_TX_BURST 16
 #define MAX_CLT_RX_BURST 16
 
-void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
+void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_pool)
 {
 	// [xia-router0 - xge0,1,2,3], [xia-router1 - xge0,1,2,3]
 	LL src_mac_arr[2][4] = {{0x36d3bd211b00, 0x37d3bd211b00, 0xa8d6a3211b00, 0xa9d6a3211b00},
@@ -91,7 +91,7 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 			rte_pktmbuf_free(tx_pkts_burst[i]);
 		}
 
-		micro_sleep(2, C_FAC);
+		micro_sleep(6.5, C_FAC);
 
 		// RX drain
 		while(1) {
@@ -107,10 +107,6 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 				int req_addr = req[1];
 				int resp = req[2];
 
-				int acc_i;		// mem-access iterator
-				for(acc_i = 0; acc_i < NUM_ACCESSES; acc_i ++) {
-					req_addr = ht_log[req_addr];
-				}
 				if(req_addr != resp) {
 					nb_fails ++;
 				}
