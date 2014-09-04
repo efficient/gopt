@@ -78,9 +78,9 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			tx_pkts_burst[i]->pkt.pkt_len = 60;
 			tx_pkts_burst[i]->pkt.data_len = 60;
 
-			// Add request, lcore_id, and timestamp
+			// Add request, global core-identifier, and timestamp
 			int *req = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size);
-			req[0] = lcore_id;							// 36 -> 40
+			req[0] = client_id * 1000 + lcore_id;					// 36 -> 40
 			req[1] = fastrand(&rss_seed) & IPv4_CACHE_CAP_;	// 40 -> 44
 			// Bytes 44 -> 48 are reserved for response (req[2])
 			
@@ -115,8 +115,8 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 
 				// Retrive send-timestamp and lcore from which this pkt was sent
 				LL *tsc = (LL *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) + hdr_size + 12);
-				int tx_lcore = req[0];		// The lcore that sent this packet to the server
-				if(lcore_id == tx_lcore) {
+				int tx_magic = req[0];		// Global id of core that sent this pkt
+				if(client_id * 1000 + lcore_id == tx_magic) {
 					rx_samples ++;
 					LL cur_tsc = rte_rdtsc();
 					latency_tot += (cur_tsc - tsc[0]);
