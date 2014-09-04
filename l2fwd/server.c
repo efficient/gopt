@@ -1,6 +1,5 @@
 #include "main.h"
 
-#define MAX_SRV_BURST 16
 // Only immutable information should be global
 // xia-router2 xge0,1,2,3,4,5,6,7
 LL src_mac_arr[8] = {0x6c10bb211b00, 0x6d10bb211b00, 0x64d2bd211b00, 0x65d2bd211b00,
@@ -10,13 +9,47 @@ LL src_mac_arr[8] = {0x6c10bb211b00, 0x6d10bb211b00, 0x64d2bd211b00, 0x65d2bd211
 LL dst_mac_arr[8] = {0x36d3bd211b00, 0x37d3bd211b00, 0x44d7a3211b00, 0x45d7a3211b00,
 					 0xa8d6a3211b00, 0xa9d6a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00};
 
-void process_pkts_in_batch_goto(struct rte_mbuf **pkts,
+void process_batch_goto(struct rte_mbuf **pkts,
 	int nb_pkts, uint64_t *rss_seed, uint8_t *ipv4_cache);
 
-void process_pkts_in_batch_nogoto(struct rte_mbuf **pkts,
-	int nb_pkts, uint64_t *rss_seed, uint8_t *ipv4_cache);
+void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
+	uint64_t *rss_seed, uint8_t *ipv4_cache, 
+	struct lcore_port_info *lp_info);
 
-void process_pkts_in_batch_goto(struct rte_mbuf **pkts,
+void send_packet(struct rte_mbuf *pkt, int port_id,
+	struct lcore_port_info *lp_info);
+
+void send_packet(struct rte_mbuf *pkt, int port_id, 
+	struct lcore_port_info *lp_info)
+{
+	int i;
+	int tot_buffered = lp_info[port_id].nb_buf;
+	assert(ISSET(XIA_R2_PORT_MASK, port_id));
+
+	lp_info[port_id].mbufs[tot_buffered] = pkt;
+	tot_buffered ++;
+
+	if(unlikely(tot_buffered == MAX_SRV_BURST)) {
+		int queue_id = lp_info[port_id].queue_id;
+		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, 
+			lp_info[port_id].mbufs, MAX_SRV_BURST);
+
+		// Free unsent packets
+		for(i = nb_tx_new; i < MAX_SRV_BURST; i ++) {
+			rte_pktmbuf_free(lp_info[port_id].mbufs[i]);
+		}
+
+		lp_info[port_id].nb_tx += nb_tx_new;
+		lp_info[0].nb_tx_all_ports += nb_tx_new;
+		
+		lp_info[port_id].nb_buf = 0;
+		
+	} else {
+		lp_info[port_id].nb_buf = tot_buffered;
+	}
+}
+
+void process_batch_goto(struct rte_mbuf **pkts,
 	int nb_pkts, uint64_t *rss_seed, uint8_t *ipv4_cache)
 {
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
@@ -81,8 +114,9 @@ fpp_end:
 	goto *batch_rips[I];
 }
 
-void process_pkts_in_batch_nogoto(struct rte_mbuf **pkts, 
-	int nb_pkts, uint64_t *rss_seed, uint8_t *ipv4_cache)
+void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
+	uint64_t *rss_seed, uint8_t *ipv4_cache, 
+	struct lcore_port_info *lp_info)
 {
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
 	int hdr_size = 36;
@@ -122,47 +156,43 @@ void process_pkts_in_batch_nogoto(struct rte_mbuf **pkts,
 
 		FPP_EXPENSIVE(&ht_index[req[1] & IPv4_CACHE_CAP_]);
 		req[2] = ipv4_cache[req[1] & IPv4_CACHE_CAP_];
+
+		send_packet(pkts[batch_index], req[2], lp_info);
 	}
 }
 
 void run_server(uint8_t *ipv4_cache)
 {
 	int i;
-	LL nb_tx[RTE_MAX_ETHPORTS] = {0}, nb_rx[RTE_MAX_ETHPORTS] = {0}, nb_tx_all_ports = 0;
+	uint64_t rss_seed = 0xdeadbeef;
 
-	int *port_arr = get_active_ports(XIA_R2_PORT_MASK);
-	int port_index = 0;
-	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
-
-	struct rte_mbuf *rx_pkts_burst[MAX_SRV_BURST];
-
-	int lcore_id = rte_lcore_id();						// Lcore on which this server process runs
+	int lcore_id = rte_lcore_id();
 	int socket_id = rte_lcore_to_socket_id(lcore_id);
-
-	// XXX: Need to implement logic so that lcores only access the ports on their socket.
-	// Until then, restrict to one socket.
 	assert(socket_id == 1);
 
 	int queue_id = get_lcore_rank(lcore_id, socket_id);
-
 	printf("Server on lcore %d. Queue Id = %d\n", lcore_id, queue_id);
 
-	uint64_t rss_seed = 0xdeadbeef;
+	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
+	int *port_arr = get_active_ports(XIA_R2_PORT_MASK);
+	
+	// Initialize the per-port info for this lcore
+	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
+	memset(lp_info, 0, RTE_MAX_ETHPORTS * sizeof(struct lcore_port_info));
+	for(i = 0; i < RTE_MAX_ETHPORTS; i ++) {
+		lp_info[i].queue_id = queue_id;
+	}
+
+	struct rte_mbuf *rx_pkts_burst[MAX_SRV_BURST];
+	int port_index = 0;
 
 	// Init measurement variables
-	LL tput_tsc[2], tx_lat_msr[4], brst_sz_msr[4], mem_lat_msr[4];
+	LL tput_tsc[2], brst_sz_msr[4];
 	tput_tsc[0] = rte_rdtsc();
-	memset(tx_lat_msr, 0, 4 * sizeof(LL));
 	memset(brst_sz_msr, 0, 4 * sizeof(LL));
-	memset(mem_lat_msr, 0, 4 * sizeof(LL));
 
 	while (1) {
 		int port_id = port_arr[port_index];	// The port to use in this iteration
-
-		// XXX: Need to implement logic so that lcores only access the ports on their socket.
-		// Until then, restrict to one socket.
-		assert(rte_eth_dev_socket_id(port_id) == 1);
-
 		int nb_rx_new = 0, tries = 0;
 		
 		// Lcores *cannot* wait for a particular number of packets from a port. If we do this,
@@ -174,67 +204,52 @@ void run_server(uint8_t *ipv4_cache)
 		}
 		
 		if(nb_rx_new == 0) {
-			port_index = (port_index + 1) % num_active_ports;
+			port_index = (port_index + 1) < num_active_ports ? port_index + 1 : 0;
 			continue;
 		}
-	
-		nb_rx[port_id] += nb_rx_new;
 
-#if GOTO == 1
-		process_pkts_in_batch_goto(rx_pkts_burst, nb_rx_new, &rss_seed, ipv4_cache);
-#else
-		process_pkts_in_batch_nogoto(rx_pkts_burst, nb_rx_new, &rss_seed, ipv4_cache);
-#endif
-		
 		// Measurements for burst size averaging
 		brst_sz_msr[MSR_SAMPLES] ++;
 		brst_sz_msr[MSR_TOT] += nb_rx_new;
+	
+		lp_info[port_id].nb_rx += nb_rx_new;
+
+#if GOTO == 1
+		process_batch_goto(rx_pkts_burst, nb_rx_new, &rss_seed, ipv4_cache);
+#else
+		process_batch_nogoto(rx_pkts_burst,
+			nb_rx_new, &rss_seed, ipv4_cache, lp_info);
+#endif
 		
-		// Measurements for txmit time
-		tx_lat_msr[MSR_START] = rte_rdtsc();
-
-		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, rx_pkts_burst, nb_rx_new);
-
-		// Free unsent packets
-		for(i = nb_tx_new; i < nb_rx_new; i ++) {
-			rte_pktmbuf_free(rx_pkts_burst[i]);
-		}
-
-		tx_lat_msr[MSR_END] = rte_rdtsc();
-		tx_lat_msr[MSR_TOT] += (tx_lat_msr[MSR_END] - tx_lat_msr[MSR_START]);
-		tx_lat_msr[MSR_SAMPLES] += 1;
-		
-		nb_tx[port_id] += nb_tx_new;
-		nb_tx_all_ports += nb_tx_new;
-
 		// STAT PRINTING
-		if (unlikely(nb_tx_all_ports >= 10000000)) {
+		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {
 			tput_tsc[1] = rte_rdtsc();
 			double nanoseconds = S_FAC * (tput_tsc[1] - tput_tsc[0]);
+			double seconds = nanoseconds / GHZ_CPS;
 			tput_tsc[0] = tput_tsc[1];
 
-			red_printf("Lcore %d, total: %f\n", lcore_id, nb_tx_all_ports / (nanoseconds / GHZ_CPS));
+			red_printf("Lcore %d, total: %f\n", lcore_id, 
+				lp_info[0].nb_tx_all_ports / seconds);
 
 			for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
 				if(ISSET(XIA_R2_PORT_MASK, i)) {
-					printf("\tLcore: %d, port: %d: %f\n", lcore_id, i, nb_tx[i] / (nanoseconds / GHZ_CPS));
+					printf("\tLcore: %d, port: %d: %f\n", lcore_id, i, 
+						lp_info[i].nb_tx / seconds);
 				}
+
+				// Do not reset the nb_buf counter
+				lp_info[i].nb_tx = 0;
+				lp_info[i].nb_rx = 0;
+	
+				lp_info[i].nb_tx_all_ports = 0;
 			}
-			
 
 			printf("\tLcore %d, Average TX burst size: %lld\n", lcore_id, 
 				brst_sz_msr[MSR_TOT] / brst_sz_msr[MSR_SAMPLES]);
-			printf("\tLcore %d, TX burst lat: %f ns\n", lcore_id, 
-				S_FAC * (tx_lat_msr[MSR_TOT] / tx_lat_msr[MSR_SAMPLES]));
-
-			memset(tx_lat_msr, 0, 4 * sizeof(LL));
-			memset(brst_sz_msr, 0, 4 * sizeof(LL));
-
-			memset(nb_rx, 0, RTE_MAX_ETHPORTS * sizeof(LL));
-			memset(nb_tx, 0, RTE_MAX_ETHPORTS * sizeof(LL));
-			nb_tx_all_ports = 0;
-			
 			printf("\n");
+
+			memset(brst_sz_msr, 0, 4 * sizeof(LL));
+			
 		}
 
 		port_index = (port_index + 1) % num_active_ports;
