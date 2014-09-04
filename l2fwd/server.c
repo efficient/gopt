@@ -11,13 +11,13 @@ LL dst_mac_arr[8] = {0x36d3bd211b00, 0x37d3bd211b00, 0x44d7a3211b00, 0x45d7a3211
 					 0xa8d6a3211b00, 0xa9d6a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00};
 
 void process_pkts_in_batch_goto(struct rte_mbuf **pkts,
-	int nb_pkts, uint64_t *rss_seed, struct cuckoo_slot *ht_index);
+	int nb_pkts, uint64_t *rss_seed, uint8_t *ipv4_cache);
 
 void process_pkts_in_batch_nogoto(struct rte_mbuf **pkts,
-	int nb_pkts, uint64_t *rss_seed, struct cuckoo_slot *ht_index);
+	int nb_pkts, uint64_t *rss_seed, uint8_t *ipv4_cache);
 
 void process_pkts_in_batch_goto(struct rte_mbuf **pkts,
-	int nb_pkts, uint64_t *rss_seed, struct cuckoo_slot *ht_index)
+	int nb_pkts, uint64_t *rss_seed, uint8_t *ipv4_cache)
 {
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
 	int hdr_size = 36;
@@ -66,10 +66,10 @@ fpp_start:
 	// Actual code for data access
 	req[I] = (int *) ((char *) pkts[I]->pkt.data + hdr_size);
 
-	FPP_PSS(&ht_index[req[I][1] & NUM_ENTRIES_], fpp_label_1, nb_pkts);
+	FPP_PSS(&ipv4_cache[req[I][1] & IPv4_CACHE_CAP_], fpp_label_1, nb_pkts);
 fpp_label_1:
 
-	req[I][2] = ht_index[req[I][1] & NUM_ENTRIES_].value;
+	req[I][2] = ipv4_cache[req[I][1] & IPv4_CACHE_CAP_];
 
 fpp_end:
 	batch_rips[I] = &&fpp_end;
@@ -82,7 +82,7 @@ fpp_end:
 }
 
 void process_pkts_in_batch_nogoto(struct rte_mbuf **pkts, 
-	int nb_pkts, uint64_t *rss_seed, struct cuckoo_slot *ht_index)
+	int nb_pkts, uint64_t *rss_seed, uint8_t *ipv4_cache)
 {
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
 	int hdr_size = 36;
@@ -120,12 +120,12 @@ void process_pkts_in_batch_nogoto(struct rte_mbuf **pkts,
 		// Actual code for data access
 		int *req = (int *) ((char *) pkts[batch_index]->pkt.data + hdr_size);
 
-		FPP_EXPENSIVE(&ht_index[req[1] & NUM_ENTRIES_]);
-		req[2] = ht_index[req[1] & NUM_ENTRIES_].value;
+		FPP_EXPENSIVE(&ht_index[req[1] & IPv4_CACHE_CAP_]);
+		req[2] = ipv4_cache[req[1] & IPv4_CACHE_CAP_];
 	}
 }
 
-void run_server(struct cuckoo_slot *ht_index)
+void run_server(uint8_t *ipv4_cache)
 {
 	int i;
 	LL nb_tx[RTE_MAX_ETHPORTS] = {0}, nb_rx[RTE_MAX_ETHPORTS] = {0}, nb_tx_all_ports = 0;
@@ -181,9 +181,9 @@ void run_server(struct cuckoo_slot *ht_index)
 		nb_rx[port_id] += nb_rx_new;
 
 #if GOTO == 1
-		process_pkts_in_batch_goto(rx_pkts_burst, nb_rx_new, &rss_seed, ht_index);
+		process_pkts_in_batch_goto(rx_pkts_burst, nb_rx_new, &rss_seed, ipv4_cache);
 #else
-		process_pkts_in_batch_nogoto(rx_pkts_burst, nb_rx_new, &rss_seed, ht_index);
+		process_pkts_in_batch_nogoto(rx_pkts_burst, nb_rx_new, &rss_seed, ipv4_cache);
 #endif
 		
 		// Measurements for burst size averaging

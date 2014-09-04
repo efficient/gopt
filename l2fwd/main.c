@@ -1,7 +1,6 @@
 #include "main.h"
 int is_client = -1, client_id;
-struct cuckoo_slot *ht_index;
-int *entries;
+uint8_t *ipv4_cache;
 
 // Disable all offload features
 static const struct rte_eth_conf port_conf = {
@@ -49,9 +48,9 @@ static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, entries, l2fwd_pktmbuf_pool);
+		run_client(client_id, ipv4_cache, l2fwd_pktmbuf_pool);
 	} else {
-		run_server(ht_index);
+		run_server(ipv4_cache);
 	}
 	return 1;
 }
@@ -72,9 +71,9 @@ main(int argc, char **argv)
 	}
 
 	// Don't move this allocation: must be before EAL's ops
-	red_printf("Creating cuckoo index..\n");
-	cuckoo_init(&entries, &ht_index);
-	red_printf("\tSetting up cuckoo index done!\n");
+	red_printf("Creating ipv4 address cache \n");
+	ipv4_cache_init(&ipv4_cache);
+	red_printf("\tSetting up ipv4 address cache done!\n");
 
 	ret = rte_eal_init(argc, argv);
 	CPE(ret < 0, "Invalid EAL arguments\n");

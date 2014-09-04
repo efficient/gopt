@@ -2,7 +2,7 @@
 #define MAX_CLT_TX_BURST 16
 #define MAX_CLT_RX_BURST 16
 
-void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_pool)
+void run_client(int client_id, uint8_t *ipv4_cache, struct rte_mempool **l2fwd_pktmbuf_pool)
 {
 	// [xia-router0 - xge0,1,2,3], [xia-router1 - xge0,1,2,3]
 	LL src_mac_arr[2][4] = {{0x36d3bd211b00, 0x37d3bd211b00, 0xa8d6a3211b00, 0xa9d6a3211b00},
@@ -78,7 +78,7 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 			// Add request, lcore_id, and timestamp
 			int *req = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size);
 			req[0] = lcore_id;							// 36 -> 40
-			req[1] = fastrand(&rss_seed) & NUM_ENTRIES_;	// 40 -> 44
+			req[1] = fastrand(&rss_seed) & IPv4_CACHE_CAP_;	// 40 -> 44
 			// Bytes 44 -> 48 are reserved for response (req[2])
 			
 			LL *tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size + 12);

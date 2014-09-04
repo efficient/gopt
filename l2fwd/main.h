@@ -18,9 +18,9 @@
 
 #include "sizes.h"
 #include "fpp.h"
-#include "cuckoo.h"
+#include "ipv4.h"
 
-#define GOTO 0
+#define GOTO 1
 
 #define LL long long
 
@@ -89,8 +89,8 @@ void print_mac(int port_id, struct ether_addr macaddr);
 void check_all_ports_link_status(uint8_t port_num, int portmask);
 void print_buf(char *A, int n);
 
-void run_server(struct cuckoo_slot *ht_index);
-void run_client(int client_id, int *cuckoo_entries,
+void run_server(uint8_t *ipv4_cache);
+void run_client(int client_id, uint8_t *ipv4_cache,
 	 struct rte_mempool **l2fwd_pktmbuf_pool);
 int *shm_alloc(int key, int cap);
 
