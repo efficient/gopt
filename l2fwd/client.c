@@ -2,7 +2,7 @@
 #define MAX_CLT_TX_BURST 16
 #define MAX_CLT_RX_BURST 16
 
-void run_client(int client_id, uint8_t *ipv4_cache, struct rte_mempool **l2fwd_pktmbuf_pool)
+void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 {
 	// [xia-router0 - xge0,1,2,3], [xia-router1 - xge0,1,2,3]
 	LL src_mac_arr[2][4] = {{0x36d3bd211b00, 0x37d3bd211b00, 0xa8d6a3211b00, 0xa9d6a3211b00},
@@ -17,19 +17,22 @@ void run_client(int client_id, uint8_t *ipv4_cache, struct rte_mempool **l2fwd_p
 
 	int i;
 
-	struct rte_mbuf *rx_pkts_burst[MAX_CLT_RX_BURST], *tx_pkts_burst[MAX_CLT_TX_BURST];
+	struct rte_mbuf *rx_pkts_burst[MAX_CLT_RX_BURST];
+	struct rte_mbuf *tx_pkts_burst[MAX_CLT_TX_BURST];
 
 	int lcore_id = rte_lcore_id();
 
 	int port_id = lcore_to_port[lcore_id];
 	if(!ISSET(XIA_R0_PORT_MASK, port_id)) {
-		red_printf("Lcore %d uses disabled port (port %d). Exiting.\n", lcore_id, port_id);
+		red_printf("Lcore %d uses disabled port (port %d). Exiting.\n",
+			lcore_id, port_id);
 		exit(-1);
 	}
 
 	// This is a valid queue_id because all client ports have 3 queues
 	int queue_id = lcore_id % 3;
-	red_printf("Client: lcore: %d, port: %d, queue: %d\n", lcore_id, port_id, queue_id);
+	red_printf("Client: lcore: %d, port: %d, queue: %d\n", 
+		lcore_id, port_id, queue_id);
 
 	LL prev_tsc = 0, cur_tsc = 0;
 	prev_tsc = rte_rdtsc();
@@ -93,7 +96,8 @@ void run_client(int client_id, uint8_t *ipv4_cache, struct rte_mempool **l2fwd_p
 
 		// RX drain
 		while(1) {
-			int nb_rx_new = rte_eth_rx_burst(port_id, queue_id, rx_pkts_burst, MAX_CLT_RX_BURST);
+			int nb_rx_new = rte_eth_rx_burst(port_id, 
+				queue_id, rx_pkts_burst, MAX_CLT_RX_BURST);
 			if(nb_rx_new == 0) {
 				break;
 			}

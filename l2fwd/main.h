@@ -76,10 +76,12 @@
 // Application-specific burst size for the server
 #define MAX_SRV_BURST 16
 
-// The server process on each lcore creates a separate instance of 
-// lcore_port_info for each port. The total number of packets transmitted
-// is collected in the nb_tx_all_ports field for port #0 (this does not
-// require that port #0 is enabled.
+/**
+ * The server process on each lcore creates a separate instance of 
+ * lcore_port_info for each port. The total number of packets transmitted
+ * is collected in the nb_tx_all_ports field for port #0 (this does not
+ * require that port #0 is enabled.
+ */
 struct lcore_port_info {
 	struct rte_mbuf *mbufs[MAX_SRV_BURST];
 	int nb_buf;
@@ -106,8 +108,7 @@ void check_all_ports_link_status(uint8_t port_num, int portmask);
 void print_buf(char *A, int n);
 
 void run_server(uint8_t *ipv4_cache);
-void run_client(int client_id, uint8_t *ipv4_cache,
-	 struct rte_mempool **l2fwd_pktmbuf_pool);
+void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool);
 int *shm_alloc(int key, int cap);
 
 inline uint32_t fastrand(uint64_t* seed);

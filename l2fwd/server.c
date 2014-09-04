@@ -9,17 +9,11 @@ LL src_mac_arr[8] = {0x6c10bb211b00, 0x6d10bb211b00, 0x64d2bd211b00, 0x65d2bd211
 LL dst_mac_arr[8] = {0x36d3bd211b00, 0x37d3bd211b00, 0x44d7a3211b00, 0x45d7a3211b00,
 					 0xa8d6a3211b00, 0xa9d6a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00};
 
-void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, 
-	uint64_t *rss_seed, uint8_t *ipv4_cache,
-	struct lcore_port_info *lp_info);
-
-void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
-	uint64_t *rss_seed, uint8_t *ipv4_cache, 
-	struct lcore_port_info *lp_info);
-
-void send_packet(struct rte_mbuf *pkt, int port_id,
-	struct lcore_port_info *lp_info);
-
+/**
+ * Enque a packet for transmission on a port. The per-port rx/tx/buffering 
+ * statistics, and the queue to use for transmission are kept in the 
+ * lcore_port_info structure.
+ */ 
 void send_packet(struct rte_mbuf *pkt, int port_id, 
 	struct lcore_port_info *lp_info)
 {
@@ -29,6 +23,7 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	lp_info[port_id].mbufs[tot_buffered] = pkt;
 	tot_buffered ++;
 
+	// TX when a sufficient number of packets are buffered
 	if(unlikely(tot_buffered == MAX_SRV_BURST)) {
 		int queue_id = lp_info[port_id].queue_id;
 		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, 
@@ -197,11 +192,11 @@ void run_server(uint8_t *ipv4_cache)
 		int port_id = port_arr[port_index];	// The port to use in this iteration
 		int nb_rx_new = 0, tries = 0;
 		
-		// Lcores *cannot* wait for a particular number of packets from a port. If we do this,
-		// the port mysteriously runs out of RX descriptors.
+		// Lcores *cannot* wait for a particular number of packets from a port.
+		//  If we do this, the port mysteriously runs out of RX descriptors.
 		while(nb_rx_new < MAX_SRV_BURST && tries < 5) {
-			nb_rx_new += rte_eth_rx_burst(port_id, queue_id, &rx_pkts_burst[nb_rx_new], 
-				MAX_SRV_BURST - nb_rx_new);
+			nb_rx_new += rte_eth_rx_burst(port_id, queue_id, 
+				&rx_pkts_burst[nb_rx_new], MAX_SRV_BURST - nb_rx_new);
 			tries ++;
 		}
 		
@@ -256,6 +251,5 @@ void run_server(uint8_t *ipv4_cache)
 		}
 
 		port_index = (port_index + 1) % num_active_ports;
-		//usleep(200000);
 	}
 }

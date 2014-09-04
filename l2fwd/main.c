@@ -48,7 +48,7 @@ static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, ipv4_cache, l2fwd_pktmbuf_pool);
+		run_client(client_id, l2fwd_pktmbuf_pool);
 	} else {
 		run_server(ipv4_cache);
 	}
