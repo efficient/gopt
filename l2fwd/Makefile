@@ -14,6 +14,6 @@ APP = l2fwd
 SRCS-y := main.c common.c server.c client.c cuckoo.c city.c
 
 CFLAGS += -O3
-CFLAGS += $(WERROR_FLAGS) -Wno-unused-parameter	-Wno-unused-result	#mempool in run_server() is unused
+CFLAGS += $(WERROR_FLAGS) -Wno-missing-prototypes -Wno-missing-declarations
 
 include $(RTE_SDK)/mk/rte.extapp.mk

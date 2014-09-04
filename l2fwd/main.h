@@ -70,8 +70,26 @@
 #define XIA_R2_PORT_MASK 0xf0	// xge4,5,6,7
 #define XIA_R2_CPS 2700000000	// Server cycles per second
 
-// On all our machines, even numbered lcores are on socket 0
+// On all xia-router* machines, even numbered lcores are on socket 0
 #define LCORE_TO_SOCKET(lcore) (lcore % 2)
+
+// Application-specific burst size for the server
+#define MAX_SRV_BURST 16
+
+/**
+ * The server process on each lcore creates a separate instance of 
+ * lcore_port_info for each port. The total number of packets transmitted
+ * is collected in the nb_tx_all_ports field for port #0 (this does not
+ * require that port #0 is enabled.
+ */
+struct lcore_port_info {
+	struct rte_mbuf *mbufs[MAX_SRV_BURST];
+	int nb_buf;
+	int nb_tx;
+	int nb_rx;
+	int queue_id;
+	int nb_tx_all_ports;
+};
 
 struct rte_mempool *mempool_init(char *name, int socket_id);
 

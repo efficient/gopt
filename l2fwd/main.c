@@ -73,7 +73,10 @@ main(int argc, char **argv)
 
 	// Don't move this allocation: must be before EAL's ops
 	red_printf("Creating cuckoo index..\n");
-	cuckoo_init(&entries, &ht_index);
+
+	// The cuckoo index will map keys in the "entries" array to port-numbers
+	// from the portmask. Clients only need the "entries" array.
+	cuckoo_init(&entries, &ht_index, XIA_R2_PORT_MASK);
 	red_printf("\tSetting up cuckoo index done!\n");
 
 	ret = rte_eal_init(argc, argv);
@@ -111,6 +114,13 @@ main(int argc, char **argv)
 		// xia-router0/1 use an IO-Hub for PCIe devices, so NICs don't have a NUMA-socket.
 		int my_socket_id = is_client == 1 ? get_socket_id_from_macaddr(port_id) : 
 			rte_eth_dev_socket_id(port_id);
+
+		// XXX: Need to implement logic so that server lcores only access the ports on 
+		// their socket. Until then, restrict to one socket.
+		if(!is_client) {
+			assert(my_socket_id == 1);
+		}
+
 		int num_queues = is_client == 1 ? 3 : count_active_lcores_on_socket(my_socket_id);
 
 		printf("Initializing port %u on socket %d with %d queues \n", 

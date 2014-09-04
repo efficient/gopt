@@ -1,19 +1,47 @@
 #include "cuckoo.h"
 
-#define COMPUTE 1
+// Don't want to include rte header
+#define CUCKOO_MAX_ETHPORTS 16
+#define CUCKOO_ISSET(a, i) (a & (1 << i))
 
 uint32_t hash(uint32_t u)
 {
-	int i, ret = u;
-	for(i = 0; i < COMPUTE; i ++) {
-		ret =  CityHash32((char *) &ret, 4);
-	}
-	return ret;
+	return CityHash32((char *) &u, 4);
 }
 
-void cuckoo_init(int **entries, struct cuckoo_slot **ht_index)
+// Count the number of 1-bits in n
+int cuckoo_bitcount(int n)
 {
-	int i;
+	int count = 0;
+	while(n > 0) {
+		count ++;
+		n = n & (n - 1);
+	}
+	return count;
+}
+
+// Returns an array containing the port numbers of all ports that are active
+int *cuckoo_get_active_ports(int portmask)
+{
+	int num_active_ports = cuckoo_bitcount(portmask);
+	int *active_ports = (int *) malloc(num_active_ports * sizeof(int));
+	int pos = 0, i;
+	for(i = 0; i < CUCKOO_MAX_ETHPORTS; i++) {
+		if(CUCKOO_ISSET(portmask, i)) {
+			active_ports[pos] = i;
+			pos ++;
+		}
+	}
+	assert(pos == num_active_ports);
+	return active_ports;
+}
+
+void cuckoo_init(int **entries, struct cuckoo_slot **ht_index, int portmask)
+{
+	int i, overwrites = 0;
+
+	int num_active_ports = cuckoo_bitcount(portmask);
+	int *port_arr = cuckoo_get_active_ports(portmask);
 
 	printf("Initializing cuckoo index of size = %lu bytes\n", 
 		HASH_INDEX_N * sizeof(struct cuckoo_slot));
@@ -27,9 +55,12 @@ void cuckoo_init(int **entries, struct cuckoo_slot **ht_index)
 	}
 
 	*ht_index = shmat(sid, 0, 0);
+	memset((char *) *ht_index, 0, HASH_INDEX_N_ * sizeof(struct cuckoo_slot));
+
+	srand(2);
 
 	// Allocate the packets and put them into the hash index randomly
-	printf("Putting entries into hash index randomly\n");
+	printf("Putting active ports into hash index randomly\n");
 	*entries = malloc(NUM_ENTRIES * sizeof(int));
 
 	for(i = 0; i < NUM_ENTRIES; i++) {
@@ -46,8 +77,14 @@ void cuckoo_init(int **entries, struct cuckoo_slot **ht_index)
 			hash_bucket_i = hash(K + 1) & HASH_INDEX_N_;
 		}
 
-		// The value for key K is K + i
+		if((*ht_index)[hash_bucket_i].key != 0) {
+			overwrites ++;
+		}
+
+		// The value for key K is a random, enabled, port 
 		(*ht_index)[hash_bucket_i].key = K;
-		(*ht_index)[hash_bucket_i].value = K + i;
+		(*ht_index)[hash_bucket_i].port = port_arr[rand() % num_active_ports];
 	}
+
+	printf("Percentage of entries overwritten = %f\n", (double) overwrites / NUM_ENTRIES);
 }
