@@ -47,7 +47,6 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
 	int hdr_size = 36;
-	double sleep_us = 2;
 
 	while (1) {
 
@@ -95,8 +94,6 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 			rte_pktmbuf_free(tx_pkts_burst[i]);
 		}
 
-		micro_sleep(sleep_us, C_FAC);
-
 		// RX drain
 		while(1) {
 			int nb_rx_new = rte_eth_rx_burst(port_id, 
@@ -139,15 +136,6 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 				lcore_id, nb_tx / (nanoseconds / GHZ_CPS),
 				(C_FAC * (latency_tot / (rx_samples + .01))) / 1000, rx_samples, nb_fails, nb_rx);
 			
-			double latency = (C_FAC * (latency_tot / (rx_samples + .01))) / 1000;
-			if(latency >= 100) {
-				sleep_us += 1;
-				printf("Increasing sleep_us to %f\n", sleep_us);
-			} else {
-				sleep_us -= .1;
-				printf("Decreasing sleep_us to %f\n", sleep_us);
-			}
-
 			nb_tx = 0;
 
 			nb_fails = 0;
