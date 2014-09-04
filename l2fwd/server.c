@@ -9,8 +9,9 @@ LL src_mac_arr[8] = {0x6c10bb211b00, 0x6d10bb211b00, 0x64d2bd211b00, 0x65d2bd211
 LL dst_mac_arr[8] = {0x36d3bd211b00, 0x37d3bd211b00, 0x44d7a3211b00, 0x45d7a3211b00,
 					 0xa8d6a3211b00, 0xa9d6a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00};
 
-void process_batch_goto(struct rte_mbuf **pkts,
-	int nb_pkts, uint64_t *rss_seed, uint8_t *ipv4_cache);
+void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, 
+	uint64_t *rss_seed, uint8_t *ipv4_cache,
+	struct lcore_port_info *lp_info);
 
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
 	uint64_t *rss_seed, uint8_t *ipv4_cache, 
@@ -24,7 +25,6 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 {
 	int i;
 	int tot_buffered = lp_info[port_id].nb_buf;
-	assert(ISSET(XIA_R2_PORT_MASK, port_id));
 
 	lp_info[port_id].mbufs[tot_buffered] = pkt;
 	tot_buffered ++;
@@ -49,8 +49,9 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
-void process_batch_goto(struct rte_mbuf **pkts,
-	int nb_pkts, uint64_t *rss_seed, uint8_t *ipv4_cache)
+void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, 
+	uint64_t *rss_seed, uint8_t *ipv4_cache,
+	struct lcore_port_info *lp_info)
 {
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
 	int hdr_size = 36;
@@ -103,6 +104,7 @@ fpp_start:
 fpp_label_1:
 
 	req[I][2] = ipv4_cache[req[I][1] & IPv4_CACHE_CAP_];
+	send_packet(pkts[I], req[I][2], lp_info);
 
 fpp_end:
 	batch_rips[I] = &&fpp_end;
@@ -215,7 +217,8 @@ void run_server(uint8_t *ipv4_cache)
 		lp_info[port_id].nb_rx += nb_rx_new;
 
 #if GOTO == 1
-		process_batch_goto(rx_pkts_burst, nb_rx_new, &rss_seed, ipv4_cache);
+		process_batch_goto(rx_pkts_burst, 
+			nb_rx_new, &rss_seed, ipv4_cache, lp_info);
 #else
 		process_batch_nogoto(rx_pkts_burst,
 			nb_rx_new, &rss_seed, ipv4_cache, lp_info);
