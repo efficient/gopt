@@ -18,6 +18,12 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	struct lcore_port_info *lp_info)
 {
 	int i;
+
+	if(unlikely(!ISSET(XIA_R2_PORT_MASK, port_id))) {
+		red_printf("TX on invalid port!. Exiting.\n");
+		exit(-1);
+	}
+
 	int tot_buffered = lp_info[port_id].nb_buf;
 
 	lp_info[port_id].mbufs[tot_buffered] = pkt;

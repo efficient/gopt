@@ -202,7 +202,7 @@ int count_active_lcores_on_socket(int socket_id)
 }
 
 // On CPUs that use an I/O Hub, rte_eth_dev_socket_id(port_id) returns -1.
-// So, we assign a socket manually using macaddr. XXX: XIA-specific
+// So, we assign a socket manually using macaddr. XIA-specific.
 int get_socket_id_from_macaddr(int port_id)
 {
 	struct ether_addr macaddr;
@@ -225,7 +225,7 @@ int get_socket_id_from_macaddr(int port_id)
 }
 
 // Return the client lcore responsible for queue #queue_id on port #port_id
-// XXX: XIA-specific
+// XIA-specific
 int client_port_queue_to_lcore(int port_id, int queue_id)
 {
 	assert(port_id <= 3 && port_id >= 0);
