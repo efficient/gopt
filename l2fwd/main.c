@@ -75,9 +75,9 @@ main(int argc, char **argv)
 		ipv4_cache_init(&ipv4_cache, XIA_R2_PORT_MASK);
 		red_printf("\tSetting up ipv4 address cache done!\n");
 
-		red_printf("Creating worker-master shared queues\n");
+		red_printf("Mapping worker-master shared queues\n");
 		map_wm_queues(&wmq);
-		red_printf("\tSetting up worker-master queues done\n");
+		red_printf("\tMapping worker-master queues done\n");
 	}
 
 	ret = rte_eal_init(argc, argv);

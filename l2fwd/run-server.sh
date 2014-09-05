@@ -1,10 +1,26 @@
-# Re-building is required because the same executable does not
-# work at both the client and the server
+# A function to echo in blue color
+function blue() {
+	es=`tput setaf 4`
+	ee=`tput sgr0`
+	echo "${es}$1${ee}"
+}
+
+blue "Re-compiling master's CUDA code"
+nvcc -O3 -o master master.cu -lrt
+
+blue "Re-compiling DPDK code"
 make clean
 make
 
+blue "Removing DPDK's hugepages and shm keys 1 and 2"
 sudo rm -rf /mnt/huge/*
-sudo ipcrm -M 1			# BASE_HT_LOG_SHM_KEY = 1
+sudo ipcrm -M 1			# WM_QUEUE_KEY
+sudo ipcrm -M 2			# IPv4_CACHE_KEY
+
+blue "Running master and sleeping for 1 seconds"
+sudo ./master &
+sleep 1
+
 #sudo ./build/l2fwd -c 0xAA55 -n 4
 sudo ./build/l2fwd -c 0x2 -n 4
 

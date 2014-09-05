@@ -23,6 +23,7 @@ void create_wm_queues()
 	// The worker-master queues should fit inside one hugepage
 	assert(WM_MAX_LCORE * sizeof(struct wm_queue) < M_2);
 
+	printf("Creating WM_QUEUE with key = %d\n", WM_QUEUE_KEY);
 	int shm_flags = IPC_CREAT | 0666 | SHM_HUGETLB;
 	int sid = shmget(WM_QUEUE_KEY, M_2, shm_flags);
 	if(sid == -1) {

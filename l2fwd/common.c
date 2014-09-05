@@ -287,5 +287,12 @@ void map_wm_queues(volatile struct wm_queue **wmq)
 	assert(RTE_MAX_LCORE * sizeof(struct wm_queue) < M_2);
 
 	int sid = shmget(WM_QUEUE_KEY, M_2, SHM_HUGETLB | 0666);
+	if(sid == -1) {
+		fprintf(stderr, "shmget Error! Failed to map worker-master queues\n");
+		int doh = system("cat /sys/devices/system/node/*/meminfo | grep Huge");
+		exit(doh);
+	}	
+	
 	*wmq = shmat(sid, 0, 0);
+	assert(*wmq != NULL);
 }
