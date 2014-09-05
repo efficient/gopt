@@ -89,17 +89,20 @@ struct rte_mempool *mempool_init(char *name, int socket_id)
 	return ret;
 }
 
-int *shm_alloc(int key, int cap)
+void *shm_alloc(int key, int bytes)
 {
 	int shm_flags = IPC_CREAT | 0666 | SHM_HUGETLB;
-	int ht_log_sid = shmget(key, cap * sizeof(int), shm_flags);
+	int ht_log_sid = shmget(key, bytes, shm_flags);
 	if(ht_log_sid == -1) {
 		fprintf(stderr, "shmget Error! Failed to shm_alloc\n");
 		int doh = system("cat /sys/devices/system/node/*/meminfo | grep Huge");
 		exit(doh);
 	}	
 
-	int *data = (int *) shmat(ht_log_sid, 0, 0);
+	void *data = shmat(ht_log_sid, 0, 0);
+	assert(data != NULL);
+
+	memset((char *) data, 0, bytes);
 
 	return data;
 }
@@ -274,3 +277,15 @@ void print_ether_hdr(struct ether_hdr *eth_hdr)
 	printf("\n");
 }
 
+/**
+ * Map worker-master queues. This assumes that the queues have already been
+ * created.
+ */
+void map_wm_queues(volatile struct wm_queue **wmq)
+{	
+	// The worker-master queues should fit inside one hugepage
+	assert(RTE_MAX_LCORE * sizeof(struct wm_queue) < M_2);
+
+	int sid = shmget(WM_QUEUE_KEY, M_2, SHM_HUGETLB | 0666);
+	*wmq = shmat(sid, 0, 0);
+}

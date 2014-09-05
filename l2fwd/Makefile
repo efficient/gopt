@@ -13,7 +13,7 @@ APP = l2fwd
 # all source are stored in SRCS-y
 SRCS-y := main.c common.c server.c client.c ipv4.c city.c
 
-CFLAGS += -O3
+CFLAGS += -g
 CFLAGS += $(WERROR_FLAGS) -Wno-missing-prototypes -Wno-missing-declarations
 
 include $(RTE_SDK)/mk/rte.extapp.mk

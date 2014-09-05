@@ -1,6 +1,7 @@
 #include "main.h"
 int is_client = -1, client_id;
 uint8_t *ipv4_cache;
+volatile struct wm_queue *wmq;
 
 // Disable all offload features
 static const struct rte_eth_conf port_conf = {
@@ -73,8 +74,11 @@ main(int argc, char **argv)
 		red_printf("Creating ipv4 address cache \n");
 		ipv4_cache_init(&ipv4_cache, XIA_R2_PORT_MASK);
 		red_printf("\tSetting up ipv4 address cache done!\n");
-	}
 
+		red_printf("Creating worker-master shared queues\n");
+		map_wm_queues(&wmq);
+		red_printf("\tSetting up worker-master queues done\n");
+	}
 
 	ret = rte_eal_init(argc, argv);
 	CPE(ret < 0, "Invalid EAL arguments\n");
@@ -87,6 +91,7 @@ main(int argc, char **argv)
 	CPE(nb_ports == 0, "No Ethernet ports - bye\n");
 
 	printf("\n\n");
+
 	// Create a mempool for each enabled lcore
 	for(lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id ++) {
 		if(rte_lcore_is_enabled(lcore_id)) {

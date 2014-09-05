@@ -19,6 +19,7 @@
 #include "sizes.h"
 #include "fpp.h"
 #include "ipv4.h"
+#include "worker-master.h"
 
 #define GOTO 1
 
@@ -73,10 +74,11 @@
 // On all xia-router* machines, even numbered lcores are on socket 0
 #define LCORE_TO_SOCKET(lcore) (lcore % 2)
 
-// Application-specific burst size for the server
+// Application-specific RX/TX burst size for the server
 #define MAX_SRV_BURST 16
 
 /**
+ * Per-lcore, per-port statistics:
  * The server process on each lcore creates a separate instance of 
  * lcore_port_info for each port. The total number of packets transmitted
  * is collected in the nb_tx_all_ports field for port #0 (this does not
@@ -92,6 +94,7 @@ struct lcore_port_info {
 };
 
 struct rte_mempool *mempool_init(char *name, int socket_id);
+void map_wm_queues(volatile struct wm_queue **wmq);
 
 int client_port_queue_to_lcore(int port_id, int queue_id);
 int count_active_lcores(void);
@@ -109,7 +112,7 @@ void print_buf(char *A, int n);
 
 void run_server(uint8_t *ipv4_cache);
 void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool);
-int *shm_alloc(int key, int cap);
+void *shm_alloc(int key, int cap);
 
 inline uint32_t fastrand(uint64_t* seed);
 void micro_sleep(double us, double cycles_to_ns_fac);
