@@ -21,7 +21,7 @@
 #include "ipv4.h"
 #include "worker-master.h"
 
-#define GOTO 1
+#define GOTO 0
 
 #define LL long long
 
