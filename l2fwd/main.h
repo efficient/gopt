@@ -17,9 +17,9 @@
 #include <rte_mbuf.h>
 
 #include "fpp.h"
-#include "ipv4.h"
 #include "worker-master.h"
 #include "util.h"
+#include "ipv4.h"
 
 #define GOTO 0
 
@@ -49,15 +49,6 @@
 // Configurable number of RX/TX ring descriptors
 #define NUM_RX_DESC 512
 #define NUM_TX_DESC 512
-
-#define ISSET(a, i) (a & (1 << i))
-#define MAX(a, b) (a > b ? a : b)
-#define htons(n) (((((unsigned short)(n) & 0xFF)) << 8) | (((unsigned short)(n) & 0xFF00) >> 8))
-
-#define CPE2(val, msg, error, fault) \
-	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg, error, fault);}
-#define CPE(val, msg) \
-	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg);}
 
 #define GHZ_CPS 1000000000
 // Cycles to nanoseconds conversion constants
@@ -89,8 +80,11 @@ struct lcore_port_info {
 	int nb_buf;
 	int nb_tx;
 	int nb_rx;
-	int queue_id;
 	int nb_tx_all_ports;
+
+	// Information passed between functions to avoid re-calculation
+	int queue_id;
+	int lcore_id;
 };
 
 struct rte_mempool *mempool_init(char *name, int socket_id);
@@ -99,14 +93,13 @@ int client_port_queue_to_lcore(int port_id, int queue_id);
 int count_active_lcores(void);
 int get_lcore_rank(int lcore_id, int socket_id);
 int get_lcore_ranked_n(int n, int socket_id);
-int *get_active_ports(int portmask);
 int count_active_lcores_on_socket(int socket_id);
 int get_socket_id_from_macaddr(int port_id);
 
 void print_mac(int port_id, struct ether_addr macaddr);
 void check_all_ports_link_status(uint8_t port_num, int portmask);
 
-void run_server(uint8_t *ipv4_cache);
+void run_server(volatile struct wm_queue *wmq);
 void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool);
 
 void micro_sleep(double us, double cycles_to_ns_fac);
@@ -115,4 +108,3 @@ void set_mac(uint8_t *mac_ptr, LL mac_addr);
 void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr);
 void print_ether_hdr(struct ether_hdr *eth_hdr);
 
-#define NUM_ACCESSES 0

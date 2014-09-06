@@ -99,3 +99,23 @@ int bitcount(int n)
 	}
 	return count;
 }
+
+// Returns an array containing the indexes of active bits. 
+// LSB's index is 0.
+int *get_active_bits(int mask)
+{
+	int num_active_bits = bitcount(mask);
+	int *active_bits = (int *) malloc(num_active_bits * sizeof(int));
+
+	int pos = 0, i;
+	for(i = 0; i < 31; i++) {			// Check all (int) bits
+		if(ISSET(mask, i)) {
+			active_bits[pos] = i;
+			pos ++;
+		}
+	}
+
+	assert(pos == num_active_bits);
+
+	return active_bits;
+}

@@ -45,9 +45,19 @@
 #define M_2048 2147483648
 #define M_2048_ 2147483647
 
+#define ISSET(a, i) (a & (1 << i))
+#define MAX(a, b) (a > b ? a : b)
+#define htons(n) (((((unsigned short)(n) & 0xFF)) << 8) | (((unsigned short)(n) & 0xFF00) >> 8))
+
+#define CPE2(val, msg, error, fault) \
+	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg, error, fault);}
+#define CPE(val, msg) \
+	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg);}
+
 void red_printf(const char *format, ...);
 void print_buf(char *A, int n);
 void *shm_alloc(int key, int bytes);
 void *shm_map(int key, int bytes);
 inline uint32_t fastrand(uint64_t* seed);
 int bitcount(int n);
+int *get_active_bits(int mask);

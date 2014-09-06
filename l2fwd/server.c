@@ -50,81 +50,17 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
-void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, 
-	uint64_t *rss_seed, uint8_t *ipv4_cache,
-	struct lcore_port_info *lp_info)
+/**
+ * lc_wmq = the worker/master queue for this lcore.
+ */
+void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, uint64_t *rss_seed,
+	 struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq)
 {
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
 	int hdr_size = 36;
-
-	struct ether_hdr *eth_hdr[BATCH_SIZE];
-	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
-	void *dst_mac_ptr[BATCH_SIZE];
-	void *src_mac_ptr[BATCH_SIZE];
-	int *req[BATCH_SIZE];
-
-	int I = 0;			// batch index
-	void *batch_rips[BATCH_SIZE];		// goto targets
-	int iMask = 0;		// No packet is done yet
-
-	int temp_index;
-	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&fpp_start;
-	}
-
-fpp_start:
-
-	// Boilerplate for TX pkt
-
-	if(I != nb_pkts - 1) {
-		rte_prefetch0(pkts[I + 1]->pkt.data);
-	}
-
-	eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
-	ip_hdr[I] = (struct ipv4_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
-
-	src_mac_ptr[I] = &eth_hdr[I]->s_addr.addr_bytes[0];
-	dst_mac_ptr[I] = &eth_hdr[I]->d_addr.addr_bytes[0];
-	swap_mac(src_mac_ptr[I], dst_mac_ptr[I]);
-
-	eth_hdr[I]->ether_type = htons(ETHER_TYPE_IPv4);
-
-	// These 3 fields of ip_hdr are required for RSS
-	ip_hdr[I]->src_addr = fastrand(rss_seed);
-	ip_hdr[I]->dst_addr = fastrand(rss_seed);
-	ip_hdr[I]->version_ihl = 0x40 | 0x05;
-
-	pkts[I]->pkt.nb_segs = 1;
-	pkts[I]->pkt.pkt_len = 60;
-	pkts[I]->pkt.data_len = 60;
-
-	// Actual code for data access
-	req[I] = (int *) ((char *) pkts[I]->pkt.data + hdr_size);
-
-	FPP_PSS(&ipv4_cache[req[I][1] & IPv4_CACHE_CAP_], fpp_label_1, nb_pkts);
-fpp_label_1:
-
-	req[I][2] = ipv4_cache[req[I][1] & IPv4_CACHE_CAP_];
-	send_packet(pkts[I], req[I][2], lp_info);
-
-fpp_end:
-	batch_rips[I] = &&fpp_end;
-	iMask = FPP_SET(iMask, I); 
-	if(iMask == (1 << nb_pkts) - 1) {
-		return;
-	}
-	I = (I + 1) < nb_pkts ? I + 1 : 0;
-	goto *batch_rips[I];
-}
-
-void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
-	uint64_t *rss_seed, uint8_t *ipv4_cache, 
-	struct lcore_port_info *lp_info)
-{
-	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
-	int hdr_size = 36;
-
 	int batch_index = 0;
+
+	int head = lc_wmq->head;
 
 	foreach(batch_index, nb_pkts) {
 		// Boilerplate for TX pkt
@@ -154,22 +90,44 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		pkts[batch_index]->pkt.pkt_len = 60;
 		pkts[batch_index]->pkt.data_len = 60;
 
-		// Actual code for data access
+		// Put the request data into the w/m queue. 
 		int *req = (int *) ((char *) pkts[batch_index]->pkt.data + hdr_size);
-
-		FPP_EXPENSIVE(&ht_index[req[1] & IPv4_CACHE_CAP_]);
-		req[2] = ipv4_cache[req[1] & IPv4_CACHE_CAP_];
-
-		send_packet(pkts[batch_index], req[2], lp_info);
+		
+		lc_wmq->ipv4_address[head & WM_QUEUE_CAP_] = req[1];
+		lc_wmq->mbufs[head & WM_QUEUE_CAP_] = (void *) pkts[batch_index];
+		head ++;
 	}
+
+	// Update the shared head to enque the entire batch	
+	lc_wmq->head = head;
+	printf("Worker [lcore %d]: head = %lld\n", 
+		lp_info->lcore_id, lc_wmq->head);
+	while(lc_wmq->head - lc_wmq->tail >= WM_QUEUE_THRESH) {
+		// Do nothing
+	}
+
+	// Snapshot the tail into a local variable
+	int tail = lc_wmq->tail;
+	while(lc_wmq->sent != tail) {
+		printf("Worker [lcore %d]: sending: %lld\n", 
+			lp_info->lcore_id, lc_wmq->sent);
+
+		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		// Offset in queue
+		send_packet(lc_wmq->mbufs[q_i], 6/*lc_wmq->ports[q_i]*/, lp_info);
+		lc_wmq->sent ++;
+	}
+	
+	usleep(200000);
 }
 
-void run_server(uint8_t *ipv4_cache)
+void run_server(volatile struct wm_queue *wmq)
 {
 	int i;
 	uint64_t rss_seed = 0xdeadbeef;
 
 	int lcore_id = rte_lcore_id();
+	volatile struct wm_queue *lc_wmq = &wmq[lcore_id];
+
 	int socket_id = rte_lcore_to_socket_id(lcore_id);
 	assert(socket_id == 1);
 
@@ -177,13 +135,14 @@ void run_server(uint8_t *ipv4_cache)
 	printf("Server on lcore %d. Queue Id = %d\n", lcore_id, queue_id);
 
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
-	int *port_arr = get_active_ports(XIA_R2_PORT_MASK);
+	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
 	
 	// Initialize the per-port info for this lcore
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
 	memset(lp_info, 0, RTE_MAX_ETHPORTS * sizeof(struct lcore_port_info));
 	for(i = 0; i < RTE_MAX_ETHPORTS; i ++) {
 		lp_info[i].queue_id = queue_id;
+		lp_info[i].lcore_id = lcore_id;
 	}
 
 	struct rte_mbuf *rx_pkts_burst[MAX_SRV_BURST];
@@ -217,13 +176,7 @@ void run_server(uint8_t *ipv4_cache)
 	
 		lp_info[port_id].nb_rx += nb_rx_new;
 
-#if GOTO == 1
-		process_batch_goto(rx_pkts_burst, 
-			nb_rx_new, &rss_seed, ipv4_cache, lp_info);
-#else
-		process_batch_nogoto(rx_pkts_burst,
-			nb_rx_new, &rss_seed, ipv4_cache, lp_info);
-#endif
+		process_batch_gpu(rx_pkts_burst, nb_rx_new, &rss_seed, lp_info, lc_wmq);
 		
 		// STAT PRINTING
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {

@@ -1,6 +1,5 @@
 #include "main.h"
 int is_client = -1, client_id;
-uint8_t *ipv4_cache;
 volatile struct wm_queue *wmq;
 
 // Disable all offload features
@@ -51,7 +50,7 @@ l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 	if(is_client) {
 		run_client(client_id, l2fwd_pktmbuf_pool);
 	} else {
-		run_server(ipv4_cache);
+		run_server(wmq);
 	}
 	return 1;
 }
@@ -70,12 +69,14 @@ main(int argc, char **argv)
 	} else {
 		is_client = 0;
 
-		// Don't move this allocation: must be before EAL's ops
-		red_printf("Creating ipv4 address cache \n");
-		ipv4_cache_init(&ipv4_cache, XIA_R2_PORT_MASK);
-		red_printf("\tSetting up ipv4 address cache done!\n");
-
 		red_printf("Mapping worker-master shared queues\n");
+		// w/m queues should fit in one hugepage
+		assert(WM_MAX_LCORE * sizeof(struct wm_queue) < M_2);
+	
+		// Queue tail shouldn't cross the head in one RX burst
+		// XXX: is this needed?
+		assert(WM_QUEUE_THRESH > 2 * MAX_SRV_BURST);
+
 		wmq = shm_map(WM_QUEUE_KEY, M_2);
 		red_printf("\tMapping worker-master queues done\n");
 	}

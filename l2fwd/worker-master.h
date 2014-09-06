@@ -6,6 +6,9 @@
 #define WM_QUEUE_THRESH 128
 #define WM_QUEUE_KEY 1
 
+// Maximum worker lcores supported by the master
+#define WM_MAX_LCORE 16
+
 /**
  * A shared queue between a worker and a master.
  * The mbufs are actually pointers to rte_mbuf structs, but we use void 
@@ -13,9 +16,17 @@
  */
 struct wm_queue
 {
-	void *mbufs[WM_QUEUE_CAP];
-	int ipv4_address[WM_QUEUE_CAP];
-	long long head;
-	long long tail;
+	void *mbufs[WM_QUEUE_CAP];			/** < Book-keeping by worker thread */
+	int ipv4_address[WM_QUEUE_CAP];		/** < Input by worker thread */
+	int ports[WM_QUEUE_CAP];			/** < Output by master thread */
+
+	/** < Counters updated by a worker thread */
+	long long head;		/** < Number of packets in queue */
+	long long sent;		/** < Number of queue packets TX-ed */
+	long long pad_1[6];	/** < Master's counter gets different cacheline */
+
+	/** < Counter updated by the master thread */
+	long long tail;		/** < Number of packets processed by the master */
+	long long pad_2[7];	/** < Each wm_queue should be cacheline aligned */
 };
 

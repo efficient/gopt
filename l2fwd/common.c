@@ -97,21 +97,6 @@ int get_lcore_ranked_n(int n, int socket_id)
 }
 
 
-// Returns an array containing the port numbers of all ports that are active
-int *get_active_ports(int portmask)
-{
-	int num_active_ports = bitcount(portmask);
-	int *active_ports = (int *) malloc(num_active_ports * sizeof(int));
-	int pos = 0, i;
-	for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
-		if(ISSET(portmask, i)) {
-			active_ports[pos] = i;
-			pos ++;
-		}
-	}
-	assert(pos == num_active_ports);
-	return active_ports;
-}
 
 int count_active_lcores_on_socket(int socket_id)
 {

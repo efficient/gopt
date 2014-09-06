@@ -17,10 +17,11 @@ sudo rm -rf /mnt/huge/*
 sudo ipcrm -M 1			# WM_QUEUE_KEY
 sudo ipcrm -M 2			# IPv4_CACHE_KEY
 
-blue "Running master and sleeping for 1 seconds"
+blue "Running gpu master and sleeping for 1 seconds"
 sudo taskset -c 0 ./master -c 0x2 &
 sleep 1
 
+blue "Running workers"
 #sudo ./build/l2fwd -c 0xAA55 -n 4
 sudo ./build/l2fwd -c 0x2 -n 4
 
