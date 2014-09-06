@@ -5,6 +5,8 @@ function blue() {
 	echo "${es}$1${ee}"
 }
 
+worker_core_mask="0xAA"		# Mask for lcores running DPDK-workers
+
 blue "Killing existing GPU-master processes"
 sudo killall master
 
@@ -21,11 +23,11 @@ sudo ipcrm -M 1			# WM_QUEUE_KEY
 sudo ipcrm -M 2			# IPv4_CACHE_KEY
 
 blue "Running gpu master on core 15 and sleeping for 1 seconds"
-sudo taskset -c 15 ./master -c 0x2 &
+sudo taskset -c 15 ./master -c $worker_core_mask &
 sleep 1
 
 blue "Running workers"
-#sudo ./build/l2fwd -c 0xAA55 -n 4
-sudo ./build/l2fwd -c 0x2 -n 4
+sudo ./build/l2fwd -c $worker_core_mask -n 4
 
 # AA = lcores 1, 3, 5, 7
+# 55 = lcores 0, 2, 4, 6
