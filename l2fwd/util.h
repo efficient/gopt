@@ -1,3 +1,14 @@
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <unistd.h>
+#include <assert.h>
+
+/* Some commonly used sizes */
 #define K_512 524288
 #define K_512_ 524287
 
@@ -34,3 +45,9 @@
 #define M_2048 2147483648
 #define M_2048_ 2147483647
 
+void red_printf(const char *format, ...);
+void print_buf(char *A, int n);
+void *shm_alloc(int key, int bytes);
+void *shm_map(int key, int bytes);
+inline uint32_t fastrand(uint64_t* seed);
+int bitcount(int n);

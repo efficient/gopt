@@ -5,45 +5,42 @@
 #include <sys/shm.h>
 #include <unistd.h>
 
+// nvcc assumes that all header files are C++ files. Tell it
+// that these are C header files
+extern "C" {
 #include "worker-master.h"
-#include "sizes.h"
+#include "util.h"
+}
 
 // Re-define RTE_MAX_LCORE because we don't want to include
 // any DPDK header files here
-
 #define WM_MAX_LCORE 64
 
 volatile struct wm_queue *wmq;
 
-/**
- * Create worker-master queues for all possible lcores.
- */
-void create_wm_queues()
-{	
-	// The worker-master queues should fit inside one hugepage
-	assert(WM_MAX_LCORE * sizeof(struct wm_queue) < M_2);
-
-	printf("Creating WM_QUEUE with key = %d\n", WM_QUEUE_KEY);
-	int shm_flags = IPC_CREAT | 0666 | SHM_HUGETLB;
-	int sid = shmget(WM_QUEUE_KEY, M_2, shm_flags);
-	if(sid == -1) {
-		fprintf(stderr, "shmget Error! Failed to shm_alloc\n");
-		int doh = system("cat /sys/devices/system/node/*/meminfo | grep Huge");
-		exit(doh);
+int main(int argc, char **argv)
+{
+	int c;
+	int lcore_mask = -1;
+	while ((c = getopt (argc, argv, "c:")) != -1) {
+		switch(c) {
+			case 'c':
+				printf("Got lcore_mask = %s\n", optarg);
+				lcore_mask = atoi(optarg);
+				break;
+			default:
+				red_printf("Master needs coremask. Exiting!\n");
+				exit(-1);
+		}
 	}
 
-	wmq = (volatile struct wm_queue *) shmat(sid, 0, 0);
-	assert(wmq != NULL);
-	
-	memset((char *) wmq, 0, M_2);
-	
-}
+	assert(lcore_mask != -1);
+	red_printf("Master got lcore_mask: %d\n", lcore_mask);
 
-int main()
-{
-	printf("\033[31mMaster: Creating worker-master shared queues\033[0m\n");
-	create_wm_queues();
-	printf("\t\033[31mMaster: Creating worker-master queues done\033[0m\n");
-	
+	red_printf("Master: Creating worker-master shared queues\n");
+	assert(WM_MAX_LCORE * sizeof(struct wm_queue) < M_2);
+	wmq = (volatile struct wm_queue *) shm_alloc(WM_QUEUE_KEY, M_2);
+	red_printf("Master: Creating worker-master queues done\n");
+
 	sleep(10000);
 }

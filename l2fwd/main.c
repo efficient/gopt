@@ -76,7 +76,7 @@ main(int argc, char **argv)
 		red_printf("\tSetting up ipv4 address cache done!\n");
 
 		red_printf("Mapping worker-master shared queues\n");
-		map_wm_queues(&wmq);
+		wmq = shm_map(WM_QUEUE_KEY, M_2);
 		red_printf("\tMapping worker-master queues done\n");
 	}
 

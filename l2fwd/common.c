@@ -1,38 +1,5 @@
+/* Common functions used in DPDK code  */
 #include "main.h"
-
-// Like printf, but red. Limited to 1000 characters.
-void red_printf(const char *format, ...)
-{	
-	#define RED_LIM 1000
-	va_list args;
-	int i;
-
-	char buf1[RED_LIM], buf2[RED_LIM];
-	memset(buf1, 0, RED_LIM);
-	memset(buf2, 0, RED_LIM);
-
-    va_start(args, format);
-
-	// Marshal the stuff to print in a buffer
-	vsnprintf(buf1, RED_LIM, format, args);
-
-	// Probably a bad check for buffer overflow
-	for(i = RED_LIM - 1; i >= RED_LIM - 50; i --) {
-		assert(buf1[i] == 0);
-	}
-
-	// Add markers for red color and reset color
-	snprintf(buf2, 1000, "\033[31m%s\033[0m", buf1);
-
-	// Probably another bad check for buffer overflow
-	for(i = RED_LIM - 1; i >= RED_LIM - 50; i --) {
-		assert(buf2[i] == 0);
-	}
-
-	printf("%s", buf2);
-
-    va_end(args);
-}
 
 void print_mac(int port_id, struct ether_addr macaddr)
 {
@@ -64,18 +31,6 @@ void check_all_ports_link_status(uint8_t port_num, int portmask)
 	}
 }
 
-void print_buf(char *A, int n)
-{
-	int i;
-	for(i = 0; i < n; i++) {
-		if(A[i] >= 'a' && A[i] <= 'z') {
-			printf("%c, ", A[i]);
-		} else {
-			printf("%d, ", A[i]);
-		}
-	}
-	printf("\n");
-}
 
 struct rte_mempool *mempool_init(char *name, int socket_id)
 {
@@ -87,30 +42,6 @@ struct rte_mempool *mempool_init(char *name, int socket_id)
 	
 	CPE(ret == NULL, "rte_mempool_create failed\n")
 	return ret;
-}
-
-void *shm_alloc(int key, int bytes)
-{
-	int shm_flags = IPC_CREAT | 0666 | SHM_HUGETLB;
-	int ht_log_sid = shmget(key, bytes, shm_flags);
-	if(ht_log_sid == -1) {
-		fprintf(stderr, "shmget Error! Failed to shm_alloc\n");
-		int doh = system("cat /sys/devices/system/node/*/meminfo | grep Huge");
-		exit(doh);
-	}	
-
-	void *data = shmat(ht_log_sid, 0, 0);
-	assert(data != NULL);
-
-	memset((char *) data, 0, bytes);
-
-	return data;
-}
-
-inline uint32_t fastrand(uint64_t* seed)
-{
-    *seed = *seed * 1103515245 + 12345;
-    return (uint32_t)(*seed >> 32);
 }
 
 // FAC is a cycles-to-nanoseconds conversion factor
@@ -165,16 +96,6 @@ int get_lcore_ranked_n(int n, int socket_id)
 	exit(-1);
 }
 
-// Count the number of 1-bits in n
-int bitcount(int n)
-{
-	int count = 0;
-	while(n > 0) {
-		count ++;
-		n = n & (n - 1);
-	}
-	return count;
-}
 
 // Returns an array containing the port numbers of all ports that are active
 int *get_active_ports(int portmask)
@@ -277,22 +198,3 @@ void print_ether_hdr(struct ether_hdr *eth_hdr)
 	printf("\n");
 }
 
-/**
- * Map worker-master queues. This assumes that the queues have already been
- * created.
- */
-void map_wm_queues(volatile struct wm_queue **wmq)
-{	
-	// The worker-master queues should fit inside one hugepage
-	assert(RTE_MAX_LCORE * sizeof(struct wm_queue) < M_2);
-
-	int sid = shmget(WM_QUEUE_KEY, M_2, SHM_HUGETLB | 0666);
-	if(sid == -1) {
-		fprintf(stderr, "shmget Error! Failed to map worker-master queues\n");
-		int doh = system("cat /sys/devices/system/node/*/meminfo | grep Huge");
-		exit(doh);
-	}	
-	
-	*wmq = shmat(sid, 0, 0);
-	assert(*wmq != NULL);
-}

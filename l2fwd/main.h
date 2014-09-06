@@ -16,10 +16,10 @@
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
 
-#include "sizes.h"
 #include "fpp.h"
 #include "ipv4.h"
 #include "worker-master.h"
+#include "util.h"
 
 #define GOTO 0
 
@@ -94,27 +94,21 @@ struct lcore_port_info {
 };
 
 struct rte_mempool *mempool_init(char *name, int socket_id);
-void map_wm_queues(volatile struct wm_queue **wmq);
 
 int client_port_queue_to_lcore(int port_id, int queue_id);
 int count_active_lcores(void);
-int bitcount(int n);
 int get_lcore_rank(int lcore_id, int socket_id);
 int get_lcore_ranked_n(int n, int socket_id);
 int *get_active_ports(int portmask);
 int count_active_lcores_on_socket(int socket_id);
 int get_socket_id_from_macaddr(int port_id);
 
-void red_printf(const char *format, ...);
 void print_mac(int port_id, struct ether_addr macaddr);
 void check_all_ports_link_status(uint8_t port_num, int portmask);
-void print_buf(char *A, int n);
 
 void run_server(uint8_t *ipv4_cache);
 void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool);
-void *shm_alloc(int key, int cap);
 
-inline uint32_t fastrand(uint64_t* seed);
 void micro_sleep(double us, double cycles_to_ns_fac);
 
 void set_mac(uint8_t *mac_ptr, LL mac_addr);

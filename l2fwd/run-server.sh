@@ -6,7 +6,7 @@ function blue() {
 }
 
 blue "Re-compiling master's CUDA code"
-nvcc -O3 -o master master.cu -lrt
+nvcc -O3 -o master util.c master.cu -lrt
 
 blue "Re-compiling DPDK code"
 make clean
@@ -18,7 +18,7 @@ sudo ipcrm -M 1			# WM_QUEUE_KEY
 sudo ipcrm -M 2			# IPv4_CACHE_KEY
 
 blue "Running master and sleeping for 1 seconds"
-sudo ./master &
+sudo taskset -c 0 ./master -c 0x2 &
 sleep 1
 
 #sudo ./build/l2fwd -c 0xAA55 -n 4
