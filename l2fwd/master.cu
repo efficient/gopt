@@ -18,21 +18,32 @@ extern "C" {
 void master_gpu(volatile struct wm_queue *wmq, 
 	int num_workers, int *worker_lcores)
 {
-	int prev_head[WM_MAX_LCORE] = {0};
+	int i;
+	long long prev_head[WM_MAX_LCORE] = {0};
+	int worker_index = 0;
+	volatile struct wm_queue *lc_wmq;		// Work queue of one worker
 
 	assert(worker_lcores != NULL);
-	int worker_index = 0;
 
 	while(1) {
 		// Grab the lcore_id of the next worker
 		int w_lcore_id = worker_lcores[worker_index];
+		lc_wmq = &wmq[w_lcore_id];
 
-		long long w_head = wmq[w_lcore_id].head;
+		// Snapshot this worker queue's head
+		long long w_head = lc_wmq->head;
+
 		if(w_head != prev_head[w_lcore_id]) {
-			prev_head[w_lcore_id] = w_head;
-			printf("Master updating tail for worker (lcore %d) to %lld\n", 
-				w_lcore_id, w_head);
 
+			for(i = prev_head[w_lcore_id]; i < w_head; i ++) {
+				int q_i = i & WM_QUEUE_CAP_;		// Offset in the queue
+				int ip_addr = lc_wmq->ipv4_address[q_i];
+				lc_wmq->ports[q_i] = 6; //(ip_addr & 2) == 0 ? 4 : 6;
+			}
+			
+			prev_head[w_lcore_id] = w_head;
+			/*printf("Master updating tail for worker (lcore %d) to %lld\n", 
+				w_lcore_id, w_head);*/
 			wmq[w_lcore_id].tail = w_head;
 		}
 		
@@ -46,7 +57,7 @@ void master_gpu(volatile struct wm_queue *wmq,
 
 int main(int argc, char **argv)
 {
-	int c;
+	int c, i;
 	int lcore_mask = -1;
 	volatile struct wm_queue *wmq;
 
@@ -69,6 +80,16 @@ int main(int argc, char **argv)
 	red_printf("\tGPU master: creating worker-master shm queues\n");
 	assert(WM_MAX_LCORE * sizeof(struct wm_queue) < M_2);
 	wmq = (volatile struct wm_queue *) shm_alloc(WM_QUEUE_KEY, M_2);
+
+	for(i = 0; i < WM_MAX_LCORE; i ++) {
+		uint64_t c1 = (uint64_t) (uintptr_t) &wmq[i].head;
+		uint64_t c2 = (uint64_t) (uintptr_t) &wmq[i].tail;
+		uint64_t c3 = (uint64_t) (uintptr_t) &wmq[i].sent;
+
+		// Ensure that all counters are in separate cachelines
+		assert((c1 % 64 == 0) && (c2 % 64 == 0) && (c3 % 64 == 0));
+	}
+
 	red_printf("\tGPU master: creating worker-master shm queues done\n");
 
 	int num_workers = bitcount(lcore_mask);

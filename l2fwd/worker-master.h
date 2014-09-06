@@ -20,13 +20,14 @@ struct wm_queue
 	int ipv4_address[WM_QUEUE_CAP];		/** < Input by worker thread */
 	int ports[WM_QUEUE_CAP];			/** < Output by master thread */
 
-	/** < Counters updated by a worker thread */
+	/** < All counters should be on separate cachelines */
 	long long head;		/** < Number of packets in queue */
-	long long sent;		/** < Number of queue packets TX-ed */
-	long long pad_1[6];	/** < Master's counter gets different cacheline */
+	long long pad_1[7];	/** < Master's counter gets different cacheline */
 
-	/** < Counter updated by the master thread */
 	long long tail;		/** < Number of packets processed by the master */
 	long long pad_2[7];	/** < Each wm_queue should be cacheline aligned */
+
+	long long sent;		/** < Number of queue packets TX-ed */
+	long long pad_3[7];
 };
 

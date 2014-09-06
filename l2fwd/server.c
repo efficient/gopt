@@ -100,8 +100,8 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, uint64_t *rss_seed,
 
 	// Update the shared head to enque the entire batch	
 	lc_wmq->head = head;
-	printf("Worker [lcore %d]: head = %lld\n", 
-		lp_info->lcore_id, lc_wmq->head);
+	/*printf("Worker [lcore %d]: head = %lld\n", 
+		lp_info->lcore_id, lc_wmq->head);*/
 	while(lc_wmq->head - lc_wmq->tail >= WM_QUEUE_THRESH) {
 		// Do nothing
 	}
@@ -109,15 +109,14 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, uint64_t *rss_seed,
 	// Snapshot the tail into a local variable
 	int tail = lc_wmq->tail;
 	while(lc_wmq->sent != tail) {
-		printf("Worker [lcore %d]: sending: %lld\n", 
-			lp_info->lcore_id, lc_wmq->sent);
+		/*printf("Worker [lcore %d]: sending: %lld\n", 
+			lp_info->lcore_id, lc_wmq->sent);*/
 
 		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		// Offset in queue
-		send_packet(lc_wmq->mbufs[q_i], 6/*lc_wmq->ports[q_i]*/, lp_info);
+		send_packet(lc_wmq->mbufs[q_i], lc_wmq->ports[q_i], lp_info);
 		lc_wmq->sent ++;
 	}
 	
-	usleep(200000);
 }
 
 void run_server(volatile struct wm_queue *wmq)
