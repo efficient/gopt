@@ -69,7 +69,7 @@ main(int argc, char **argv)
 	} else {
 		is_client = 0;
 
-		red_printf("Mapping worker-master shared queues\n");
+		red_printf("\tDPDK main: Mapping worker-master shared queues\n");
 		// w/m queues should fit in one hugepage
 		assert(WM_MAX_LCORE * sizeof(struct wm_queue) < M_2);
 	
@@ -78,7 +78,7 @@ main(int argc, char **argv)
 		assert(WM_QUEUE_THRESH > 2 * MAX_SRV_BURST);
 
 		wmq = shm_map(WM_QUEUE_KEY, M_2);
-		red_printf("\tMapping worker-master queues done\n");
+		red_printf("\tDPDK main: Mapping worker-master queues done\n");
 	}
 
 	ret = rte_eal_init(argc, argv);

@@ -34,17 +34,18 @@ void master_gpu(volatile struct wm_queue *wmq,
 		long long w_head = lc_wmq->head;
 
 		if(w_head != prev_head[w_lcore_id]) {
-
+			// Iterate over the new packets
 			for(i = prev_head[w_lcore_id]; i < w_head; i ++) {
 				int q_i = i & WM_QUEUE_CAP_;		// Offset in the queue
 				int ip_addr = lc_wmq->ipv4_address[q_i];
-				lc_wmq->ports[q_i] = 6; //(ip_addr & 2) == 0 ? 4 : 6;
+
+				lc_wmq->ports[q_i] = (ip_addr & 1) == 0 ? 4 : 6;
 			}
 			
 			prev_head[w_lcore_id] = w_head;
 			/*printf("Master updating tail for worker (lcore %d) to %lld\n", 
 				w_lcore_id, w_head);*/
-			wmq[w_lcore_id].tail = w_head;
+			lc_wmq->tail = w_head;
 		}
 		
 		// Round-robin among the workers
