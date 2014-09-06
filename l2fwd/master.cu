@@ -26,7 +26,8 @@ int main(int argc, char **argv)
 		switch(c) {
 			case 'c':
 				printf("Got lcore_mask = %s\n", optarg);
-				lcore_mask = atoi(optarg);
+				// atoi() doesn't work for hex representation
+				lcore_mask = strtol(optarg, NULL, 16);
 				break;
 			default:
 				red_printf("Master needs coremask. Exiting!\n");
