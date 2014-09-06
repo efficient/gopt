@@ -5,6 +5,9 @@ function blue() {
 	echo "${es}$1${ee}"
 }
 
+blue "Killing existing GPU-master processes"
+sudo killall master
+
 blue "Re-compiling master's CUDA code"
 nvcc -O3 -o master util.c master.cu -lrt
 
