@@ -153,8 +153,8 @@ int main(int argc, char *argv[])
 	
 		printf("Test PASSED for num_pkts = %d\n", num_pkts);
 
-		// Emit the results to stderr
-		fprintf(stderr, "Batch size = %d, CPU: %f, GPU: %f, CPU/GPU: %f\n",
+		// Emit the results to stderr. Use only space for delimiting
+		fprintf(stderr, "Batch size  %d CPU %f GPU %f CPU/GPU %f\n",
 			num_pkts, cpu_time, gpu_time, cpu_time / gpu_time);
 	
 		// Free host memory
