@@ -1,0 +1,16 @@
+CUDA bandwidth test from:
+https://github.com/parallel-forall/code-samples/blob/master/series/cuda-cpp/optimize-data-transfers/bandwidthtest.cu
+
+Benchmark gives wrong results a lot of the time.
+
+Device: GeForce GTX 750 Ti
+Transfer size (MB): 16
+
+Pageable transfers
+  Host to Device bandwidth (GB/s): 3.465084
+  Device to Host bandwidth (GB/s): 3.223829
+
+Pinned transfers
+  Host to Device bandwidth (GB/s): 6.144744
+  Device to Host bandwidth (GB/s): 6.54
+

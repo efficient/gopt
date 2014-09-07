@@ -1,0 +1,6 @@
+Susitna:
+
+(8 * 1024 * 1024) * 4 memory accesses in .024 seconds => 1,333 million accesses
+per second
+
+
