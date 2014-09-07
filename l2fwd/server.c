@@ -128,7 +128,7 @@ void run_server(volatile struct wm_queue *wmq)
 	volatile struct wm_queue *lc_wmq = &wmq[lcore_id];
 
 	int socket_id = rte_lcore_to_socket_id(lcore_id);
-	assert(socket_id == 1);
+	assert(socket_id == 0);
 
 	int queue_id = get_lcore_rank(lcore_id, socket_id);
 	printf("Server on lcore %d. Queue Id = %d\n", lcore_id, queue_id);

@@ -117,7 +117,7 @@ main(int argc, char **argv)
 		// XXX: Need to implement logic so that server lcores only access the ports on 
 		// their socket. Until then, restrict to one socket.
 		if(!is_client) {
-			assert(my_socket_id == 1);
+			assert(my_socket_id == 0);
 		}
 
 		int num_queues = is_client == 1 ? 3 : count_active_lcores_on_socket(my_socket_id);

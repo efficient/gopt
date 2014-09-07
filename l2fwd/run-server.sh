@@ -5,7 +5,7 @@ function blue() {
 	echo "${es}$1${ee}"
 }
 
-worker_core_mask="0xAA"		# Mask for lcores running DPDK-workers
+worker_core_mask="0x55"		# Mask for lcores running DPDK-workers
 
 blue "Killing existing GPU-master processes"
 sudo killall master
@@ -23,7 +23,7 @@ sudo ipcrm -M 1			# WM_QUEUE_KEY
 sudo ipcrm -M 2			# IPv4_CACHE_KEY
 
 blue "Running gpu master on core 15 and sleeping for 1 seconds"
-sudo taskset -c 15 ./master -c $worker_core_mask &
+sudo taskset -c 14 ./master -c $worker_core_mask &
 sleep 1
 
 blue "Running workers"

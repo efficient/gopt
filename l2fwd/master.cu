@@ -39,7 +39,7 @@ void master_gpu(volatile struct wm_queue *wmq,
 				int q_i = i & WM_QUEUE_CAP_;		// Offset in the queue
 				int ip_addr = lc_wmq->ipv4_address[q_i];
 
-				lc_wmq->ports[q_i] = 4 + (ip_addr & 3);
+				lc_wmq->ports[q_i] = 0 + (ip_addr & 3);
 			}
 			
 			prev_head[w_lcore_id] = w_head;
