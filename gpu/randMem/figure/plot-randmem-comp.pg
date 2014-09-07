@@ -19,8 +19,12 @@ set key font ',22'
 
 xia_r2_naive_depth_20="../xia-router2/naive-depth-20.dat"
 xia_r2_opt_depth_20="../xia-router2/opt-depth-20.dat"
+haswell_naive_depth_20="../fawn-haswell/naive-depth-20.dat"
+haswell_opt_depth_20="../fawn-haswell/opt-depth-20.dat"
 
 plot \
-xia_r2_naive_depth_20 using 3:9 title "xia-r2-naive" w lp lc rgb "#228B22" lt 1 lw 1 ps 1 pt 11,\
-xia_r2_opt_depth_20 using 3:9 title "xia-r2-opt" w lp lc rgb "#8B0000" lt 1 lw 1 ps 1 pt 11,\
+xia_r2_naive_depth_20 using 3:9 title "xia-r2-naive" w lp lc rgb "#228B22" lt 1 lw 1 ps .5 pt 11,\
+xia_r2_opt_depth_20 using 3:9 title "xia-r2-opt" w lp lc rgb "#8B0000" lt 1 lw 1 ps .5 pt 11,\
+haswell_naive_depth_20 using 3:9 title "xia-r2-naive" w lp lc rgb "#AAAAAA" lt 1 lw 1 ps .5 pt 11,\
+haswell_opt_depth_20 using 3:9 title "xia-r2-opt" w lp lc rgb "#000000" lt 1 lw 1 ps .5 pt 11,\
 
