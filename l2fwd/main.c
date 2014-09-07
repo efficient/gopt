@@ -1,6 +1,5 @@
 #include "main.h"
 int is_client = -1, client_id;
-int *ht_log;
 
 // Disable all offload features
 static const struct rte_eth_conf port_conf = {
@@ -48,9 +47,9 @@ static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, ht_log, l2fwd_pktmbuf_pool);
+		run_client(client_id, l2fwd_pktmbuf_pool);
 	} else {
-		run_server(ht_log, l2fwd_pktmbuf_pool);
+		run_server();
 	}
 	return 1;
 }
@@ -70,11 +69,6 @@ main(int argc, char **argv)
 		is_client = 0;
 	}
 
-	// Don't move this allocation: must be before EAL's ops
-	red_printf("Setting up log..\n");
-	ht_log = shm_alloc(BASE_HT_LOG_SHM_KEY, LOG_CAP);
-	printf("\tSetting up log done!\n");
-
 	ret = rte_eal_init(argc, argv);
 	CPE(ret < 0, "Invalid EAL arguments\n");
 
@@ -86,6 +80,7 @@ main(int argc, char **argv)
 	CPE(nb_ports == 0, "No Ethernet ports - bye\n");
 
 	printf("\n\n");
+
 	// Create a mempool for each enabled lcore
 	for(lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id ++) {
 		if(rte_lcore_is_enabled(lcore_id)) {
@@ -110,6 +105,13 @@ main(int argc, char **argv)
 		// xia-router0/1 use an IO-Hub for PCIe devices, so NICs don't have a NUMA-socket.
 		int my_socket_id = is_client == 1 ? get_socket_id_from_macaddr(port_id) : 
 			rte_eth_dev_socket_id(port_id);
+
+		// XXX: Need to implement logic so that server lcores only access the ports on 
+		// their socket. Until then, restrict to one socket.
+		if(!is_client) {
+			assert(my_socket_id == 0);
+		}
+
 		int num_queues = is_client == 1 ? 3 : count_active_lcores_on_socket(my_socket_id);
 
 		printf("Initializing port %u on socket %d with %d queues \n", 
@@ -149,7 +151,6 @@ main(int argc, char **argv)
 
 		ret = rte_eth_dev_start(port_id);
 		CPE2(ret < 0, "rte_eth_dev_start: %d, %u\n", ret, (unsigned) port_id);
-
 	}
 
 	check_all_ports_link_status(nb_ports, portmask);

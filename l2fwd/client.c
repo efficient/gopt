@@ -2,11 +2,11 @@
 #define MAX_CLT_TX_BURST 16
 #define MAX_CLT_RX_BURST 16
 
-void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_pool)
+void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 {
 	// [xia-router0 - xge0,1,2,3], [xia-router1 - xge0,1,2,3]
 	LL src_mac_arr[2][4] = {{0x36d3bd211b00, 0x37d3bd211b00, 0xa8d6a3211b00, 0xa9d6a3211b00},
-							{0x44d7a3211b00, 0x45d713211b00, 0x0ad7a3211b00, 0x0bd7a3211b00}};
+							{0x44d7a3211b00, 0x45d7a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00}};
 
 	// [xia-router2 - xge0,1,4,5], [xia-router2 - xge2,3,6,7]
 	LL dst_mac_arr[2][4] = {{0x6c10bb211b00, 0x6d10bb211b00, 0xc8a610ca0568, 0xc9a610ca0568},
@@ -17,19 +17,22 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 
 	int i;
 
-	struct rte_mbuf *rx_pkts_burst[MAX_CLT_RX_BURST], *tx_pkts_burst[MAX_CLT_TX_BURST];
+	struct rte_mbuf *rx_pkts_burst[MAX_CLT_RX_BURST];
+	struct rte_mbuf *tx_pkts_burst[MAX_CLT_TX_BURST];
 
 	int lcore_id = rte_lcore_id();
 
 	int port_id = lcore_to_port[lcore_id];
 	if(!ISSET(XIA_R0_PORT_MASK, port_id)) {
-		red_printf("Lcore %d uses disabled port (port %d). Exiting.\n", lcore_id, port_id);
+		red_printf("Lcore %d uses disabled port (port %d). Exiting.\n",
+			lcore_id, port_id);
 		exit(-1);
 	}
 
 	// This is a valid queue_id because all client ports have 3 queues
 	int queue_id = lcore_id % 3;
-	red_printf("Client: lcore: %d, port: %d, queue: %d\n", lcore_id, port_id, queue_id);
+	red_printf("Client: lcore: %d, port: %d, queue: %d\n", 
+		lcore_id, port_id, queue_id);
 
 	LL prev_tsc = 0, cur_tsc = 0;
 	prev_tsc = rte_rdtsc();
@@ -77,8 +80,8 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 
 			// Add request, lcore_id, and timestamp
 			int *req = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size);
-			req[0] = lcore_id;							// 36 -> 40
-			req[1] = fastrand(&rss_seed) & LOG_CAP_;	// 40 -> 44
+			req[0] = client_id * 1000 + lcore_id;					// 36 -> 40
+			req[1] = fastrand(&rss_seed);				// 40 -> 44
 			// Bytes 44 -> 48 are reserved for response (req[2])
 			
 			LL *tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size + 12);
@@ -95,7 +98,8 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 
 		// RX drain
 		while(1) {
-			int nb_rx_new = rte_eth_rx_burst(port_id, queue_id, rx_pkts_burst, MAX_CLT_RX_BURST);
+			int nb_rx_new = rte_eth_rx_burst(port_id, 
+				queue_id, rx_pkts_burst, MAX_CLT_RX_BURST);
 			if(nb_rx_new == 0) {
 				break;
 			}
@@ -107,18 +111,14 @@ void run_client(int client_id, int *ht_log, struct rte_mempool **l2fwd_pktmbuf_p
 				int req_addr = req[1];
 				int resp = req[2];
 
-				int acc_i;		// mem-access iterator
-				for(acc_i = 0; acc_i < NUM_ACCESSES; acc_i ++) {
-					req_addr = ht_log[req_addr];
-				}
 				if(req_addr != resp) {
 					nb_fails ++;
 				}
 
 				// Retrive send-timestamp and lcore from which this pkt was sent
 				LL *tsc = (LL *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) + hdr_size + 12);
-				int tx_lcore = req[0];		// The lcore that sent this packet to the server
-				if(lcore_id == tx_lcore) {
+				int tx_magic = req[0];		// Global id of core that sent this pkt
+				if(client_id * 1000 + lcore_id == tx_magic) {
 					rx_samples ++;
 					LL cur_tsc = rte_rdtsc();
 					latency_tot += (cur_tsc - tsc[0]);

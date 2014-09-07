@@ -1,38 +1,5 @@
+/* Common functions used in DPDK code  */
 #include "main.h"
-
-// Like printf, but red. Limited to 1000 characters.
-void red_printf(const char *format, ...)
-{	
-	#define RED_LIM 1000
-	va_list args;
-	int i;
-
-	char buf1[RED_LIM], buf2[RED_LIM];
-	memset(buf1, 0, RED_LIM);
-	memset(buf2, 0, RED_LIM);
-
-    va_start(args, format);
-
-	// Marshal the stuff to print in a buffer
-	vsnprintf(buf1, RED_LIM, format, args);
-
-	// Probably a bad check for buffer overflow
-	for(i = RED_LIM - 1; i >= RED_LIM - 50; i --) {
-		assert(buf1[i] == 0);
-	}
-
-	// Add markers for red color and reset color
-	snprintf(buf2, 1000, "\033[31m%s\033[0m", buf1);
-
-	// Probably another bad check for buffer overflow
-	for(i = RED_LIM - 1; i >= RED_LIM - 50; i --) {
-		assert(buf2[i] == 0);
-	}
-
-	printf("%s", buf2);
-
-    va_end(args);
-}
 
 void print_mac(int port_id, struct ether_addr macaddr)
 {
@@ -64,18 +31,6 @@ void check_all_ports_link_status(uint8_t port_num, int portmask)
 	}
 }
 
-void print_buf(char *A, int n)
-{
-	int i;
-	for(i = 0; i < n; i++) {
-		if(A[i] >= 'a' && A[i] <= 'z') {
-			printf("%c, ", A[i]);
-		} else {
-			printf("%d, ", A[i]);
-		}
-	}
-	printf("\n");
-}
 
 struct rte_mempool *mempool_init(char *name, int socket_id)
 {
@@ -89,33 +44,8 @@ struct rte_mempool *mempool_init(char *name, int socket_id)
 	return ret;
 }
 
-int *shm_alloc(int key, int cap)
-{
-	int shm_flags = IPC_CREAT | 0666 | SHM_HUGETLB;
-	int ht_log_sid = shmget(key, cap * sizeof(int), shm_flags);
-	if(ht_log_sid == -1) {
-		fprintf(stderr, "shmget Error! Failed to shm_alloc\n");
-		int doh = system("cat /sys/devices/system/node/*/meminfo | grep Huge");
-		exit(doh);
-	}	
-
-	int *data = (int *) shmat(ht_log_sid, 0, 0);
-
-	int i;
-	for(i = 0; i < cap; i++) {
-		data[i] = rand() & LOG_CAP_;
-	}
-	return data;
-}
-
-inline uint32_t fastrand(uint64_t* seed)
-{
-    *seed = *seed * 1103515245 + 12345;
-    return (uint32_t)(*seed >> 32);
-}
-
 // FAC is a cycles-to-nanoseconds conversion factor
-void micro_sleep(int us, double cycles_to_ns_fac)
+void micro_sleep(double us, double cycles_to_ns_fac)
 {
 	LL required_diff = (us * 1000) / cycles_to_ns_fac;
 	LL start_tsc = rte_rdtsc();
@@ -166,32 +96,7 @@ int get_lcore_ranked_n(int n, int socket_id)
 	exit(-1);
 }
 
-// Count the number of 1-bits in n
-int bitcount(int n)
-{
-	int count = 0;
-	while(n > 0) {
-		count ++;
-		n = n & (n - 1);
-	}
-	return count;
-}
 
-// Returns an array containing the port numbers of all ports that are active
-int *get_active_ports(int portmask)
-{
-	int num_active_ports = bitcount(portmask);
-	int *active_ports = (int *) malloc(num_active_ports * sizeof(int));
-	int pos = 0, i;
-	for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
-		if(ISSET(portmask, i)) {
-			active_ports[pos] = i;
-			pos ++;
-		}
-	}
-	assert(pos == num_active_ports);
-	return active_ports;
-}
 
 int count_active_lcores_on_socket(int socket_id)
 {
@@ -206,7 +111,7 @@ int count_active_lcores_on_socket(int socket_id)
 }
 
 // On CPUs that use an I/O Hub, rte_eth_dev_socket_id(port_id) returns -1.
-// So, we assign a socket manually using macaddr. XXX: XIA-specific
+// So, we assign a socket manually using macaddr. XIA-specific.
 int get_socket_id_from_macaddr(int port_id)
 {
 	struct ether_addr macaddr;
@@ -229,7 +134,7 @@ int get_socket_id_from_macaddr(int port_id)
 }
 
 // Return the client lcore responsible for queue #queue_id on port #port_id
-// XXX: XIA-specific
+// XIA-specific
 int client_port_queue_to_lcore(int port_id, int queue_id)
 {
 	assert(port_id <= 3 && port_id >= 0);
