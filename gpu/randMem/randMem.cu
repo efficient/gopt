@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
 		h_log[i] = rand() % LOG_CAP;
 	}
 
-	for(int num_pkts = 8; num_pkts < 1024; num_pkts += 8) {
+	for(int num_pkts = 8; num_pkts < 8 * 1024; num_pkts += 8) {
 
 		int *h_pkts_cpu = (int *) malloc(num_pkts * sizeof(int));
 		int *h_pkts_gpu = (int *) malloc(num_pkts * sizeof(int));
@@ -151,8 +151,10 @@ int main(int argc, char *argv[])
 			}
 		}
 	
-		printf("Test PASSED\n");
-		printf("Batch size = %d, CPU: %f, GPU: %f, CPU/GPU: %f\n",
+		printf("Test PASSED for num_pkts = %d\n", num_pkts);
+
+		// Emit the results to stderr
+		fprintf(stderr, "Batch size = %d, CPU: %f, GPU: %f, CPU/GPU: %f\n",
 			num_pkts, cpu_time, gpu_time, cpu_time / gpu_time);
 	
 		// Free host memory

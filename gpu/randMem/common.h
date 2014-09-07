@@ -2,8 +2,8 @@
 #include <cuda_runtime.h>
 #include <time.h>
 
-#define USE_HUGEPAGE 0
-#define USE_INTERLEAVING 0
+#define USE_HUGEPAGE 1
+#define USE_INTERLEAVING 1
 #define DEPTH 20
 
 #define NUM_PKTS (8 * 1024 * 1024)
