@@ -4,7 +4,8 @@
 #include<time.h>
 
 #include "city.h"
-#include "param.h"
+
+#define NUM_PKTS (16 * 1024 * 1024)
 
 int main(int argc, char **argv)
 {

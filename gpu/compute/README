@@ -1,0 +1,2 @@
+To run:
+	taskset -c 0 ./compute 2>xia-router2/nohuge-nointerleave.dat
