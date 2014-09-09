@@ -6,7 +6,7 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 {
 	// [xia-router0 - xge0,1,2,3], [xia-router1 - xge0,1,2,3]
 	LL src_mac_arr[2][4] = {{0x36d3bd211b00, 0x37d3bd211b00, 0xa8d6a3211b00, 0xa9d6a3211b00},
-							{0x44d7a3211b00, 0x45d713211b00, 0x0ad7a3211b00, 0x0bd7a3211b00}};
+							{0x44d7a3211b00, 0x45d7a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00}};
 
 	// [xia-router2 - xge0,1,4,5], [xia-router2 - xge2,3,6,7]
 	LL dst_mac_arr[2][4] = {{0x6c10bb211b00, 0x6d10bb211b00, 0xc8a610ca0568, 0xc9a610ca0568},

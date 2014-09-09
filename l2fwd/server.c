@@ -210,13 +210,13 @@ void run_server(struct cuckoo_slot *ht_index)
 
 	int lcore_id = rte_lcore_id();
 	int socket_id = rte_lcore_to_socket_id(lcore_id);
-	assert(socket_id == 1);
+	assert(socket_id == 0);
 
 	int queue_id = get_lcore_rank(lcore_id, socket_id);
 	printf("Server on lcore %d. Queue Id = %d\n", lcore_id, queue_id);
 
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
-	int *port_arr = get_active_ports(XIA_R2_PORT_MASK);
+	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
 	
 	// Initialize the per-port info for this lcore
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
