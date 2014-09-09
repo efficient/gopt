@@ -75,7 +75,6 @@ main(int argc, char **argv)
 		red_printf("\tSetting up ipv4 address cache done!\n");
 	}
 
-
 	ret = rte_eal_init(argc, argv);
 	CPE(ret < 0, "Invalid EAL arguments\n");
 
@@ -87,6 +86,7 @@ main(int argc, char **argv)
 	CPE(nb_ports == 0, "No Ethernet ports - bye\n");
 
 	printf("\n\n");
+
 	// Create a mempool for each enabled lcore
 	for(lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id ++) {
 		if(rte_lcore_is_enabled(lcore_id)) {
@@ -115,7 +115,7 @@ main(int argc, char **argv)
 		// XXX: Need to implement logic so that server lcores only access the ports on 
 		// their socket. Until then, restrict to one socket.
 		if(!is_client) {
-			assert(my_socket_id == 1);
+			assert(my_socket_id == 0);
 		}
 
 		int num_queues = is_client == 1 ? 3 : count_active_lcores_on_socket(my_socket_id);

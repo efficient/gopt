@@ -16,11 +16,11 @@
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
 
-#include "sizes.h"
 #include "fpp.h"
+#include "util.h"
 #include "ipv4.h"
 
-#define GOTO 1
+#define GOTO 0
 
 #define LL long long
 
@@ -49,35 +49,27 @@
 #define NUM_RX_DESC 512
 #define NUM_TX_DESC 512
 
-#define ISSET(a, i) (a & (1 << i))
-#define MAX(a, b) (a > b ? a : b)
-#define htons(n) (((((unsigned short)(n) & 0xFF)) << 8) | (((unsigned short)(n) & 0xFF00) >> 8))
-
-#define CPE2(val, msg, error, fault) \
-	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg, error, fault);}
-#define CPE(val, msg) \
-	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg);}
-
 #define GHZ_CPS 1000000000
 // Cycles to nanoseconds conversion constants
 #define C_FAC ((double) GHZ_CPS / XIA_R0_CPS)
 #define S_FAC ((double) GHZ_CPS / XIA_R2_CPS)
 
 // All xia hardware specific features need to be prefixed by XIA_
-#define XIA_R0_PORT_MASK 0x4	// xge2
+#define XIA_R0_PORT_MASK 0x3	// xge0,1
 #define XIA_R0_CPS 2270000000	// Client cycles per second
 
-#define XIA_R2_PORT_MASK 0x50	// xge4,6
+#define XIA_R2_PORT_MASK 0xf	// xge0,1,2,3
 #define XIA_R2_CPS 2700000000	// Server cycles per second
 
 // On all xia-router* machines, even numbered lcores are on socket 0
 #define LCORE_TO_SOCKET(lcore) (lcore % 2)
 
-// Application-specific burst size for the server
+// Application-specific RX/TX burst size for the server
 #define MAX_SRV_BURST 16
 
 /**
- * The server process on each lcore creates a separate instance of 
+ * Per-lcore, per-port statistics:
+ * The server process on each lcore creates a separate instance of
  * lcore_port_info for each port. The total number of packets transmitted
  * is collected in the nb_tx_all_ports field for port #0 (this does not
  * require that port #0 is enabled.
@@ -87,35 +79,28 @@ struct lcore_port_info {
 	int nb_buf;
 	int nb_tx;
 	int nb_rx;
-	int queue_id;
 	int nb_tx_all_ports;
+	int queue_id;
 };
 
 struct rte_mempool *mempool_init(char *name, int socket_id);
 
 int client_port_queue_to_lcore(int port_id, int queue_id);
 int count_active_lcores(void);
-int bitcount(int n);
 int get_lcore_rank(int lcore_id, int socket_id);
 int get_lcore_ranked_n(int n, int socket_id);
-int *get_active_ports(int portmask);
 int count_active_lcores_on_socket(int socket_id);
 int get_socket_id_from_macaddr(int port_id);
 
-void red_printf(const char *format, ...);
 void print_mac(int port_id, struct ether_addr macaddr);
 void check_all_ports_link_status(uint8_t port_num, int portmask);
-void print_buf(char *A, int n);
 
 void run_server(uint8_t *ipv4_cache);
 void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool);
-int *shm_alloc(int key, int cap);
 
-inline uint32_t fastrand(uint64_t* seed);
 void micro_sleep(double us, double cycles_to_ns_fac);
 
 void set_mac(uint8_t *mac_ptr, LL mac_addr);
 void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr);
 void print_ether_hdr(struct ether_hdr *eth_hdr);
 
-#define NUM_ACCESSES 0
