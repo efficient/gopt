@@ -48,7 +48,7 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
 	int hdr_size = 36;
 
-	//float sleep_us = 2;
+	float sleep_us = 2;
 
 	while (1) {
 
@@ -96,7 +96,7 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 			rte_pktmbuf_free(tx_pkts_burst[i]);
 		}
 
-		micro_sleep(2, C_FAC);
+		micro_sleep(sleep_us, C_FAC);
 
 		// RX drain
 		while(1) {
@@ -147,7 +147,7 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 			latency_tot = 0;
 
 			// Update sleep_us by reading the "sleep_time" file
-			//sleep_us = get_sleep_time();
+			sleep_us = get_sleep_time();
 		}
 	}
 }
