@@ -105,4 +105,6 @@ void set_mac(uint8_t *mac_ptr, LL mac_addr);
 void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr);
 void print_ether_hdr(struct ether_hdr *eth_hdr);
 
+float get_sleep_time(void);
+
 #define NUM_ACCESSES 0
