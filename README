@@ -8,3 +8,5 @@ Directory structure:
 
 	l2fwd:
 		DPDK code for forwarding b/w xia-router2 and xia-router1
+	gpu:
+		Microbenchmarks for GPU performance.

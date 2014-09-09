@@ -3,6 +3,8 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
+cudaStream_t myStream;
+
 __global__ void
 randMem(int *pkts, const int *log, int num_pkts)
 {
@@ -44,7 +46,6 @@ double cpu_run(int *pkts, int *log, int num_pkts)
 		}
 	}
 #endif
-	
 
 	clock_gettime(CLOCK_REALTIME, &end);
 	double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
@@ -52,42 +53,37 @@ double cpu_run(int *pkts, int *log, int num_pkts)
 	return time;
 }
 
-double gpu_run(int *h_pkts, int *d_log, int num_pkts)
+double gpu_run(int *h_pkts, int *d_pkts, int *d_log, int num_pkts)
 {
 	struct timespec start, end;
-	int *d_pkts = NULL;
 	int err = cudaSuccess;
 
-	err = cudaMalloc((void **) &d_pkts, num_pkts * sizeof(int));
-	CPE(err != cudaSuccess, "Failed to allocate packet buffer on device\n", -1);
-
-	// Start the clock
 	clock_gettime(CLOCK_REALTIME, &start);
-	err = cudaMemcpy(d_pkts, h_pkts, num_pkts * sizeof(int), cudaMemcpyHostToDevice);
 
-	// Launch the Vector Add CUDA Kernel
+	/**< Copy packets to device */
+	err = cudaMemcpyAsync(d_pkts, h_pkts, num_pkts * sizeof(int), 
+		cudaMemcpyHostToDevice, myStream);
+
+	/**< Kernel launch */
 	int threadsPerBlock = 256;
 	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
-	printf("CUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid, threadsPerBlock);
 
-	randMem<<<blocksPerGrid, threadsPerBlock>>>(d_pkts, d_log, num_pkts);
-	cudaDeviceSynchronize();
-
+	randMem<<<blocksPerGrid, threadsPerBlock, 0, myStream>>>(d_pkts, 
+		d_log, num_pkts);
 	err = cudaGetLastError();
 	CPE(err != cudaSuccess, "Failed to launch randMem kernel\n", -1);
 
-	// Copy back the result
-	printf("Copy output data from the CUDA device to the host memory\n");
-	err = cudaMemcpy(h_pkts, d_pkts, num_pkts * sizeof(int), cudaMemcpyDeviceToHost);
+	/**< Copy back the results */
+	err = cudaMemcpyAsync(h_pkts, d_pkts, num_pkts * sizeof(int),
+		cudaMemcpyDeviceToHost, myStream);
 	CPE(err != cudaSuccess, "Failed to copy C from device to host\n", -1);
+
+	/**< Wait for all stream ops to complete */
+	cudaStreamSynchronize(myStream);
 
 	clock_gettime(CLOCK_REALTIME, &end);
 	double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
 		(end.tv_sec - start.tv_sec);
-
-	// Free device global memory
-	err = cudaFree(d_pkts);
-	CPE(err != cudaSuccess, "Failed to cudaFree\n", -1);
 
 	return time;
 }
@@ -97,23 +93,28 @@ int main(int argc, char *argv[])
 	int err = cudaSuccess;
 	int i;
 	int *h_log, *d_log;
+	int *h_pkts_cpu;
+	/** <Separate packet buffer to compare GPU's result with the CPU's */
+	int *h_pkts_gpu, *d_pkts_gpu;
 
 	srand(time(NULL));
 
 	printDeviceProperties();
 
-	// Initialize hugepage log once for all values of num_pkts
+	/** <Initialize a cudaStream for async calls */
+	err = cudaStreamCreate(&myStream);
+	CPE(err != cudaSuccess, "Failed to create cudaStream\n", -1);
+
+	/** <Initialize hugepage log and copy it to the device: do it once */
 #if USE_HUGEPAGE == 1
 	int sid = shmget(1, LOG_CAP * sizeof(int), SHM_HUGETLB | 0666 | IPC_CREAT);
 	assert(sid >= 0);
 	h_log = (int *) shmat(sid, 0, 0);
-	assert(h_log != NULL);
 #else
 	h_log = (int *) malloc(LOG_CAP * sizeof(int));
-	assert(h_log != NULL);
 #endif
+	assert(h_log != NULL);
 
-	// Initialize the log and copy it to the device once
 	for(i = 0; i < LOG_CAP; i ++) {
 		h_log[i] = rand() % LOG_CAP;
 	}
@@ -123,29 +124,29 @@ int main(int argc, char *argv[])
 	err = cudaMemcpy(d_log, h_log, LOG_CAP * sizeof(int), cudaMemcpyHostToDevice);
 	CPE(err != cudaSuccess, "Failed to copy to device memory\n", -1);
 
-	// Test for different batch sizes
-	for(int num_pkts = 8; num_pkts < 8 * 1024; num_pkts += 8) {
+	/** <Initialize the packet arrays for CPU and GPU code */
+	h_pkts_cpu =  (int *) malloc(MAX_PKTS * sizeof(int));
 
-		int *h_pkts_cpu = (int *) malloc(num_pkts * sizeof(int));
-		int *h_pkts_gpu = (int *) malloc(num_pkts * sizeof(int));
+	/** <The host packet-array for GPU code should be pinned */
+	err = cudaMallocHost((void **) &h_pkts_gpu, MAX_PKTS * sizeof(int));
+	err = cudaMalloc((void **) &d_pkts_gpu, MAX_PKTS * sizeof(int));
+
+	/** <Test for different batch sizes */
+	assert(MAX_PKTS % 8 == 0);
+	for(int num_pkts = 8; num_pkts < MAX_PKTS; num_pkts += 8) {
+
 		double cpu_time, gpu_time;
 
-		// Verify that allocations succeeded
-		if (h_pkts_cpu == NULL || h_pkts_gpu == NULL || h_log == NULL) {
-			fprintf(stderr, "Failed to allocate host mem!\n");
-			exit(-1);
-		}
-		
-		// Initialize packets
+		/** <Initialize packets */
 		for(i = 0; i < num_pkts; i ++) {
 			h_pkts_cpu[i] = rand() & LOG_CAP_;
 			h_pkts_gpu[i] = h_pkts_cpu[i];
 		}
 	
 		cpu_time = cpu_run(h_pkts_cpu, h_log, num_pkts);
-		gpu_time = gpu_run(h_pkts_gpu, d_log, num_pkts);
+		gpu_time = gpu_run(h_pkts_gpu, d_pkts_gpu, d_log, num_pkts);
 	
-		// Verify that the result vector is correct
+		/** <Verify that the result vector is correct */
 		for(int i = 0; i < num_pkts; i ++) {
 			if (h_pkts_cpu[i] != h_pkts_gpu[i]) {
 				fprintf(stderr, "Result verification failed at element %d!\n", i);
@@ -155,15 +156,28 @@ int main(int argc, char *argv[])
 		}
 	
 		printf("Test PASSED for num_pkts = %d\n", num_pkts);
+		printf("CPU: %dM cachelines/sec\n", 
+			(int) ((num_pkts * DEPTH) / (cpu_time * 1000000)));
+		printf("GPU: %dM cachelines/sec\n", 
+			(int) ((num_pkts * DEPTH) / (gpu_time * 1000000)));
+		printf("\n");
 
-		// Emit the results to stderr. Use only space for delimiting
+		/** <Emit the results to stderr. Use only space for delimiting */
 		fprintf(stderr, "Batch size  %d CPU %f GPU %f CPU/GPU %f\n",
 			num_pkts, cpu_time, gpu_time, cpu_time / gpu_time);
 	
-		// Free host memory
-		free(h_pkts_cpu);
-		free(h_pkts_gpu);
 	}
+
+	// Free device memory
+	cudaFree(d_pkts_gpu);
+	cudaFree(d_log);
+
+	// Free host memory
+	free(h_pkts_cpu);
+	cudaFreeHost(h_pkts_gpu);
+#if USE_HUGEPAGE == 0
+	free(h_log);
+#endif
 
 	// Reset the device and exit
 	err = cudaDeviceReset();

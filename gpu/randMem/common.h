@@ -6,7 +6,8 @@
 #define USE_INTERLEAVING 1
 #define DEPTH 7
 
-#define NUM_PKTS (8 * 1024 * 1024)
+#define MAX_PKTS 8192
+
 #define LOG_CAP (64 * 1024 * 1024)		// 256 M log
 #define LOG_CAP_ ((64 * 1024 * 1024) - 1)	// 256 M log
 
