@@ -94,6 +94,8 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 			rte_pktmbuf_free(tx_pkts_burst[i]);
 		}
 
+		micro_sleep(2, C_FAC);
+
 		// RX drain
 		while(1) {
 			int nb_rx_new = rte_eth_rx_burst(port_id, 
