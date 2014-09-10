@@ -1,0 +1,2 @@
+To run:
+	taskset -c 0 ./randMem 2>xia-router2/nohuge-nointerleave.dat

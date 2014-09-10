@@ -52,7 +52,7 @@
 #define CPE2(val, msg, error, fault) \
 	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg, error, fault);}
 #define CPE(val, msg) \
-	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg);}
+	if(val) {fflush(stdout); printf(msg); exit(-1);}
 
 void red_printf(const char *format, ...);
 void print_buf(char *A, int n);

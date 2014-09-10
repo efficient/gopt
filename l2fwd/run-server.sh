@@ -11,7 +11,7 @@ blue "Killing existing GPU-master processes"
 sudo killall master
 
 blue "Re-compiling master's CUDA code"
-nvcc -O3 -o master util.c master.cu -lrt
+nvcc -O3 -o master util.c ipv4.c master.cu -lrt
 
 blue "Re-compiling DPDK code"
 make clean
@@ -24,7 +24,7 @@ sudo ipcrm -M 2			# IPv4_CACHE_KEY
 
 blue "Running gpu master on core 15 and sleeping for 1 seconds"
 sudo taskset -c 14 ./master -c $worker_core_mask &
-sleep 1
+sleep 3
 
 blue "Running workers"
 sudo ./build/l2fwd -c $worker_core_mask -n 4

@@ -3,11 +3,14 @@
 #define WM_QUEUE_CAP_ 1023
 
 // Maximum outstanding packets maintained by a worker for the master
-#define WM_QUEUE_THRESH 128
+#define WM_QUEUE_THRESH 512
 #define WM_QUEUE_KEY 1
 
-// Maximum worker lcores supported by the master
+/**< Maximum worker lcores supported by the master */
 #define WM_MAX_LCORE 16
+
+#define WM_INPUT_SIZE 4			/** < Input is IPv4 address */
+#define WM_OUTPUT_SIZE 1		/** < Output is a portnum */
 
 /**
  * A shared queue between a worker and a master.
@@ -18,7 +21,7 @@ struct wm_queue
 {
 	void *mbufs[WM_QUEUE_CAP];			/** < Book-keeping by worker thread */
 	int ipv4_address[WM_QUEUE_CAP];		/** < Input by worker thread */
-	int ports[WM_QUEUE_CAP];			/** < Output by master thread */
+	uint8_t ports[WM_QUEUE_CAP];		/** < Output by master thread */
 
 	/** < All counters should be on separate cachelines */
 	long long head;		/** < Number of packets in queue */
