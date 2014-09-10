@@ -1,9 +1,9 @@
 // Capacity of a queue between a PS-style worker thread and the master thread
-#define WM_QUEUE_CAP 1024
-#define WM_QUEUE_CAP_ 1023
+#define WM_QUEUE_CAP 8192
+#define WM_QUEUE_CAP_ 8191
 
 // Maximum outstanding packets maintained by a worker for the master
-#define WM_QUEUE_THRESH 512
+#define WM_QUEUE_THRESH 2048
 #define WM_QUEUE_KEY 1
 
 /**< Maximum worker lcores supported by the master */

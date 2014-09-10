@@ -37,7 +37,8 @@ void master_gpu(volatile struct wm_queue *wmq,
 	assert(num_workers != 0);
 	assert(worker_lcores != NULL);
 	
-	int i, err;
+	int i, err, iter = 0;
+	long long total_ips = 0;
 
 	/** < The h_ips buffer start index for an lcore during a kernel launch */
 	int ips_lo[WM_MAX_LCORE] = {0};
@@ -74,6 +75,15 @@ void master_gpu(volatile struct wm_queue *wmq,
 
 		if(ips_cur == 0) {		// Number of IPs = ips_cur
 			continue;
+		}
+
+		iter ++;
+		total_ips += ips_cur;
+		if(iter == 10000) {
+			red_printf("\tGPU master: average batch size = %lld\n",
+				total_ips / iter);
+			iter = 0;
+			total_ips = 0;
 		}
 
 		/**< Copy packets to device */
