@@ -25,6 +25,6 @@ haswell_opt_depth_20="../fawn-haswell/opt-depth-20.dat"
 plot \
 xia_r2_naive_depth_20 using 3:9 title "xia-r2-naive" w lp lc rgb "#228B22" lt 1 lw 1 ps .5 pt 11,\
 xia_r2_opt_depth_20 using 3:9 title "xia-r2-opt" w lp lc rgb "#8B0000" lt 1 lw 1 ps .5 pt 11,\
-haswell_naive_depth_20 using 3:9 title "xia-r2-naive" w lp lc rgb "#AAAAAA" lt 1 lw 1 ps .5 pt 11,\
-haswell_opt_depth_20 using 3:9 title "xia-r2-opt" w lp lc rgb "#000000" lt 1 lw 1 ps .5 pt 11,\
+haswell_naive_depth_20 using 3:9 title "haswell-naive" w lp lc rgb "#AAAAAA" lt 1 lw 1 ps .5 pt 11,\
+haswell_opt_depth_20 using 3:9 title "haswell-opt" w lp lc rgb "#000000" lt 1 lw 1 ps .5 pt 11,\
 
