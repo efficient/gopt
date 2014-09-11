@@ -2,15 +2,16 @@
 #define MAX_CLT_TX_BURST 16
 #define MAX_CLT_RX_BURST 16
 
-void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_pool)
+void run_client(int client_id, ULL *mac_addrs, 
+	struct rte_mempool **l2fwd_pktmbuf_pool)
 {
 	// [xia-router0 - xge0,1,2,3], [xia-router1 - xge0,1,2,3]
 	LL src_mac_arr[2][4] = {{0x36d3bd211b00, 0x37d3bd211b00, 0xa8d6a3211b00, 0xa9d6a3211b00},
 							{0x44d7a3211b00, 0x45d7a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00}};
 
 	// [xia-router2 - xge0,1,4,5], [xia-router2 - xge2,3,6,7]
-	LL dst_mac_arr[2][4] = {{0x6c10bb211b00, 0x6d10bb211b00, 0xc8a610ca0568, 0xc9a610ca0568},
-							{0x64d2bd211b00, 0x65d2bd211b00, 0xa2a610ca0568, 0xa3a610ca0568}};
+	/*LL dst_mac_arr[2][4] = {{0x6c10bb211b00, 0x6d10bb211b00, 0xc8a610ca0568, 0xc9a610ca0568},
+							{0x64d2bd211b00, 0x65d2bd211b00, 0xa2a610ca0568, 0xa3a610ca0568}};*/
 
 	// Even cores take xge0,1. Odd cores take xge2, xge3
 	int lcore_to_port[12] = {0, 2, 0, 2, 0, 2, 1, 3, 1, 3, 1, 3};
@@ -60,14 +61,17 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 			ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 		
 			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
+			dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
+
+			// Choose a dst mac from the ones inserted in the cuckoo index
+			set_mac(dst_mac_ptr, mac_addrs[fastrand(&rss_seed) & NUM_MAC_]);
+
+			// Occassionally, put the correct src mac address
 			if((fastrand(&rss_seed) & 0xff) == 0) {
 				set_mac(src_mac_ptr, src_mac_arr[client_id][port_id]);
 			} else {
 				set_mac(src_mac_ptr, 0xdeadbeef);
 			}
-
-			dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
-			set_mac(dst_mac_ptr, dst_mac_arr[client_id][port_id]);
 
 			eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
 	
@@ -83,14 +87,14 @@ void run_client(int client_id, int *entries, struct rte_mempool **l2fwd_pktmbuf_
 			// Add request, global core-identifier, and timestamp
 			int *req = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size);
 			req[0] = client_id * 1000 + lcore_id;					// 36 -> 40
-			req[1] = entries[fastrand(&rss_seed) & NUM_ENTRIES_];	// 40 -> 44
 			// Bytes 44 -> 48 are reserved for response (req[2])
 			
 			LL *tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size + 12);
 			tsc[0] = rte_rdtsc();		// 48 -> 56
 		}
 
-		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, tx_pkts_burst, MAX_CLT_TX_BURST);
+		int nb_tx_new = rte_eth_tx_burst(port_id, 
+			queue_id, tx_pkts_burst, MAX_CLT_TX_BURST);
 		nb_tx += nb_tx_new;
 		for(i = nb_tx_new; i < MAX_CLT_TX_BURST; i++) {
 			rte_pktmbuf_free(tx_pkts_burst[i]);

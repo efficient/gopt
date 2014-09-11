@@ -1,7 +1,8 @@
 #include "main.h"
 int is_client = -1, client_id;
-struct cuckoo_slot *ht_index;
-int *entries;
+
+struct cuckoo_bucket *ht_index;
+unsigned long long *mac_addrs;
 
 // Disable all offload features
 static const struct rte_eth_conf port_conf = {
@@ -49,7 +50,7 @@ static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, entries, l2fwd_pktmbuf_pool);
+		run_client(client_id, mac_addrs, l2fwd_pktmbuf_pool);
 	} else {
 		run_server(ht_index);
 	}
@@ -74,9 +75,9 @@ main(int argc, char **argv)
 	// Don't move this allocation: must be before EAL's ops
 	red_printf("Creating cuckoo index..\n");
 
-	// The cuckoo index will map keys in the "entries" array to port-numbers
-	// from the portmask. Clients only need the "entries" array.
-	cuckoo_init(&entries, &ht_index, XIA_R2_PORT_MASK);
+	// The cuckoo index will map mac addresses in the "mac_addrs" array to 
+	// port-numbers from the portmask. Clients only need "mac_addrs".
+	cuckoo_init(&mac_addrs, &ht_index, XIA_R2_PORT_MASK);
 	red_printf("\tSetting up cuckoo index done!\n");
 
 	ret = rte_eal_init(argc, argv);
@@ -157,7 +158,14 @@ main(int argc, char **argv)
 
 		// Print device mac address and start it
 		rte_eth_macaddr_get(port_id, &l2fwd_ports_eth_addr[port_id]);
-		print_mac(port_id, l2fwd_ports_eth_addr[port_id]);
+		printf("Port %d, MAC: ", port_id);
+		print_mac_arr(l2fwd_ports_eth_addr[port_id].addr_bytes);
+		printf("\n");
+
+		// The server acts as an L2 switch: it should accept all dst macs
+		if(!is_client) {
+			rte_eth_promiscuous_enable(port_id);
+		}
 
 		ret = rte_eth_dev_start(port_id);
 		CPE2(ret < 0, "rte_eth_dev_start: %d, %u\n", ret, (unsigned) port_id);

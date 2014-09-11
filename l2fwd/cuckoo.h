@@ -5,24 +5,33 @@
 #include <assert.h>
 
 #include "city.h"
+#include "util.h"
 
 #define HASH_INDEX_KEY 1
 
-#define HASH_INDEX_N (64 * 1024 * 1024)		// Number of cuckoo slots
-#define HASH_INDEX_N_ ((64 * 1024 * 1024) - 1)
+#define NUM_BKT (8 * 1024 * 1024)		// Number of cuckoo buckets
+#define NUM_BKT_ ((8 * 1024 * 1024) - 1)
 
 // Number of packets to populate index. Keep this number smaller
 // than the number of cuckoo slots so that fewer entries are lost
 // due to collision
-#define NUM_ENTRIES (16 * 1024 * 1024)	// Number of packets to populate index
-#define NUM_ENTRIES_ ((16 * 1024 * 1024) - 1)
+//#define NUM_MAC (16 * 1024 * 1024)
+//#define NUM_MAC_ ((16 * 1024 * 1024) - 1)
 
-struct cuckoo_slot
+#define NUM_MAC (16)
+#define NUM_MAC_ ((16) - 1)
+
+struct cuckoo_bucket
 {
-	int key;
-	int port;
+	/**< Slot: bytes 0:1 = port | bytes 2:7 = mac */
+	ULL slot[8];
 };
+
+// These macros should be safe for use with the ANTLR code
+#define SLOT_TO_MAC(s) (s & ((1L << 48) - 1))
+#define SLOT_TO_PORT(s) (s >> 48)
 
 // Cuckoo-specific function prototypes
 uint32_t hash(uint32_t u);
-void cuckoo_init(int **entries, struct cuckoo_slot** ht_index, int portmask);
+void cuckoo_init(ULL **mac_addrs, 
+	struct cuckoo_bucket** ht_index, int portmask);
