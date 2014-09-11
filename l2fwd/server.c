@@ -50,6 +50,96 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
+void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
+                          uint64_t *rss_seed, struct cuckoo_bucket *ht_index,
+                          struct lcore_port_info *lp_info, int port_id)
+{
+	int i[BATCH_SIZE];
+	struct ether_hdr *eth_hdr[BATCH_SIZE];
+	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
+	void *dst_mac_ptr[BATCH_SIZE];
+	ULL dst_mac[BATCH_SIZE];
+	int fwd_port[BATCH_SIZE];
+	int bkt_2[BATCH_SIZE];
+	int bkt_1[BATCH_SIZE];
+
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&fpp_start;
+	}
+
+fpp_start:
+
+	fwd_port[I] = -1;
+
+	if(I != nb_pkts - 1) {
+		rte_prefetch0(pkts[I + 1]->pkt.data);
+	}
+
+	eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
+	ip_hdr[I] = (struct ipv4_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
+
+	dst_mac_ptr[I] = &eth_hdr[I]->d_addr.addr_bytes[0];
+	dst_mac[I] = get_mac(eth_hdr[I]->d_addr.addr_bytes);
+
+	eth_hdr[I]->ether_type = htons(ETHER_TYPE_IPv4);
+
+	// These 3 fields of ip_hdr are required for RSS
+	ip_hdr[I]->src_addr = fastrand(rss_seed);
+	ip_hdr[I]->dst_addr = fastrand(rss_seed);
+	ip_hdr[I]->version_ihl = 0x40 | 0x05;
+
+	pkts[I]->pkt.nb_segs = 1;
+	pkts[I]->pkt.pkt_len = 60;
+	pkts[I]->pkt.data_len = 60;
+
+	bkt_1[I] = CityHash32(dst_mac_ptr[I], 6) & NUM_BKT_;
+	FPP_PSS(&ht_index[bkt_1[I]], fpp_label_1, nb_pkts);
+fpp_label_1:
+
+	for(i[I] = 0; i[I] < 8; i[I] ++) {
+		if(SLOT_TO_MAC(ht_index[bkt_1[I]].slot[i[I]]) == dst_mac[I]) {
+			fwd_port[I] = SLOT_TO_PORT(ht_index[bkt_1[I]].slot[i[I]]);
+			break;
+		}
+	}
+
+	if(fwd_port[I] == -1) {
+		bkt_2[I] = CityHash32((char *) &bkt_1[I], 4) & NUM_BKT_;
+		FPP_PSS(&ht_index[bkt_2[I]], fpp_label_2, nb_pkts);
+fpp_label_2:
+
+		for(i[I] = 0; i[I] < 8; i[I] ++) {
+			if(SLOT_TO_MAC(ht_index[bkt_2[I]].slot[i[I]]) == dst_mac[I]) {
+				fwd_port[I] = SLOT_TO_PORT(ht_index[bkt_2[I]].slot[i[I]]);
+				break;
+			}
+		}
+	}
+
+	if(fwd_port[I] == -1) {
+		lp_info[port_id].nb_tx_fail ++;
+		rte_pktmbuf_free(pkts[I]);
+	} else {
+		set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
+		set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[fwd_port[I]]);
+		send_packet(pkts[I], fwd_port[I], lp_info);
+	}
+
+fpp_end:
+	batch_rips[I] = &&fpp_end;
+	iMask = FPP_SET(iMask, I); 
+	if(iMask == (1 << nb_pkts) - 1) {
+		return;
+	}
+	I = (I + 1) < nb_pkts ? I + 1 : 0;
+	goto *batch_rips[I];
+}
+
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
 	uint64_t *rss_seed, struct cuckoo_bucket *ht_index,
 	struct lcore_port_info *lp_info, int port_id)

@@ -20,8 +20,7 @@
 #include "util.h"
 #include "cuckoo.h"
 
-#define GOTO 0
-
+#define GOTO 1
 
 // sizeof(rte_mbuf) = 64, RTE_PKTMBUF_HEADROOM = 128
 #define MBUF_SIZE (2048 + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)

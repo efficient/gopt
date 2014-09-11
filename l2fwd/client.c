@@ -16,7 +16,7 @@ void run_client(int client_id, ULL *mac_addrs,
 	// Even cores take xge0,1. Odd cores take xge2, xge3
 	int lcore_to_port[12] = {0, 2, 0, 2, 0, 2, 1, 3, 1, 3, 1, 3};
 
-	int i;
+	int i, mac_i;
 
 	struct rte_mbuf *rx_pkts_burst[MAX_CLT_RX_BURST];
 	struct rte_mbuf *tx_pkts_burst[MAX_CLT_TX_BURST];
@@ -53,6 +53,9 @@ void run_client(int client_id, ULL *mac_addrs,
 
 	while (1) {
 
+		// Reduce the number of random accesses into the mac_addrs array
+		mac_i = rand();
+
 		for(i = 0; i < MAX_CLT_TX_BURST; i ++) {
 			tx_pkts_burst[i] = rte_pktmbuf_alloc(l2fwd_pktmbuf_pool[lcore_id]);
 			CPE(tx_pkts_burst[i] == NULL, "tx_alloc failed\n");
@@ -64,7 +67,7 @@ void run_client(int client_id, ULL *mac_addrs,
 			dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
 
 			// Choose a dst mac from the ones inserted in the cuckoo index
-			set_mac(dst_mac_ptr, mac_addrs[fastrand(&rss_seed) & NUM_MAC_]);
+			set_mac(dst_mac_ptr, mac_addrs[(mac_i + i) & NUM_MAC_]);
 
 			// Occassionally, put the correct src mac address
 			if((fastrand(&rss_seed) & 0xff) == 0) {

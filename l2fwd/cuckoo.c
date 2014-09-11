@@ -49,9 +49,6 @@ void cuckoo_init(ULL **mac_addrs,
 		// Put the mac into a byte-array for hash computation
 		set_mac(__mac_48, mac_48);
 
-		print_mac_ull(mac_48);
-		print_mac_arr(__mac_48);
-		
 		// Choose one of the two candidate buckets randomly
 		bkt = CityHash32((char *) __mac_48, 6) & NUM_BKT_;
 		if(rand() % 2 != 0) {

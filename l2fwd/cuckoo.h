@@ -15,11 +15,8 @@
 // Number of packets to populate index. Keep this number smaller
 // than the number of cuckoo slots so that fewer entries are lost
 // due to collision
-//#define NUM_MAC (16 * 1024 * 1024)
-//#define NUM_MAC_ ((16 * 1024 * 1024) - 1)
-
-#define NUM_MAC (16)
-#define NUM_MAC_ ((16) - 1)
+#define NUM_MAC (16 * 1024 * 1024)
+#define NUM_MAC_ ((16 * 1024 * 1024) - 1)
 
 struct cuckoo_bucket
 {
