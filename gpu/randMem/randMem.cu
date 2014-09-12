@@ -53,6 +53,8 @@ double cpu_run(int *pkts, int *log, int num_pkts)
 	return time;
 }
 
+#if INCLUDE_COPY_TIME == 1
+/**< Include copy overhead in measurement */
 double gpu_run(int *h_pkts, int *d_pkts, int *d_log, int num_pkts)
 {
 	struct timespec start, end;
@@ -87,6 +89,46 @@ double gpu_run(int *h_pkts, int *d_pkts, int *d_log, int num_pkts)
 
 	return time;
 }
+
+#else
+/**< Don't include copy overhead in measurement */
+double gpu_run(int *h_pkts, int *d_pkts, int *d_log, int num_pkts)
+{
+	struct timespec start, end;
+	int err = cudaSuccess;
+
+
+	/**< Copy packets to device */
+	err = cudaMemcpy(d_pkts, h_pkts, num_pkts * sizeof(int), 
+		cudaMemcpyHostToDevice);
+
+	/**< Memcpy has completed: start timer */
+	clock_gettime(CLOCK_REALTIME, &start);
+
+	/**< Kernel launch */
+	int threadsPerBlock = 256;
+	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
+
+	randMem<<<blocksPerGrid, threadsPerBlock>>>(d_pkts, d_log, num_pkts);
+	err = cudaGetLastError();
+	CPE(err != cudaSuccess, "Failed to launch randMem kernel\n", -1);
+	cudaDeviceSynchronize();
+
+	/**< Kernel execution finished: stop timer */
+	clock_gettime(CLOCK_REALTIME, &end);
+
+	/**< Copy back the results */
+	err = cudaMemcpy(h_pkts, d_pkts, num_pkts * sizeof(int),
+		cudaMemcpyDeviceToHost);
+	CPE(err != cudaSuccess, "Failed to copy C from device to host\n", -1);
+
+	double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
+		(end.tv_sec - start.tv_sec);
+
+	return time;
+}
+
+#endif
 
 int main(int argc, char *argv[])
 {

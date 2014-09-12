@@ -6,17 +6,21 @@
 cudaStream_t myStream;
 
 __global__ void
-seqMem(const long long *log, long long *sum)
+seqMem(long long *log, long long *sum)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j, num_iters = LOG_CAP / CUDA_THREADS;
-	int iter_base;
+	int iter_base = 0;
 
 	sum[i] = 0;
 
 	for(j = 0; j < num_iters; j ++) {
-		iter_base = j * CUDA_THREADS;	
+#if WR_ONLY == 1
+		log[iter_base + i] = j;
+#else
 		sum[i] += log[iter_base + i];
+#endif
+		iter_base += CUDA_THREADS;
 	}
 }
 
