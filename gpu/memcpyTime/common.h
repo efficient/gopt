@@ -1,15 +1,15 @@
 #include <stdio.h>
+#include <stdarg.h>
 #include <cuda_runtime.h>
 #include <time.h>
 #include <assert.h>
 
-#define NUM_PKTS (1024 * 1024)		// For PCIe 1.0 x16 measurement
-#define ITERS 10
+#define NUM_PKTS 32
+#define ITERS 1000
 
 void printDeviceProperties();
-long long get_cycles();
-cudaError_t checkCuda(cudaError_t result);
+void red_printf(const char *format, ...);
 
-#define CPE(val, msg, err_code) \
-	if(val) { fprintf(stderr, msg); fprintf(stderr, " Error %d \n", err_code); \
-	exit(err_code);}
+#define CPE(val, msg) \
+	if(val) { fprintf(stderr, msg); \
+	exit(-1);}
