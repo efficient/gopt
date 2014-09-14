@@ -25,24 +25,24 @@ int cmpfunc (const void *a, const void *b)
 	}
 }
 
-void dummy_run(int *h_A, int *d_A)
+void dummy_run(int *h_A, int *d_A, int num_pkts)
 {
 	int err = cudaSuccess;
 	int threadsPerBlock = 256;
-	int blocksPerGrid = (NUM_PKTS + threadsPerBlock - 1) / threadsPerBlock;
+	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
 
-	err = cudaMemcpy(d_A, h_A, NUM_PKTS * sizeof(int), cudaMemcpyHostToDevice);
+	err = cudaMemcpy(d_A, h_A, num_pkts * sizeof(int), cudaMemcpyHostToDevice);
 	CPE(err != cudaSuccess, "H2D memcpy failed\n");
 	
-	vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, NUM_PKTS);
+	vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, num_pkts);
 	err = cudaGetLastError();
 	CPE(err != cudaSuccess, "Kernel launch failed\n");
 	
-	err = cudaMemcpy(h_A, d_A, NUM_PKTS * sizeof(int), cudaMemcpyDeviceToHost);
+	err = cudaMemcpy(h_A, d_A, num_pkts * sizeof(int), cudaMemcpyDeviceToHost);
 	CPE(err != cudaSuccess, "D2H memcpy failed\n");
 }
 
-void gpu_run(int *h_A, int *d_A)
+void gpu_run(int *h_A, int *d_A, int num_pkts)
 {
 	int err = cudaSuccess;
 	struct timespec h2d_start[ITERS], h2d_end[ITERS];
@@ -55,27 +55,27 @@ void gpu_run(int *h_A, int *d_A)
 	
 	int i, j;
 	int threadsPerBlock = 256;
-	int blocksPerGrid = (NUM_PKTS + threadsPerBlock - 1) / threadsPerBlock;
+	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
 
 	/** < Do a dummy run for warmup */
-	dummy_run(h_A, d_A);
+	dummy_run(h_A, d_A, num_pkts);
 
 	/** < Run several iterations */
 	for(i = 0; i < ITERS; i ++) {
 
-		for(j = 0; j < NUM_PKTS; j++)	{
+		for(j = 0; j < num_pkts; j++)	{
 			h_A[j] = i;
 		}
 
 		/** < Host-to-device memcpy */
 		clock_gettime(CLOCK_REALTIME, &h2d_start[i]);
-		err = cudaMemcpy(d_A, h_A, NUM_PKTS * sizeof(int), cudaMemcpyHostToDevice);
+		err = cudaMemcpy(d_A, h_A, num_pkts * sizeof(int), cudaMemcpyHostToDevice);
 		CPE(err != cudaSuccess, "H2D memcpy failed\n");
 		clock_gettime(CLOCK_REALTIME, &h2d_end[i]);
 
 		/** < Kernel launch */
 		clock_gettime(CLOCK_REALTIME, &kernel_start[i]);
-		vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, NUM_PKTS);
+		vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, num_pkts);
 		err = cudaGetLastError();
 		CPE(err != cudaSuccess, "Kernel launch failed\n");
 		cudaDeviceSynchronize();
@@ -83,7 +83,7 @@ void gpu_run(int *h_A, int *d_A)
 
 		/** < Device-to-host memcpy */
 		clock_gettime(CLOCK_REALTIME, &d2h_start[i]);
-		err = cudaMemcpy(h_A, d_A, NUM_PKTS * sizeof(int), cudaMemcpyDeviceToHost);
+		err = cudaMemcpy(h_A, d_A, num_pkts * sizeof(int), cudaMemcpyDeviceToHost);
 		CPE(err != cudaSuccess, "D2H memcpy failed\n");
 		clock_gettime(CLOCK_REALTIME, &d2h_end[i]);
 
@@ -112,31 +112,35 @@ void gpu_run(int *h_A, int *d_A)
 	qsort(kernel_diff, ITERS, sizeof(double), cmpfunc);
 	qsort(d2h_diff, ITERS, sizeof(double), cmpfunc);
 
-	red_printf("H2D average: %.2f us, 5th %.2f us, 95th: %.2f\n",
-		h2d_tot / ITERS,
-		h2d_diff[(ITERS * 5) / 100],
-		h2d_diff[(ITERS * 95) / 100]);
-	red_printf("Kernel average: %.2f us, 5th %.2f us, 95th: %.2f\n",
-		kernel_tot / ITERS,
-		kernel_diff[(ITERS * 5) / 100],
-		kernel_diff[(ITERS * 95) / 100]);
-	red_printf("D2H average: %.2f us, 5th %.2f us, 95th: %.2f\n",
-		d2h_tot / ITERS,
-		d2h_diff[(ITERS * 5) / 100],
-		d2h_diff[(ITERS * 95) / 100]);
-	
+	int i_5 = (ITERS * 5) / 100;
+	int i_95 = (ITERS * 95) / 100;
+
+	red_printf("H2D average %.2f us 5th %.2f us 95th %.2f\n",
+		h2d_tot / ITERS, h2d_diff[i_5], h2d_diff[i_95]);
+	red_printf("Kernel average %.2f us 5th %.2f us 95th %.2f\n",
+		kernel_tot / ITERS, kernel_diff[i_5], kernel_diff[i_95]);
+	red_printf("D2H average %.2f us 5th %.2f us 95th %.2f\n",
+		d2h_tot / ITERS, d2h_diff[i_5], d2h_diff[i_95]);
+
+	red_printf("TOT average %.2f us 5th %.2f us 95th %.2f\n",
+		(h2d_tot + kernel_tot + d2h_tot) / ITERS,
+		(h2d_diff[i_5] + kernel_diff[i_5] + d2h_diff[i_5]),
+		(d2h_diff[i_95] + kernel_diff[i_95] + d2h_diff[i_95]));
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
 	int err = cudaSuccess;
 	int *h_A, *d_A;
 
+	assert(argc == 2);
+	int num_pkts = atoi(argv[1]);
+
 	printDeviceProperties();
 
 	/** < Allocate host and device buffers */
-	h_A = (int *) malloc(NUM_PKTS * sizeof(int));
-	err = cudaMalloc((void **) &d_A, NUM_PKTS * sizeof(int));
+	h_A = (int *) malloc(num_pkts * sizeof(int));
+	err = cudaMalloc((void **) &d_A, num_pkts * sizeof(int));
 	CPE(err != cudaSuccess, "Failed to cudaMalloc\n");
 
 	if (h_A == NULL) {
@@ -145,7 +149,7 @@ int main(void)
 	}
 
 	/** < Run the measurement code */
-	gpu_run(h_A, d_A);
+	gpu_run(h_A, d_A, num_pkts);
 	
 	/** < Free host and device memory */
 	free(h_A);
