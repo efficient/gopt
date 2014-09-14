@@ -120,6 +120,11 @@ void gpu_run(int *h_A, int *d_A, cudaStream_t my_stream)
 		kernel_tot += kernel_diff[i];
 		d2h_tot += d2h_diff[i];
 		sync_tot += sync_diff[i];
+
+		/** < Check results */
+		for(j = 0; j < NUM_PKTS; j ++) {
+			assert(h_A[j] == i * i);
+		}
 	}
 
 	/** < Sort the times for percentiles */
