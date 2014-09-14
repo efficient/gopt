@@ -3,7 +3,7 @@
 int volatile *h_A, *h_B;
 int volatile *d_A, *d_B;
 int volatile *h_flag, *d_flag;
-int NUM_PKTS = -1;			/** < Passed as a command-line flag */
+int num_pkts = -1;			/** < Passed as a command-line flag */
 
 pthread_t cpu_thread;		/** < CPU thread that talks to the GPU */
 
@@ -38,13 +38,13 @@ void *gpu_run(void *ptr)
 	for(iter = 0; iter < ITERS; iter ++) {
 
 		/** < Set B to zero: the GPU will make it non-zero */
-		memset((char *) h_B, 0, NUM_PKTS * sizeof(int));
+		memset((char *) h_B, 0, num_pkts * sizeof(int));
 	
 		/** < Start a timer */
 		clock_gettime(CLOCK_REALTIME, &start);
 		
 		/** < Write input data into A */
-		for(j = 0; j < NUM_PKTS; j ++) {
+		for(j = 0; j < num_pkts; j ++) {
 			h_A[j] = iter + 1;		// Always > 0
 			assert(h_A[j] != 0);
 		}
@@ -53,9 +53,9 @@ void *gpu_run(void *ptr)
 		h_flag[0] = iter;
 
 		/** < Wait till the GPU makes all of h_B non-zero */
-		waitForNonZero(h_B, NUM_PKTS);
+		waitForNonZero(h_B, num_pkts);
 
-		for(j = 0; j < NUM_PKTS; j ++) {
+		for(j = 0; j < num_pkts; j ++) {
 			if(h_B[j] != h_A[j] + 1) {
 				fprintf(stderr, "Kernel output mismatch error\n");
 				exit(-1);
@@ -81,12 +81,12 @@ void *gpu_run(void *ptr)
 
 int main(int argc, char **argv)
 {
-	/** < NUM_PKTS is passed as a command-line flag */
+	/** < num_pkts is passed as a command-line flag */
 	assert(argc == 2);
-	NUM_PKTS = atoi(argv[1]);
+	num_pkts = atoi(argv[1]);
 
-	int threadsPerBlock = NUM_PKTS;
-	int blocksPerGrid = (NUM_PKTS + threadsPerBlock - 1) / threadsPerBlock;
+	int threadsPerBlock = 256;
+	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
 
 	int err = cudaSuccess;
 	printDeviceProperties();
@@ -95,8 +95,8 @@ int main(int argc, char **argv)
 	cudaSetDeviceFlags(cudaDeviceMapHost);
 
 	/** < Allocate the mapped-memory regions */
-	err = cudaHostAlloc(&h_A, NUM_PKTS * sizeof(int), cudaHostAllocMapped);
-	err = cudaHostAlloc(&h_B, NUM_PKTS * sizeof(int), cudaHostAllocMapped);
+	err = cudaHostAlloc(&h_A, num_pkts * sizeof(int), cudaHostAllocMapped);
+	err = cudaHostAlloc(&h_B, num_pkts * sizeof(int), cudaHostAllocMapped);
 	err = cudaHostAlloc(&h_flag, sizeof(int), cudaHostAllocMapped);
 	CPE(err != cudaSuccess, "Could not allocate mapped memory\n");
 
@@ -108,7 +108,7 @@ int main(int argc, char **argv)
 
 	/** < Init. mapped memory: For iteration #i, i >= 0, the flag is i */
 	h_flag[0] = -1;
-	for(int i = 0; i < NUM_PKTS; i++) {
+	for(int i = 0; i < num_pkts; i++) {
 		h_A[i] = 0;
 		h_B[i] = 0;
 	}
@@ -124,8 +124,10 @@ int main(int argc, char **argv)
 	CPE(err != cudaSuccess, "Failed to create cudaStream\n");
 
 	vectorAdd<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_A, 
-		d_B, d_flag, NUM_PKTS);
+		d_B, d_flag, num_pkts);
 	cudaStreamQuery(my_stream);
+	err = cudaGetLastError();
+	CPE(err != cudaSuccess, "Failed to launch kernel\n");
 
 	printf("Waiting for CPU thread to finish\n");
 	pthread_join(cpu_thread, NULL);
