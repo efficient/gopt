@@ -7,7 +7,7 @@
 
 #include <cuda_runtime.h>
 
-#define ITERS 1000
+#define ITERS 100000
 
 void printDeviceProperties();
 void waitForNonZero(volatile int *A, int N);

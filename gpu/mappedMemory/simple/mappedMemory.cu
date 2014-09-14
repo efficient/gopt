@@ -73,8 +73,8 @@ void *gpu_run(void *ptr)
 
 	/** < Sort the times for percentile */
 	qsort(diff, ITERS, sizeof(double), cmpfunc);
-	red_printf("Full execution: average: %.2f, 5th: %.2f, 95th: %.2f\n",
-		tot / ITERS, diff[(ITERS * 5) / 100], diff[(ITERS * 95) / 100]);
+	red_printf("Average %.2f 5th %.2f 95th %.2f\n",
+		tot / ITERS, diff[0], diff[(ITERS * 95) / 100]);
 
 	return 0;
 }
