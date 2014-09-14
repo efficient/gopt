@@ -25,28 +25,28 @@ int cmpfunc (const void *a, const void *b)
 	}
 }
 
-void dummy_run(int *h_A, int *d_A, cudaStream_t my_stream)
+void dummy_run(int *h_A, int *d_A, int num_pkts, cudaStream_t my_stream)
 {
 	int err = cudaSuccess;
 	int threadsPerBlock = 256;
-	int blocksPerGrid = (NUM_PKTS + threadsPerBlock - 1) / threadsPerBlock;
+	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
 
-	err = cudaMemcpyAsync(d_A, h_A, NUM_PKTS * sizeof(int), 
+	err = cudaMemcpyAsync(d_A, h_A, num_pkts * sizeof(int), 
 		cudaMemcpyHostToDevice, my_stream);
 	CPE(err != cudaSuccess, "H2D memcpy failed\n");
 	
-	vectorAdd<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_A, NUM_PKTS);
+	vectorAdd<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_A, num_pkts);
 	err = cudaGetLastError();
 	CPE(err != cudaSuccess, "Kernel launch failed\n");
 	
-	err = cudaMemcpyAsync(h_A, d_A, NUM_PKTS * sizeof(int),
+	err = cudaMemcpyAsync(h_A, d_A, num_pkts * sizeof(int),
 		cudaMemcpyDeviceToHost, my_stream);
 	CPE(err != cudaSuccess, "D2H memcpy failed\n");
 
 	cudaStreamSynchronize(my_stream);
 }
 
-void gpu_run(int *h_A, int *d_A, cudaStream_t my_stream)
+void gpu_run(int *h_A, int *d_A, int num_pkts, cudaStream_t my_stream)
 {
 	int err = cudaSuccess;
 	struct timespec h2d_start[ITERS], h2d_end[ITERS];
@@ -60,28 +60,28 @@ void gpu_run(int *h_A, int *d_A, cudaStream_t my_stream)
 	
 	int i, j;
 	int threadsPerBlock = 256;
-	int blocksPerGrid = (NUM_PKTS + threadsPerBlock - 1) / threadsPerBlock;
+	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
 
 	/** < Do a dummy run for warmup */
-	dummy_run(h_A, d_A, my_stream);
+	dummy_run(h_A, d_A, num_pkts, my_stream);
 
 	/** < Run several iterations */
 	for(i = 0; i < ITERS; i ++) {
 
-		for(j = 0; j < NUM_PKTS; j++)	{
+		for(j = 0; j < num_pkts; j++)	{
 			h_A[j] = i;
 		}
 
 		/** < Host-to-device memcpy */
 		clock_gettime(CLOCK_REALTIME, &h2d_start[i]);
-		err = cudaMemcpyAsync(d_A, h_A, NUM_PKTS * sizeof(int),
+		err = cudaMemcpyAsync(d_A, h_A, num_pkts * sizeof(int),
 			cudaMemcpyHostToDevice, my_stream);
 		CPE(err != cudaSuccess, "H2D memcpy failed\n");
 		clock_gettime(CLOCK_REALTIME, &h2d_end[i]);
 
 		/** < Kernel launch */
 		clock_gettime(CLOCK_REALTIME, &kernel_start[i]);
-		vectorAdd<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_A, NUM_PKTS);
+		vectorAdd<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_A, num_pkts);
 		clock_gettime(CLOCK_REALTIME, &kernel_end[i]);
 
 		err = cudaGetLastError();
@@ -89,7 +89,7 @@ void gpu_run(int *h_A, int *d_A, cudaStream_t my_stream)
 
 		/** < Device-to-host memcpy */
 		clock_gettime(CLOCK_REALTIME, &d2h_start[i]);
-		err = cudaMemcpyAsync(h_A, d_A, NUM_PKTS * sizeof(int),
+		err = cudaMemcpyAsync(h_A, d_A, num_pkts * sizeof(int),
 			cudaMemcpyDeviceToHost, my_stream);
 		CPE(err != cudaSuccess, "D2H memcpy failed\n");
 		clock_gettime(CLOCK_REALTIME, &d2h_end[i]);
@@ -147,11 +147,14 @@ void gpu_run(int *h_A, int *d_A, cudaStream_t my_stream)
 	
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
 	int err = cudaSuccess;
 	int *h_A, *d_A;
 	cudaStream_t my_stream;
+
+	assert(argc == 2);
+	int num_pkts = atoi(argv[1]);
 
 	printDeviceProperties();
 
@@ -160,8 +163,8 @@ int main(void)
 	CPE(err != cudaSuccess, "Failed to create cudaStream\n");
 
 	/** < Allocate host and device buffers */
-	h_A = (int *) malloc(NUM_PKTS * sizeof(int));
-	err = cudaMalloc((void **) &d_A, NUM_PKTS * sizeof(int));
+	h_A = (int *) malloc(num_pkts * sizeof(int));
+	err = cudaMalloc((void **) &d_A, num_pkts * sizeof(int));
 	CPE(err != cudaSuccess, "Failed to cudaMalloc\n");
 
 	if (h_A == NULL) {
@@ -170,7 +173,7 @@ int main(void)
 	}
 
 	/** < Run the measurement code */
-	gpu_run(h_A, d_A, my_stream);
+	gpu_run(h_A, d_A, num_pkts, my_stream);
 	
 	/** < Free host and device memory */
 	free(h_A);

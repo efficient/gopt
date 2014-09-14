@@ -4,8 +4,7 @@
 #include <time.h>
 #include <assert.h>
 
-#define NUM_PKTS 32
-#define ITERS 1000
+#define ITERS 10000
 
 void printDeviceProperties();
 void red_printf(const char *format, ...);
