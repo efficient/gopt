@@ -16,6 +16,6 @@ shm-rm.sh 1>/dev/null 2>/dev/null
 sudo taskset -c 0 ./goto
 
 blue ""
-blue "Running manual"
+blue "Running handopt"
 shm-rm.sh 1>/dev/null 2>/dev/null
-sudo taskset -c 0 ./nogoto
+sudo taskset -c 0 ./handopt
