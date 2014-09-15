@@ -76,8 +76,9 @@ int main(int argc, char **argv)
 
 	seconds = (end.tv_sec - start.tv_sec) + 
 		(double) (end.tv_nsec - start.tv_nsec) / 1000000000;
-	red_printf("Time = %f sum = %d, succ_1 = %d, succ_2 = %d, fail = %d\n", 
-		seconds, sum, succ_1, succ_2, fail);
+	red_printf("Time = %.4f, rate = %.2f "
+		"sum = %d, succ_1 = %d, succ_2 = %d, fail = %d\n", 
+		seconds, NUM_KEYS / seconds, sum, succ_1, succ_2, fail);
 
 	return 0;
 }

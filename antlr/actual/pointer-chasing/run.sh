@@ -1,11 +1,19 @@
+# A function to echo in blue color
+function blue() {
+	es=`tput setaf 4`
+	ee=`tput sgr0`
+	echo "${es}$1${ee}"
+}
+
 echo ""
-echo "Nogoto:"
+blue "Nogoto:"
 sudo numactl --physcpubind 0 --interleave 0 ./nogoto
 
 echo ""
-echo "Handopt:"
-sudo numactl --physcpubind 0 --interleave 0 ./handopt
+blue "Goto:"
+sudo numactl --physcpubind 0 --interleave 0 ./goto
 
 echo ""
-echo "Goto:"
-sudo numactl --physcpubind 0 --interleave 0 ./goto
+blue "Handopt:"
+sudo numactl --physcpubind 0 --interleave 0 ./handopt
+

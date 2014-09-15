@@ -38,7 +38,7 @@ void cuckoo_init(int **keys, struct cuckoo_bkt **ht_index)
 		assert(key != 0);
 		(*keys)[i] = key;
 
-		// Try the 1st bucket
+		// Choose a random bucket
 		bkt = hash(key) & NUM_BKT_;
 		if(rand() % 2 == 0) {
 			bkt = hash(bkt) & NUM_BKT_;

@@ -1,4 +1,4 @@
-#define DEPTH 20
+#define DEPTH 100
 #define NUM_PKTS (1 * 1024 * 1024)
 
 #define LOG_SID 1

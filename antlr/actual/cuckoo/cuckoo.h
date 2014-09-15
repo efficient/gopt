@@ -8,12 +8,21 @@
 #include "city.h"
 
 /** < Number of cuckoo buckets */
+/** < 256 KB: L2 cache */
+//#define NUM_BKT (4 * 1024)
+//#define NUM_BKT_ (NUM_BKT - 1)
+
+/** < 16 MB: L3 cache */
+//#define NUM_BKT (256 * 1024)
+//#define NUM_BKT_ (NUM_BKT - 1)
+
+/** < 512 MB: RAM */
 #define NUM_BKT (8 * 1024 * 1024)
-#define NUM_BKT_ ((8 * 1024 * 1024) - 1)
+#define NUM_BKT_ (NUM_BKT - 1)
 
 /** < Number of keys inserted into the hash table */
-#define NUM_KEYS (16 * 1024 * 1024)
-#define NUM_KEYS_ ((16 * 1024 * 1024) - 1)
+#define NUM_KEYS (8 * NUM_BKT)
+#define NUM_KEYS_ (NUM_KEYS - 1)
 
 /** < Key for shmget */
 #define CUCKOO_KEY 1
