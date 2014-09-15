@@ -16,13 +16,16 @@ int batch_index = 0;
 
 void process_batch(struct node *nodes) 
 {
-	foreach(batch_index, BATCH_SIZE) {
-		int i, next_nbh;
-		struct node *cur_node = &nodes[batch_index];
+	int i, batch_index, next_nbh;
+	struct node *cur_node[BATCH_SIZE];
+		
+	for(batch_index = 0; batch_index < BATCH_SIZE; batch_index ++) {
+		cur_node[batch_index] = &nodes[batch_index];
+	}
 
-		for(i = 0; i < STEPS; i ++) {
-			FPP_EXPENSIVE(cur_node);
-			sum += cur_node->id;
+	for(i = 0; i < STEPS; i ++) {
+		for(batch_index = 0; batch_index < BATCH_SIZE; batch_index ++) {
+			sum += cur_node[batch_index]->id;
 
 			/** < Compute the next neighbor */
 			next_nbh = -1;
@@ -30,10 +33,12 @@ void process_batch(struct node *nodes)
 				next_nbh = rand() % 7;
 			}
 		
-			cur_node = (struct node *) nodes[batch_index].neighbors[next_nbh];
+			cur_node[batch_index] = 
+				(struct node *) nodes[batch_index].neighbors[next_nbh];
+			__builtin_prefetch(cur_node[batch_index], 0, 0);
 		}
-		
 	}
+		
 }
 
 int main(int argc, char **argv)

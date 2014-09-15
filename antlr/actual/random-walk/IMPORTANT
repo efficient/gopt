@@ -1,0 +1,5 @@
+In this benchmark, the goto and handopt versions give
+different answers than the nogoto versions. This is because
+of the different order in which the rand() function is
+called for the different nodes we're doing the random
+walk on.

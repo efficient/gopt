@@ -12,7 +12,6 @@ long long sum = 0;
 
 // batch_index must be declared outside process_batch
 int batch_index = 0;
-
 void process_batch(struct node *nodes)
 {
 	int next_nbh[BATCH_SIZE];
