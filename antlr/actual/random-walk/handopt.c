@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<unistd.h>
 #include<pthread.h>
+#include<papi.h>
 #include<time.h>
 
 #include "fpp.h"
@@ -44,26 +45,36 @@ void process_batch(struct node *nodes)
 int main(int argc, char **argv)
 {
 	int i;
-	struct timespec start, end;
-	double seconds;
+
+	/** < Variables for PAPI */
+	float real_time, proc_time, ipc;
+	long long ins;
+	int retval;
 
 	red_printf("main: Initializing nodes for random walk\n");
 	rand_walk_init(&nodes);
 
 	red_printf("main: Starting random walks\n");
-	clock_gettime(CLOCK_REALTIME, &start);
+	/** < Init PAPI_TOT_INS and PAPI_TOT_CYC counters */
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+		printf("PAPI error: retval: %d\n", retval);
+		exit(1);
+	}
 
 	/** < Do a random-walk from every node in the graph */
 	for(i = 0; i < NUM_NODES; i += BATCH_SIZE) {
 		process_batch(&nodes[i]);
 	}
 
-	clock_gettime(CLOCK_REALTIME, &end);
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+		printf("PAPI error: retval: %d\n", retval);
+		exit(1);
+	}
 
-	seconds = (end.tv_sec - start.tv_sec) + 
-		(double) (end.tv_nsec - start.tv_nsec) / 1000000000;
-	red_printf("Time = %.4f, rate = %.2f sum = %lld\n",
-		seconds, NUM_NODES / seconds, sum);
+	red_printf("Time = %.4f, rate = %.2f sum = %lld\n"
+		"Instructions = %lld, IPC = %f\n",
+		real_time, NUM_NODES / real_time, sum,
+		ins, ipc);
 
 	return 0;
 }

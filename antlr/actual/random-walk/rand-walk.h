@@ -10,6 +10,10 @@
 #define NUM_NODES (8 * 1024 * 1024)
 #define NUM_NODES_ (NUM_NODES - 1)
 
+/** < 16 MB: L3 */
+//#define NUM_NODES (256 * 1024)
+//#define NUM_NODES_ (NUM_NODES - 1)
+
 /** < Key for shmget */
 #define RAND_WALK_KEY 1
 

@@ -21,7 +21,7 @@
 #define NUM_BKT_ (NUM_BKT - 1)
 
 /** < Number of keys inserted into the hash table */
-#define NUM_KEYS (8 * NUM_BKT)
+#define NUM_KEYS (4 * NUM_BKT)
 #define NUM_KEYS_ (NUM_KEYS - 1)
 
 /** < Key for shmget */

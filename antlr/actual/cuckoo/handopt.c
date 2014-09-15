@@ -1,6 +1,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<pthread.h>
+#include<papi.h>
 #include<time.h>
 
 #include "fpp.h"
@@ -72,26 +73,37 @@ void process_batch(int *key_lo)
 int main(int argc, char **argv)
 {
 	int i;
-	struct timespec start, end;
-	double seconds;
+
+	/** < Variables for PAPI */
+	float real_time, proc_time, ipc;
+	long long ins;
+	int retval;
 
 	red_printf("main: Initializing cuckoo hash table\n");
 	cuckoo_init(&keys, &ht_index);
 
 	red_printf("main: Starting lookups\n");
-	clock_gettime(CLOCK_REALTIME, &start);
+	/** < Init PAPI_TOT_INS and PAPI_TOT_CYC counters */
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+		printf("PAPI error: retval: %d\n", retval);
+		exit(1);
+	}
 
 	for(i = 0; i < NUM_KEYS; i += BATCH_SIZE) {
 		process_batch(&keys[i]);
 	}
 
-	clock_gettime(CLOCK_REALTIME, &end);
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+		printf("PAPI error: retval: %d\n", retval);
+		exit(1);
+	}
 
-	seconds = (end.tv_sec - start.tv_sec) + 
-		(double) (end.tv_nsec - start.tv_nsec) / 1000000000;
-	red_printf("Time = %.4f, rate = %.2f "
+	red_printf("Time = %.4f s, rate = %.2f\n"
+		"Instructions = %lld, IPC = %f\n"		
 		"sum = %d, succ_1 = %d, succ_2 = %d, fail = %d\n", 
-		seconds, NUM_KEYS / seconds, sum, succ_1, succ_2, fail);
+		real_time, NUM_KEYS / real_time,
+		ins, ipc,
+		sum, succ_1, succ_2, fail);
 
 	return 0;
 }
