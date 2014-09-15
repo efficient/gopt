@@ -2,48 +2,28 @@
 #include<stdlib.h>
 #include<pthread.h>
 #include<time.h>
-#include<sys/ipc.h>
-#include<sys/shm.h>
 
 #include "fpp.h"
-#include "param.h"
-#include "city.h"
+#include "cuckoo.h"
 
-// Compute an expensive hash using multiple applications of cityhash
-uint32_t hash(uint32_t u)
-{
-	uint32_t ret = u, i;
-	for(i = 0; i < COMPUTE; i ++) {
-		ret = CityHash32((char *) &ret, 4);
-	}
-	return ret;
-}
-
-struct cuckoo_slot
-{
-	uint32_t key;
-	uint32_t value;
-};
-struct cuckoo_slot *hash_index;
-
-
-// Each packet contains a random integer. The memory address accessed
-// by the packet is determined by an expensive hash of the integer.
-uint32_t *pkts;
+int *keys;
+struct cuckoo_bkt *ht_index;
 
 int sum = 0;
-int succ_1 = 0;
-int succ_2 = 0;
-int fail = 0;
+int succ_1 = 0;		/** < Number of lookups that succeed in bucket 1 */
+int succ_2 = 0;		/** < Number of lookups that success in bucket 2 */
+int fail = 0;		/** < Failed lookups */
 
-// batch_index must be declared outside process_pkts_in_batch
+// batch_index must be declared outside process_batch
 int batch_index = 0;
 
-void process_pkts_in_batch(uint32_t *pkt_lo)
+void process_batch(int *key_lo)
 {
-	uint32_t K[BATCH_SIZE];
-	uint32_t S1[BATCH_SIZE];
-	uint32_t S2[BATCH_SIZE];
+	int success[BATCH_SIZE];
+	int bkt_2[BATCH_SIZE];
+	int bkt_1[BATCH_SIZE];
+	int i[BATCH_SIZE];
+	int key[BATCH_SIZE];
 
 	int I = 0;			// batch index
 	void *batch_rips[BATCH_SIZE];		// goto targets
@@ -56,29 +36,42 @@ void process_pkts_in_batch(uint32_t *pkt_lo)
 
 fpp_start:
 
-        // Try the first slot
-        K[I] = pkt_lo[I];
-        S1[I] = hash(K[I]) % HASH_INDEX_N;
-        FPP_PSS(&hash_index[S1[I]], fpp_label_1);
+        success[I] = 0;
+        key[I] = key_lo[I];
+        
+        /** < Try the first bucket */
+        bkt_1[I] = hash(key[I]) & NUM_BKT_;
+        FPP_PSS(&ht_index[bkt_1[I]], fpp_label_1);
 fpp_label_1:
 
-        if(hash_index[S1[I]].key == K[I]) {
-            sum += hash_index[S1[I]].value;
-            succ_1 ++;
-        } else {
-            // Try the second slot
-            S2[I] = hash(K[I] + 1) % HASH_INDEX_N;
-            FPP_PSS(&hash_index[S2[I]], fpp_label_2);
-fpp_label_2:
-
-            if(hash_index[S2[I]].key == K[I]) {
-                sum += hash_index[S2[I]].value;
-                succ_2 ++;
-            } else {
-                fail ++;
+        for(i[I] = 0; i[I] < 8; i[I] ++) {
+            if(ht_index[bkt_1[I]].slot[i[I]].key == key[I]) {
+                sum += ht_index[bkt_1[I]].slot[i[I]].value;
+                succ_1 ++;
+                success[I] = 1;
+                break;
             }
         }
-       
+        
+        if(success[I] == 0) {
+            bkt_2[I] = hash(bkt_1[I]) & NUM_BKT_;
+            FPP_PSS(&ht_index[bkt_2[I]], fpp_label_2);
+fpp_label_2:
+
+            for(i[I] = 0; i[I] < 8; i[I] ++) {
+                if(ht_index[bkt_2[I]].slot[i[I]].key == key[I]) {
+                    sum += ht_index[bkt_2[I]].slot[i[I]].value;
+                    succ_2 ++;
+                    success[I] = 1;
+                    break;
+                }
+            }
+        }
+        
+        if(success[I] == 0) {
+            fail ++;
+        }
+    
 fpp_end:
     batch_rips[I] = &&fpp_end;
     iMask = FPP_SET(iMask, I); 
@@ -92,51 +85,26 @@ fpp_end:
 
 int main(int argc, char **argv)
 {
-	int i, j;
-
-	// Allocate a large memory area
-	fprintf(stderr, "Size of hash index = %lu\n", HASH_INDEX_N * sizeof(struct cuckoo_slot));
-
-	int sid = shmget(HASH_INDEX_SID, HASH_INDEX_N * sizeof(struct cuckoo_slot), 
-		IPC_CREAT | 0666 | SHM_HUGETLB);
-	if(sid < 0) {
-		fprintf(stderr, "Could not create cuckoo hash index\n");
-		exit(-1);
-	}
-	hash_index = shmat(sid, 0, 0);
-
-	// Allocate the packets and put them into the hash index randomly
-	printf("Putting packets into hash index randomly\n");
-	pkts = (uint32_t *) malloc(NUM_PKTS * sizeof(int));
-	for(i = 0; i < NUM_PKTS; i++) {
-		uint32_t K = (uint32_t) rand();
-		pkts[i] = K;
-		
-		// With 1/2 probability, put into 1st bucket
-		uint32_t hash_bucket_i = 0;
-		
-		// The 2nd hash function for key K is CITYHASH(K + 1)
-		if(rand() % 2 == 0) {
-			hash_bucket_i = hash(K) % HASH_INDEX_N;
-		} else {
-			hash_bucket_i = hash(K + 1) % HASH_INDEX_N;
-		}
-
-		// The value for key K is K + i
-		hash_index[hash_bucket_i].key = K;
-		hash_index[hash_bucket_i].value = K + i;
-	}
-
-	printf("Starting lookups\n");
+	int i;
 	struct timespec start, end;
+	double seconds;
+
+	red_printf("main: Initializing cuckoo hash table\n");
+	cuckoo_init(&keys, &ht_index);
+
+	red_printf("main: Starting lookups\n");
 	clock_gettime(CLOCK_REALTIME, &start);
 
-	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
-		process_pkts_in_batch(&pkts[i]);
+	for(i = 0; i < NUM_KEYS; i += BATCH_SIZE) {
+		process_batch(&keys[i]);
 	}
 
 	clock_gettime(CLOCK_REALTIME, &end);
-	printf("Time = %f sum = %d, succ_1 = %d, succ_2 = %d, fail = %d\n", 
-		(end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1000000000,
-		sum, succ_1, succ_2, fail);
+
+	seconds = (end.tv_sec - start.tv_sec) + 
+		(double) (end.tv_nsec - start.tv_nsec) / 1000000000;
+	red_printf("Time = %f sum = %d, succ_1 = %d, succ_2 = %d, fail = %d\n", 
+		seconds, sum, succ_1, succ_2, fail);
+
+	return 0;
 }

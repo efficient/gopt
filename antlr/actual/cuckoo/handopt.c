@@ -6,7 +6,7 @@
 #include<sys/shm.h>
 
 #include "fpp.h"
-#include "param.h"
+#incldue "cuckoo.h"
 #include "city.h"
 
 #define foreach(i, n) for(i = 0; i < n; i ++)
