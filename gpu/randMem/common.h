@@ -6,9 +6,10 @@
 #define USE_INTERLEAVING 1
 #define INCLUDE_COPY_TIME 0
 
-#define DEPTH 7
+#define ITERS 10			/** < Number of measurements to average on */
+#define DEPTH 1
 
-#define MAX_PKTS 81920
+#define MAX_PKTS 16384
 
 #define LOG_CAP (64 * 1024 * 1024)		// 256 M log
 #define LOG_CAP_ ((64 * 1024 * 1024) - 1)	// 256 M log
