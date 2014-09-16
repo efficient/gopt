@@ -1,117 +1,96 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<pthread.h>
+#include<papi.h>
 #include<time.h>
-#include<sys/ipc.h>
-#include<sys/shm.h>
 
 #include "fpp.h"
-#include "param.h"
-#include "city.h"
+#include "cuckoo.h"
 
-// Compute an expensive hash using multiple applications of cityhash
-uint32_t hash(uint32_t u)
-{
-	uint32_t ret = u, i;
-	for(i = 0; i < COMPUTE; i ++) {
-		ret = CityHash32((char *) &ret, 4);
-	}
-	return ret;
-}
-
-struct cuckoo_slot
-{
-	uint32_t key;
-	uint32_t value;
-};
-struct cuckoo_slot *hash_index;
-
-
-// Each packet contains a random integer. The memory address accessed
-// by the packet is determined by an expensive hash of the integer.
-uint32_t *pkts;
+int *keys;
+struct cuckoo_bkt *ht_index;
 
 int sum = 0;
-int succ_1 = 0;
-int succ_2 = 0;
-int fail = 0;
+int succ_1 = 0;		/** < Number of lookups that succeed in bucket 1 */
+int succ_2 = 0;		/** < Number of lookups that success in bucket 2 */
+int fail = 0;		/** < Failed lookups */
 
-// batch_index must be declared outside process_pkts_in_batch
+// batch_index must be declared outside process_batch
 int batch_index = 0;
 
-void process_pkts_in_batch(uint32_t *pkt_lo) 
+void process_batch(int *key_lo) 
 {
 	foreach(batch_index, BATCH_SIZE) {
+		int i, bkt_1, bkt_2, success = 0;
+		int key = key_lo[batch_index];
 
-		// Try the first slot
-		uint32_t K = pkt_lo[batch_index];
-		uint32_t S1 = hash(K) % HASH_INDEX_N;
-		FPP_EXPENSIVE(&hash_index[S1]);
-
-		if(hash_index[S1].key == K) {
-			sum += hash_index[S1].value;
-			succ_1 ++;
-		} else {
-			// Try the second slot
-			uint32_t S2 = hash(K + 1) % HASH_INDEX_N;
-			FPP_EXPENSIVE(&hash_index[S2]);
-			if(hash_index[S2].key == K) {
-				sum += hash_index[S2].value;
-				succ_2 ++;
-			} else {
-				fail ++;
+		/** < Try the first bucket */
+		bkt_1 = hash(key) & NUM_BKT_;
+		FPP_EXPENSIVE(&ht_index[bkt_1]);
+		
+		for(i = 0; i < 8; i ++) {
+			if(ht_index[bkt_1].slot[i].key == key) {
+				sum += ht_index[bkt_1].slot[i].value;
+				succ_1 ++;
+				success = 1;
+				break;
 			}
+		}
+
+		if(success == 0) {
+			bkt_2 = hash(bkt_1) & NUM_BKT_;
+			FPP_EXPENSIVE(&ht_index[bkt_2]);
+			
+			for(i = 0; i < 8; i ++) {
+				if(ht_index[bkt_2].slot[i].key == key) {
+					sum += ht_index[bkt_2].slot[i].value;
+					succ_2 ++;
+					success = 1;
+					break;
+				}
+			}
+		}
+
+		if(success == 0) {
+			fail ++;
 		}
 	}
 }
 
 int main(int argc, char **argv)
 {
-	int i, j;
+	int i;
 
-	// Allocate a large memory area
-	fprintf(stderr, "Size of hash index = %lu\n", HASH_INDEX_N * sizeof(struct cuckoo_slot));
+	/** < Variables for PAPI */
+	float real_time, proc_time, ipc;
+	long long ins;
+	int retval;
 
-	int sid = shmget(HASH_INDEX_SID, HASH_INDEX_N * sizeof(struct cuckoo_slot), 
-		IPC_CREAT | 0666 | SHM_HUGETLB);
-	if(sid < 0) {
-		fprintf(stderr, "Could not create cuckoo hash index\n");
-		exit(-1);
-	}
-	hash_index = shmat(sid, 0, 0);
+	red_printf("main: Initializing cuckoo hash table\n");
+	cuckoo_init(&keys, &ht_index);
 
-	// Allocate the packets and put them into the hash index randomly
-	printf("Putting packets into hash index randomly\n");
-	pkts = (uint32_t *) malloc(NUM_PKTS * sizeof(int));
-	for(i = 0; i < NUM_PKTS; i++) {
-		uint32_t K = (uint32_t) rand();
-		pkts[i] = K;
-		
-		// With 1/2 probability, put into 1st bucket
-		uint32_t hash_bucket_i = 0;
-		
-		// The 2nd hash function for key K is CITYHASH(K + 1)
-		if(rand() % 2 == 0) {
-			hash_bucket_i = hash(K) % HASH_INDEX_N;
-		} else {
-			hash_bucket_i = hash(K + 1) % HASH_INDEX_N;
-		}
-
-		// The value for key K is K + i
-		hash_index[hash_bucket_i].key = K;
-		hash_index[hash_bucket_i].value = K + i;
+	red_printf("main: Starting lookups\n");
+	/** < Init PAPI_TOT_INS and PAPI_TOT_CYC counters */
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+		printf("PAPI error: retval: %d\n", retval);
+		exit(1);
 	}
 
-	printf("Starting lookups\n");
-	struct timespec start, end;
-	clock_gettime(CLOCK_REALTIME, &start);
-
-	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
-		process_pkts_in_batch(&pkts[i]);
+	for(i = 0; i < NUM_KEYS; i += BATCH_SIZE) {
+		process_batch(&keys[i]);
 	}
 
-	clock_gettime(CLOCK_REALTIME, &end);
-	printf("Time = %f sum = %d, succ_1 = %d, succ_2 = %d, fail = %d\n", 
-		(end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1000000000,
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+		printf("PAPI error: retval: %d\n", retval);
+		exit(1);
+	}
+
+	red_printf("Time = %.4f s, rate = %.2f\n"
+		"Instructions = %lld, IPC = %f\n"		
+		"sum = %d, succ_1 = %d, succ_2 = %d, fail = %d\n", 
+		real_time, NUM_KEYS / real_time,
+		ins, ipc,
 		sum, succ_1, succ_2, fail);
+
+	return 0;
 }

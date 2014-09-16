@@ -84,6 +84,8 @@ int main(int argc, char **argv)
 	}
 
 	printf("Sum = %d\n", sum);
-	red_printf("Real_time: %fs, Total instructions: %lld, Total cycles = %lld, IPC: %f\n", 
-		real_time, ins, (long long ) (ins / ipc), ipc);
+	red_printf("Real_time: %.4fs, rate = %.2f\n"
+		"Total instructions: %lld, Total cycles = %lld, IPC: %f\n", 
+		real_time, NUM_PKTS / real_time,
+		ins, (long long ) (ins / ipc), ipc);
 }

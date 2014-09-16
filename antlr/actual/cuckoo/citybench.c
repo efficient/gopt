@@ -24,4 +24,6 @@ int main(int argc, char **argv)
 	double nanoseconds = (end.tv_sec - start.tv_sec) * 1000000000 + 
 		(end.tv_nsec - start.tv_nsec);
 	printf("Time = %f, time per hash = %f ns, sum = %d\n", seconds, nanoseconds / NUM_PKTS, sum);
+
+	return 0;
 }
