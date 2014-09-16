@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
 	assert(MAX_PKTS % 8 == 0);
 	for(int num_pkts = 8; num_pkts < MAX_PKTS; num_pkts += 8) {
 
-		double cpu_time, gpu_time;
+		double cpu_time = 0, gpu_time = 0;
 
 		/** <Initialize packets */
 		for(i = 0; i < num_pkts; i ++) {
@@ -185,8 +185,14 @@ int main(int argc, char *argv[])
 			h_pkts_gpu[i] = h_pkts_cpu[i];
 		}
 	
-		cpu_time = cpu_run(h_pkts_cpu, h_log, num_pkts);
-		gpu_time = gpu_run(h_pkts_gpu, d_pkts_gpu, d_log, num_pkts);
+		/** Perform several measurements for averaging */
+		for(i = 0; i < ITERS; i ++) {
+			cpu_time += cpu_run(h_pkts_cpu, h_log, num_pkts);
+			gpu_time += gpu_run(h_pkts_gpu, d_pkts_gpu, d_log, num_pkts);
+		}
+		
+		cpu_time = cpu_time / ITERS;
+		gpu_time = gpu_time / ITERS;
 	
 		/** <Verify that the result vector is correct */
 		for(int i = 0; i < num_pkts; i ++) {
