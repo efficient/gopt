@@ -6,7 +6,7 @@
 #define USE_INTERLEAVING 1
 #define INCLUDE_COPY_TIME 1
 
-#define ITERS 10			/** < Number of measurements to average on */
+#define ITERS 100			/** < Number of measurements to average on */
 #define DEPTH 1
 
 #define MAX_PKTS 32768
