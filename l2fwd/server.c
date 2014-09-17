@@ -139,6 +139,11 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
 		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 
+		if(is_valid_ipv4_pkt(ip_hdr, pkts[batch_index]->pkt.pkt_len) < 0) {
+			rte_pktmbuf_free(pkts[batch_index]);
+			continue;
+		}	
+
 		src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
 		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
 		swap_mac(src_mac_ptr, dst_mac_ptr);
@@ -153,6 +158,9 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		pkts[batch_index]->pkt.nb_segs = 1;
 		pkts[batch_index]->pkt.pkt_len = 60;
 		pkts[batch_index]->pkt.data_len = 60;
+
+		ip_hdr->time_to_live --;
+		ip_hdr->hdr_checksum ++;
 
 		// Actual code for data access
 		int *req = (int *) ((char *) pkts[batch_index]->pkt.data + hdr_size);

@@ -73,6 +73,7 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			ip_hdr->src_addr = fastrand(&rss_seed);
 			ip_hdr->dst_addr = fastrand(&rss_seed);
 			ip_hdr->version_ihl = 0x40 | 0x05;
+			ip_hdr->total_length = 60 - sizeof(struct ether_hdr);
 
 			tx_pkts_burst[i]->pkt.nb_segs = 1;
 			tx_pkts_burst[i]->pkt.pkt_len = 60;

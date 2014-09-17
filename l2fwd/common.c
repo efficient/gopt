@@ -183,3 +183,50 @@ void print_ether_hdr(struct ether_hdr *eth_hdr)
 	printf("\n");
 }
 
+inline int
+is_valid_ipv4_pkt(struct ipv4_hdr *pkt, uint32_t link_len)
+{
+	/* From http://www.rfc-editor.org/rfc/rfc1812.txt section 5.2.2 */
+	/*   
+	 * 1. The packet length reported by the Link Layer must be large
+	 * enough to hold the minimum length legal IP datagram (20 bytes).
+	 */
+	if (link_len < sizeof(struct ipv4_hdr)) {
+		red_printf("Invalid IPv4 packet: len < sizeof(ipv4_hdr)\n");
+		return -1;
+	}
+
+	/* 2. The IP checksum must be correct. */
+	/* this is checked in H/W */
+
+	/*   
+	 * 3. The IP version number must be 4. If the version number is not 4
+	 * then the packet may be another version of IP, such as IPng or
+	 * ST-II.
+	 */
+	if (((pkt->version_ihl) >> 4) != 4) {
+		red_printf("Invalid IP version number\n");
+		return -3;
+	}
+	/*   
+	 * 4. The IP header length field must be large enough to hold the
+	 * minimum length legal IP datagram (20 bytes = 5 words).
+	 */
+	if ((pkt->version_ihl & 0xf) < 5) {
+		red_printf("Invalid IP header length field\n");
+		return -4;
+	}
+
+	/*   
+	 * 5. The IP total length field must be large enough to hold the IP
+	 * datagram header, whose length is specified in the IP header length
+	 * field.
+	 */
+	if (rte_cpu_to_be_16(pkt->total_length) < sizeof(struct ipv4_hdr)) {
+		red_printf("Invalid IP total length field\n");
+		return -5;
+	}
+
+	return 0;
+}
+

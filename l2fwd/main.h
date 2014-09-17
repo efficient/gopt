@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <assert.h>
 
+#include <rte_byteorder.h>
 #include <rte_common.h>
 #include <rte_cycles.h>
 #include <rte_prefetch.h>
@@ -20,7 +21,7 @@
 #include "util.h"
 #include "ipv4.h"
 
-#define GOTO 0
+#define GOTO 1
 
 #define LL long long
 
@@ -104,3 +105,4 @@ void set_mac(uint8_t *mac_ptr, LL mac_addr);
 void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr);
 void print_ether_hdr(struct ether_hdr *eth_hdr);
 
+inline int is_valid_ipv4_pkt(struct ipv4_hdr *pkt, uint32_t link_len);
