@@ -16,10 +16,8 @@
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
 
-#include "sizes.h"
+#include "fpp.h"
 #include "util.h"
-
-#define LL long long
 
 // sizeof(rte_mbuf) = 64, RTE_PKTMBUF_HEADROOM = 128
 #define MBUF_SIZE (2048 + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)
@@ -61,6 +59,26 @@
 // On all xia-router* machines, even numbered lcores are on socket 0
 #define LCORE_TO_SOCKET(lcore) (lcore % 2)
 
+// Application-specific RX/TX burst size for the server
+#define MAX_SRV_BURST 16
+
+/**
+ * Per-lcore, per-port statistics:
+ * The server process on each lcore creates a separate instance of
+ * lcore_port_info for each port. The total number of packets transmitted
+ * is collected in the nb_tx_all_ports field for port #0 (this does not
+ * require that port #0 is enabled.
+ */
+struct lcore_port_info {
+	struct rte_mbuf *mbufs[MAX_SRV_BURST];
+	int nb_buf;
+	int nb_tx;
+	int nb_rx;
+
+	int nb_tx_all_ports;
+	int queue_id;
+};
+
 struct rte_mempool *mempool_init(char *name, int socket_id);
 
 int client_port_queue_to_lcore(int port_id, int queue_id);
@@ -70,7 +88,6 @@ int get_lcore_ranked_n(int n, int socket_id);
 int count_active_lcores_on_socket(int socket_id);
 int get_socket_id_from_macaddr(int port_id);
 
-void print_mac(int port_id, struct ether_addr macaddr);
 void check_all_ports_link_status(uint8_t port_num, int portmask);
 
 void run_server(void);
@@ -78,7 +95,7 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool);
 
 void micro_sleep(double us, double cycles_to_ns_fac);
 
-void set_mac(uint8_t *mac_ptr, LL mac_addr);
-void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr);
 void print_ether_hdr(struct ether_hdr *eth_hdr);
+
+float get_sleep_time(void);
 

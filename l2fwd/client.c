@@ -48,6 +48,8 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
 	int hdr_size = 36;
 
+	float sleep_us = 2;
+		
 	while (1) {
 
 		for(i = 0; i < MAX_CLT_TX_BURST; i ++) {
@@ -58,6 +60,8 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 		
 			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
+
+			// Occassionally, put the correct src mac address
 			if((fastrand(&rss_seed) & 0xff) == 0) {
 				set_mac(src_mac_ptr, src_mac_arr[client_id][port_id]);
 			} else {
@@ -78,7 +82,7 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			tx_pkts_burst[i]->pkt.pkt_len = 60;
 			tx_pkts_burst[i]->pkt.data_len = 60;
 
-			// Add request, lcore_id, and timestamp
+			// Add request, global core-identifier, and timestamp
 			int *req = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size);
 			req[0] = client_id * 1000 + lcore_id;					// 36 -> 40
 			req[1] = fastrand(&rss_seed);				// 40 -> 44
@@ -88,13 +92,14 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			tsc[0] = rte_rdtsc();		// 48 -> 56
 		}
 
-		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, tx_pkts_burst, MAX_CLT_TX_BURST);
+		int nb_tx_new = rte_eth_tx_burst(port_id, 
+			queue_id, tx_pkts_burst, MAX_CLT_TX_BURST);
 		nb_tx += nb_tx_new;
 		for(i = nb_tx_new; i < MAX_CLT_TX_BURST; i++) {
 			rte_pktmbuf_free(tx_pkts_burst[i]);
 		}
 
-		micro_sleep(2, C_FAC);
+		micro_sleep(sleep_us, C_FAC);
 
 		// RX drain
 		while(1) {
@@ -129,20 +134,26 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 		}
 
 		// Print TX stats : because clients rarely process RX pkts
-		if (unlikely(nb_tx >= 10000000)) {
+		if (unlikely(nb_tx >= 2000000)) {
 			cur_tsc = rte_rdtsc();
 			double nanoseconds = C_FAC * (cur_tsc - prev_tsc);
 			prev_tsc = cur_tsc;
 
-			printf("Lcore = %d, TX per sec = %f, Avg. latency = %.2f us, samples = %lld | Fails = %lld, nb_rx = %lld\n",
+			printf("Lcore %d: TX = %.2f, latency = %.2f us, sleep = %.2f\n"
+				"\tnb_rx = %lld, magic passed = %lld, fails = %lld\n",
 				lcore_id, nb_tx / (nanoseconds / GHZ_CPS),
-				(C_FAC * (latency_tot / (rx_samples + .01))) / 1000, rx_samples, nb_fails, nb_rx);
+				(C_FAC * (latency_tot / (rx_samples + .01))) / 1000, sleep_us,
+				nb_rx, rx_samples, nb_fails);
 			
 			nb_tx = 0;
 
+			nb_rx = 0;
 			nb_fails = 0;
 			rx_samples = 0;
 			latency_tot = 0;
+
+			// Update sleep_us by reading the "sleep_time" file
+			sleep_us = get_sleep_time();
 		}
 	}
 }

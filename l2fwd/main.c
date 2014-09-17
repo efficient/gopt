@@ -147,10 +147,13 @@ main(int argc, char **argv)
 
 		// Print device mac address and start it
 		rte_eth_macaddr_get(port_id, &l2fwd_ports_eth_addr[port_id]);
-		print_mac(port_id, l2fwd_ports_eth_addr[port_id]);
+		printf("Port %d, MAC: ", port_id);
+		print_mac_arr(l2fwd_ports_eth_addr[port_id].addr_bytes);
+		printf("\n");
 
 		ret = rte_eth_dev_start(port_id);
 		CPE2(ret < 0, "rte_eth_dev_start: %d, %u\n", ret, (unsigned) port_id);
+
 	}
 
 	check_all_ports_link_status(nb_ports, portmask);
