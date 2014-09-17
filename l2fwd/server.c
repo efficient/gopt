@@ -121,9 +121,6 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 	uint64_t *rss_seed, uint8_t *ipv4_cache, 
 	struct lcore_port_info *lp_info)
 {
-	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
-	int hdr_size = 36;
-
 	int batch_index = 0;
 
 	foreach(batch_index, nb_pkts) {
@@ -131,6 +128,9 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		struct ether_hdr *eth_hdr;
 		struct ipv4_hdr *ip_hdr;
 		void *src_mac_ptr, *dst_mac_ptr;
+
+		uint32_t dst_ip;
+		int dst_port;
 
 		if(batch_index != nb_pkts - 1) {
 			rte_prefetch0(pkts[batch_index + 1]->pkt.data);
@@ -150,25 +150,23 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 
 		eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
 
-		// These 3 fields of ip_hdr are required for RSS
+		/** < RSS fields */
 		ip_hdr->src_addr = fastrand(rss_seed);
 		ip_hdr->dst_addr = fastrand(rss_seed);
 		ip_hdr->version_ihl = 0x40 | 0x05;
+
+		ip_hdr->time_to_live --;
+		ip_hdr->hdr_checksum ++;
+		
+		dst_ip = ip_hdr->dst_addr;
 
 		pkts[batch_index]->pkt.nb_segs = 1;
 		pkts[batch_index]->pkt.pkt_len = 60;
 		pkts[batch_index]->pkt.data_len = 60;
 
-		ip_hdr->time_to_live --;
-		ip_hdr->hdr_checksum ++;
+		dst_port = ipv4_cache[dst_ip & IPv4_CACHE_CAP_];
 
-		// Actual code for data access
-		int *req = (int *) ((char *) pkts[batch_index]->pkt.data + hdr_size);
-
-		FPP_EXPENSIVE(&ht_index[req[1] & IPv4_CACHE_CAP_]);
-		req[2] = ipv4_cache[req[1] & IPv4_CACHE_CAP_];
-
-		send_packet(pkts[batch_index], req[2], lp_info);
+		send_packet(pkts[batch_index], dst_port, lp_info);
 	}
 }
 

@@ -1,13 +1,24 @@
-# Re-building is required because the same executable does not
-# work at both the client and the server
+# A function to echo in blue color
+function blue() {
+	es=`tput setaf 4`
+	ee=`tput sgr0`
+	echo "${es}$1${ee}"
+}
+
+blue "Re-compiling DPDK code"
 make clean
-make 
+make
 
 if [ "$#" -ne 1 ]; then
     echo "Illegal number of parameters"
 	echo "Usage: ./run_client.sh <0/1>"
 	exit
 fi
+
+blue "Removing DPDK's hugepages and shm keys 1 and 2"
+sudo rm -rf /mnt/huge/*
+sudo ipcrm -M 1
+sudo ipcrm -M 2
 
 sudo ./build/l2fwd -c 0x555 -n 3 client $@		#AAA means all odd numbered cores
 

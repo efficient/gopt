@@ -79,7 +79,9 @@ struct lcore_port_info {
 	struct rte_mbuf *mbufs[MAX_SRV_BURST];
 	int nb_buf;
 	int nb_tx;
+	int nb_tx_fail;			// Port not found for a dst IP
 	int nb_rx;
+
 	int nb_tx_all_ports;
 	int queue_id;
 };
@@ -93,7 +95,6 @@ int get_lcore_ranked_n(int n, int socket_id);
 int count_active_lcores_on_socket(int socket_id);
 int get_socket_id_from_macaddr(int port_id);
 
-void print_mac(int port_id, struct ether_addr macaddr);
 void check_all_ports_link_status(uint8_t port_num, int portmask);
 
 void run_server(uint8_t *ipv4_cache);
@@ -101,8 +102,7 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool);
 
 void micro_sleep(double us, double cycles_to_ns_fac);
 
-void set_mac(uint8_t *mac_ptr, LL mac_addr);
-void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr);
 void print_ether_hdr(struct ether_hdr *eth_hdr);
 
 inline int is_valid_ipv4_pkt(struct ipv4_hdr *pkt, uint32_t link_len);
+float get_sleep_time(void);

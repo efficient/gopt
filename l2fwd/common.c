@@ -1,13 +1,6 @@
 /* Common functions used in DPDK code  */
 #include "main.h"
 
-void print_mac(int port_id, struct ether_addr macaddr)
-{
-	printf("\tPort %u, MAC address: %02X:%02X:%02X:%02X:%02X:%02X\n\n",
-		(unsigned) port_id,
-		macaddr.addr_bytes[0], macaddr.addr_bytes[1], macaddr.addr_bytes[2],
-		macaddr.addr_bytes[3], macaddr.addr_bytes[4], macaddr.addr_bytes[5]);
-}
 
 void check_all_ports_link_status(uint8_t port_num, int portmask)
 {
@@ -97,7 +90,6 @@ int get_lcore_ranked_n(int n, int socket_id)
 }
 
 
-
 int count_active_lcores_on_socket(int socket_id)
 {
 	int active_lcores = 0;
@@ -146,26 +138,6 @@ int client_port_queue_to_lcore(int port_id, int queue_id)
 						 {7, 9, 11}};	// xge3: lcores 7, 9, 11
 
 	return mapping[port_id][queue_id];
-}
-
-void set_mac(uint8_t *mac_ptr, LL mac_addr)
-{
-   	mac_ptr[0] = mac_addr & 0xFF;
-    mac_ptr[1] = (mac_addr >> 8) & 0xFF;
-    mac_ptr[2] = (mac_addr >> 16) & 0xFF;
-    mac_ptr[3] = (mac_addr >> 24) & 0xFF;
-    mac_ptr[4] = (mac_addr >> 32) & 0xFF;
-    mac_ptr[5] = (mac_addr >> 40) & 0xFF;
-}
-
-void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr)
-{
-	int i = 0;
-	for(i = 0; i < 6; i ++) {
-		uint8_t temp = src_mac_ptr[i];
-		src_mac_ptr[i] = dst_mac_ptr[i];
-		dst_mac_ptr[i] = temp;
-	}
 }
 
 void print_ether_hdr(struct ether_hdr *eth_hdr)
@@ -230,3 +202,26 @@ is_valid_ipv4_pkt(struct ipv4_hdr *pkt, uint32_t link_len)
 	return 0;
 }
 
+float get_sleep_time(void)
+{
+	FILE *fp;
+	fp = fopen("sleep_time", "r");
+	if(fp == NULL) {
+		printf("get_sleep_time failed to open sleep_time file. Returning 0\n");
+		return 0;
+	}
+
+	char sleep_buf[100] = {0};
+	int num_read = fread(sleep_buf, 1, 10, fp);
+	if(num_read == 0) {
+		printf("get_sleep_time failed to read sleep_time file. Returning 0\n");
+		return 0;
+	}
+	
+	fclose(fp);
+
+	float sleep_time = atof(sleep_buf);
+	printf("get_sleep_time time returning sleep_time = %f\n", sleep_time);
+
+	return atof(sleep_buf);
+}

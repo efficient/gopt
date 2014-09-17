@@ -48,6 +48,8 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
 	int hdr_size = 36;
 
+	float sleep_us = 2;
+	
 	while (1) {
 
 		for(i = 0; i < MAX_CLT_TX_BURST; i ++) {
@@ -71,6 +73,8 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 	
 			// These 3 fields of ip_hdr are required for RSS
 			ip_hdr->src_addr = fastrand(&rss_seed);
+
+			// Choose a dst IP from the ones inserted in the lookup table
 			ip_hdr->dst_addr = fastrand(&rss_seed);
 			ip_hdr->version_ihl = 0x40 | 0x05;
 			ip_hdr->total_length = 60 - sizeof(struct ether_hdr);
@@ -89,12 +93,15 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			tsc[0] = rte_rdtsc();		// 48 -> 56
 		}
 
-		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, tx_pkts_burst, MAX_CLT_TX_BURST);
+		int nb_tx_new = rte_eth_tx_burst(port_id, 
+			queue_id, tx_pkts_burst, MAX_CLT_TX_BURST);
 		nb_tx += nb_tx_new;
 		for(i = nb_tx_new; i < MAX_CLT_TX_BURST; i++) {
 			rte_pktmbuf_free(tx_pkts_burst[i]);
 		}
 
+		micro_sleep(sleep_us, C_FAC);
+	
 		// RX drain
 		while(1) {
 			int nb_rx_new = rte_eth_rx_burst(port_id, 
@@ -142,6 +149,9 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			nb_fails = 0;
 			rx_samples = 0;
 			latency_tot = 0;
+
+			// Update sleep_us by reading the "sleep_time" file
+			sleep_us = get_sleep_time();
 		}
 	}
 }
