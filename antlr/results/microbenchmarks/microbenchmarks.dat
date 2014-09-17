@@ -1,7 +1,0 @@
-Optimization	nogoto			goto		handopt
-"simple"		2.95			1.97		1.93
-"synthetic"		5.65			3.31		3.23
-"cuckoo"		2.72			1.04		.95
-"mica"			3.39			.97			.90
-
-# 32 byte echoes to show that 30.42 million echoes per second can be done

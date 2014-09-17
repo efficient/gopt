@@ -1,9 +1,0 @@
-Changes to C.g4 - divergence from ANSI C grammar:
-
-1. Use `initDeclaratorList` instead of `initDeclaratorList?` in the declaration
-rule. If this is not done, [code] int a; [\code] is interpreted wrongly.
-Both `int` and `a` are matched to `declarationSpecifier`, but we need the `a`
-to match `initDeclarator`.
-
-2. A `directDeclarator` cannot be `(declarator)`. If this is not done,
-[code] foo(a) [\code] is interpreted as a `declarator`, not as a `postfixExpression`.
