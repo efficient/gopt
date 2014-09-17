@@ -50,6 +50,87 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
+void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
+                          uint64_t *rss_seed, struct dir_ipv4_table *ipv4_table,
+                          struct lcore_port_info *lp_info)
+{
+	struct ether_hdr *eth_hdr[BATCH_SIZE];
+	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
+	void *dst_mac_ptr[BATCH_SIZE];
+	void *src_mac_ptr[BATCH_SIZE];
+	uint32_t dst_ip[BATCH_SIZE];
+	int dst_port[BATCH_SIZE];
+
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&fpp_start;
+	}
+
+fpp_start:
+
+	// Boilerplate for TX pkt
+
+	/** < Must be unsigned */
+
+	if(I != nb_pkts - 1) {
+		rte_prefetch0(pkts[I + 1]->pkt.data);
+	}
+
+	eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
+	ip_hdr[I] = (struct ipv4_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
+
+	if(is_valid_ipv4_pkt(ip_hdr[I], pkts[I]->pkt.pkt_len) < 0) {
+		rte_pktmbuf_free(pkts[I]);
+		goto fpp_end;
+	}
+
+	src_mac_ptr[I] = &eth_hdr[I]->s_addr.addr_bytes[0];
+	dst_mac_ptr[I] = &eth_hdr[I]->d_addr.addr_bytes[0];
+	swap_mac(src_mac_ptr[I], dst_mac_ptr[I]);
+
+	eth_hdr[I]->ether_type = htons(ETHER_TYPE_IPv4);
+
+	/** < RSS fields */
+	ip_hdr[I]->src_addr = fastrand(rss_seed);
+	ip_hdr[I]->dst_addr = fastrand(rss_seed);
+	ip_hdr[I]->version_ihl = 0x40 | 0x05;
+
+	ip_hdr[I]->time_to_live --;
+	ip_hdr[I]->hdr_checksum ++;
+
+	/** < DIR-24-8-BASIC */
+	dst_ip[I] = ip_hdr[I]->dst_addr;
+	FPP_PSS(&ipv4_table->tbl_24[dst_ip[I] >> 8], fpp_label_1, nb_pkts);
+fpp_label_1:
+
+	dst_port[I] = ipv4_table->tbl_24[dst_ip[I] >> 8];
+	if(dst_port[I] & 0x8000) {
+		dst_port[I] = ipv4_table->tbl_long[((dst_port[I] & 0x7fff) << 8) |
+			(dst_port[I] & 0xff)];
+		lp_info[0].nb_tbl_24 ++;
+	}
+
+	pkts[I]->pkt.nb_segs = 1;
+	pkts[I]->pkt.pkt_len = 60;
+	pkts[I]->pkt.data_len = 60;
+
+	send_packet(pkts[I], dst_port[I], lp_info);
+
+fpp_end:
+	batch_rips[I] = &&fpp_end;
+	iMask = FPP_SET(iMask, I); 
+	if(iMask == (1 << nb_pkts) - 1) {
+		return;
+	}
+	I = (I + 1) < nb_pkts ? I + 1 : 0;
+	goto *batch_rips[I];
+
+}
+
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
 	uint64_t *rss_seed, struct dir_ipv4_table *ipv4_table, 
 	struct lcore_port_info *lp_info)
@@ -93,6 +174,8 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		
 		/** < DIR-24-8-BASIC */
 		dst_ip = ip_hdr->dst_addr;
+		FPP_EXPENSIVE(&ipv4_table->tbl_24[dst_ip >> 8]);
+
 		dst_port = ipv4_table->tbl_24[dst_ip >> 8];
 		if(dst_port & 0x8000) {
 			dst_port = ipv4_table->tbl_long[((dst_port & 0x7fff) << 8) | 
@@ -103,7 +186,6 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		pkts[batch_index]->pkt.nb_segs = 1;
 		pkts[batch_index]->pkt.pkt_len = 60;
 		pkts[batch_index]->pkt.data_len = 60;
-
 
 		send_packet(pkts[batch_index], dst_port, lp_info);
 	}
