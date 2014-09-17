@@ -163,11 +163,12 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 
 		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
+		/** < We need the dst_mac for comparison with the key in hash-table */
 		dst_mac = get_mac(eth_hdr->d_addr.addr_bytes);
 
 		eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
 
-		// These 3 fields of ip_hdr are required for RSS
+		/** < RSS fields */
 		ip_hdr->src_addr = fastrand(rss_seed);
 		ip_hdr->dst_addr = fastrand(rss_seed);
 		ip_hdr->version_ihl = 0x40 | 0x05;
@@ -176,6 +177,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		pkts[batch_index]->pkt.pkt_len = 60;
 		pkts[batch_index]->pkt.data_len = 60;
 
+		/** < Compute the 1st bucket using the full mac address */
 		bkt_1 = CityHash32(dst_mac_ptr, 6) & NUM_BKT_;
 		FPP_EXPENSIVE(&ht_index[bkt_1]);
 
@@ -186,6 +188,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			}
 		}
 
+		/** < 2nd bucket is computed using the 1st bucket */
 		if(fwd_port == -1) {
 			bkt_2 = CityHash32((char *) &bkt_1, 4) & NUM_BKT_;
 			FPP_EXPENSIVE(&ht_index[bkt_2]);
@@ -198,6 +201,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			}
 		} 
 			
+		/** < Count failed packets and transmit */
 		if(fwd_port == -1) {
 			lp_info[port_id].nb_tx_fail ++;
 			rte_pktmbuf_free(pkts[batch_index]);
