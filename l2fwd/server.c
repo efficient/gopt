@@ -50,75 +50,8 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
-void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, 
-	uint64_t *rss_seed, uint8_t *ipv4_cache,
-	struct lcore_port_info *lp_info)
-{
-	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
-	int hdr_size = 36;
-
-	struct ether_hdr *eth_hdr[BATCH_SIZE];
-	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
-	void *dst_mac_ptr[BATCH_SIZE];
-	void *src_mac_ptr[BATCH_SIZE];
-	int *req[BATCH_SIZE];
-
-	int I = 0;			// batch index
-	void *batch_rips[BATCH_SIZE];		// goto targets
-	int iMask = 0;		// No packet is done yet
-
-	int temp_index;
-	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&fpp_start;
-	}
-
-fpp_start:
-
-	// Boilerplate for TX pkt
-
-	if(I != nb_pkts - 1) {
-		rte_prefetch0(pkts[I + 1]->pkt.data);
-	}
-
-	eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
-	ip_hdr[I] = (struct ipv4_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
-
-	src_mac_ptr[I] = &eth_hdr[I]->s_addr.addr_bytes[0];
-	dst_mac_ptr[I] = &eth_hdr[I]->d_addr.addr_bytes[0];
-	swap_mac(src_mac_ptr[I], dst_mac_ptr[I]);
-
-	eth_hdr[I]->ether_type = htons(ETHER_TYPE_IPv4);
-
-	// These 3 fields of ip_hdr are required for RSS
-	ip_hdr[I]->src_addr = fastrand(rss_seed);
-	ip_hdr[I]->dst_addr = fastrand(rss_seed);
-	ip_hdr[I]->version_ihl = 0x40 | 0x05;
-
-	pkts[I]->pkt.nb_segs = 1;
-	pkts[I]->pkt.pkt_len = 60;
-	pkts[I]->pkt.data_len = 60;
-
-	// Actual code for data access
-	req[I] = (int *) ((char *) pkts[I]->pkt.data + hdr_size);
-
-	FPP_PSS(&ipv4_cache[req[I][1] & IPv4_CACHE_CAP_], fpp_label_1, nb_pkts);
-fpp_label_1:
-
-	req[I][2] = ipv4_cache[req[I][1] & IPv4_CACHE_CAP_];
-	send_packet(pkts[I], req[I][2], lp_info);
-
-fpp_end:
-	batch_rips[I] = &&fpp_end;
-	iMask = FPP_SET(iMask, I); 
-	if(iMask == (1 << nb_pkts) - 1) {
-		return;
-	}
-	I = (I + 1) < nb_pkts ? I + 1 : 0;
-	goto *batch_rips[I];
-}
-
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
-	uint64_t *rss_seed, uint8_t *ipv4_cache, 
+	uint64_t *rss_seed, struct dir_ipv4_table *ipv4_table, 
 	struct lcore_port_info *lp_info)
 {
 	int batch_index = 0;
@@ -129,7 +62,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		struct ipv4_hdr *ip_hdr;
 		void *src_mac_ptr, *dst_mac_ptr;
 
-		uint32_t dst_ip;
+		uint32_t dst_ip;		/** < Must be unsigned */
 		int dst_port;
 
 		if(batch_index != nb_pkts - 1) {
@@ -158,19 +91,25 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		ip_hdr->time_to_live --;
 		ip_hdr->hdr_checksum ++;
 		
+		/** < DIR-24-8-BASIC */
 		dst_ip = ip_hdr->dst_addr;
+		dst_port = ipv4_table->tbl_24[dst_ip >> 8];
+		if(dst_port & 0x8000) {
+			dst_port = ipv4_table->tbl_long[((dst_port & 0x7fff) << 8) | 
+											(dst_port & 0xff)];
+			lp_info[0].nb_tbl_24 ++;		
+		}
 
 		pkts[batch_index]->pkt.nb_segs = 1;
 		pkts[batch_index]->pkt.pkt_len = 60;
 		pkts[batch_index]->pkt.data_len = 60;
 
-		dst_port = ipv4_cache[dst_ip & IPv4_CACHE_CAP_];
 
 		send_packet(pkts[batch_index], dst_port, lp_info);
 	}
 }
 
-void run_server(uint8_t *ipv4_cache)
+void run_server(struct dir_ipv4_table *ipv4_table)
 {
 	int i;
 	uint64_t rss_seed = 0xdeadbeef;
@@ -225,10 +164,10 @@ void run_server(uint8_t *ipv4_cache)
 
 #if GOTO == 1
 		process_batch_goto(rx_pkts_burst, 
-			nb_rx_new, &rss_seed, ipv4_cache, lp_info);
+			nb_rx_new, &rss_seed, ipv4_table, lp_info);
 #else
 		process_batch_nogoto(rx_pkts_burst,
-			nb_rx_new, &rss_seed, ipv4_cache, lp_info);
+			nb_rx_new, &rss_seed, ipv4_table, lp_info);
 #endif
 		
 		// STAT PRINTING
@@ -238,8 +177,9 @@ void run_server(uint8_t *ipv4_cache)
 			double seconds = nanoseconds / GHZ_CPS;
 			tput_tsc[0] = tput_tsc[1];
 
-			red_printf("Lcore %d, total: %f\n", lcore_id, 
-				lp_info[0].nb_tx_all_ports / seconds);
+			red_printf("Lcore %d, total: %f, tbl_24: %f%\n", lcore_id, 
+				lp_info[0].nb_tx_all_ports / seconds,
+				(lp_info[0].nb_tbl_24 * 100.0) / lp_info[0].nb_tx_all_ports);
 
 			for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
 				if(ISSET(XIA_R2_PORT_MASK, i)) {
@@ -251,6 +191,7 @@ void run_server(uint8_t *ipv4_cache)
 				lp_info[i].nb_tx = 0;
 				lp_info[i].nb_rx = 0;
 	
+				lp_info[i].nb_tbl_24 = 0;
 				lp_info[i].nb_tx_all_ports = 0;
 			}
 

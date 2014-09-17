@@ -86,8 +86,6 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			// Add request, global core-identifier, and timestamp
 			int *req = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size);
 			req[0] = client_id * 1000 + lcore_id;					// 36 -> 40
-			req[1] = fastrand(&rss_seed) & IPv4_CACHE_CAP_;	// 40 -> 44
-			// Bytes 44 -> 48 are reserved for response (req[2])
 			
 			LL *tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size + 12);
 			tsc[0] = rte_rdtsc();		// 48 -> 56

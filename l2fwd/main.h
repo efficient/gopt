@@ -21,7 +21,7 @@
 #include "util.h"
 #include "ipv4.h"
 
-#define GOTO 1
+#define GOTO 0
 
 #define LL long long
 
@@ -79,7 +79,8 @@ struct lcore_port_info {
 	struct rte_mbuf *mbufs[MAX_SRV_BURST];
 	int nb_buf;
 	int nb_tx;
-	int nb_tx_fail;			// Port not found for a dst IP
+	int nb_tx_fail;		// Port not found for a dst IP
+	int nb_tbl_24;		// Number of packets that required touching tbl_24
 	int nb_rx;
 
 	int nb_tx_all_ports;
@@ -97,7 +98,7 @@ int get_socket_id_from_macaddr(int port_id);
 
 void check_all_ports_link_status(uint8_t port_num, int portmask);
 
-void run_server(uint8_t *ipv4_cache);
+void run_server(struct dir_ipv4_table *ipv4_table);
 void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool);
 
 void micro_sleep(double us, double cycles_to_ns_fac);
