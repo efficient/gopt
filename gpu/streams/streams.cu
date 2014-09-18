@@ -2,7 +2,7 @@
 
 #include "common.h"
 
-#define NUM_THREADS 4
+#define NUM_THREADS 1
 
 int *h_A[NUM_THREADS];
 int tid[NUM_THREADS];
@@ -90,15 +90,13 @@ void *gpu_run(void *ptr)
 		tot_cycles_d2h += (end_cycles_d2h - start_cycles_d2h);
 		tot_cycles += (end_cycles - start_cycles);
 
-		if(rand() % 100 == 0) {
-			printf("Thread %d, iter %d | "
-				"h2d = %d ns, kernel = %d ns, d2h = %d ns, full = %d ns\n",
-				tid, i, 
-				(int) ((end_cycles_h2d - start_cycles_h2d) / 2.7),
-				(int) ((end_cycles_kernel - start_cycles_kernel) / 2.7),
-				(int) ((end_cycles_d2h - start_cycles_d2h) / 2.7),
-				(int) ((end_cycles - start_cycles) / 2.7));
-		}
+		printf("Thread %d, iter %d | "
+			"h2d = %d ns, kernel = %d ns, d2h = %d ns, full = %d ns\n",
+			tid, i, 
+			(int) ((end_cycles_h2d - start_cycles_h2d) / 2.7),
+			(int) ((end_cycles_kernel - start_cycles_kernel) / 2.7),
+			(int) ((end_cycles_d2h - start_cycles_d2h) / 2.7),
+			(int) ((end_cycles - start_cycles) / 2.7));
 		
 		err = cudaGetLastError();
 		CPE(err != cudaSuccess, "Fail!\n", -1);

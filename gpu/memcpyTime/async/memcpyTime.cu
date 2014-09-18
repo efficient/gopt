@@ -133,23 +133,22 @@ void gpu_run(int *h_A, int *d_A, int num_pkts, cudaStream_t my_stream)
 	qsort(d2h_diff, ITERS, sizeof(double), cmpfunc);
 	qsort(sync_diff, ITERS, sizeof(double), cmpfunc);
 
+	int i_5 = (ITERS * 5) / 100;
+	int i_95 = (ITERS * 5) / 100;
+
 	red_printf("H2D average: %.2f us, 5th %.2f us, 95th: %.2f\n",
-		h2d_tot / ITERS,
-		h2d_diff[(ITERS * 5) / 100],
-		h2d_diff[(ITERS * 95) / 100]);
+		h2d_tot / ITERS, h2d_diff[i_5], h2d_diff[i_95]);
 	red_printf("Kernel average: %.2f us, 5th %.2f us, 95th: %.2f\n",
-		kernel_tot / ITERS,
-		kernel_diff[(ITERS * 5) / 100],
-		kernel_diff[(ITERS * 95) / 100]);
+		kernel_tot / ITERS, kernel_diff[i_5], kernel_diff[i_95]);
 	red_printf("D2H average: %.2f us, 5th %.2f us, 95th: %.2f\n",
-		d2h_tot / ITERS,
-		d2h_diff[(ITERS * 5) / 100],
-		d2h_diff[(ITERS * 95) / 100]);
+		d2h_tot / ITERS, d2h_diff[i_5], d2h_diff[i_95]);
 	red_printf("SYNC average: %.2f us, 5th %.2f us, 95th: %.2f\n",
-		sync_tot / ITERS,
-		sync_diff[(ITERS * 5) / 100],
-		sync_diff[(ITERS * 95) / 100]);
+		sync_tot / ITERS, sync_diff[i_5], sync_diff[i_95]);
 	
+	red_printf("TOT average %.2f us 5th %.2f us 95th %.2f\n",
+		(h2d_tot + kernel_tot + d2h_tot + sync_tot) / ITERS,
+		(h2d_diff[i_5] + kernel_diff[i_5] + d2h_diff[i_5] + sync_diff[i_5]),
+		(d2h_diff[i_95] + kernel_diff[i_95] + d2h_diff[i_95] + sync_diff[i_95]));
 }
 
 int main(int argc, char *argv[])
