@@ -4,7 +4,6 @@
 #include <time.h>
 #include <assert.h>
 
-#define NUM_PKTS 8192
 #define ITERS 1000
 
 void printDeviceProperties();

@@ -122,7 +122,7 @@ void gpu_run(int *h_A, int *d_A, int num_pkts, cudaStream_t my_stream)
 		sync_tot += sync_diff[i];
 
 		/** < Check results */
-		for(j = 0; j < NUM_PKTS; j ++) {
+		for(j = 0; j < num_pkts; j ++) {
 			assert(h_A[j] == i * i);
 		}
 	}
