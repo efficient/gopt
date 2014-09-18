@@ -56,12 +56,11 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 	int batch_index = 0;
 
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
-	int hdr_size = 36;
+	// int hdr_size = 36;
 
 	foreach(batch_index, nb_pkts) {
 		struct ether_hdr *eth_hdr;
 		struct ipv4_hdr *ip_hdr;
-		int *req;
 
 		void *dst_mac_ptr, *src_mac_ptr;
 
@@ -87,10 +86,6 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		pkts[batch_index]->pkt.nb_segs = 1;
 		pkts[batch_index]->pkt.pkt_len = 60;
 		pkts[batch_index]->pkt.data_len = 60;
-
-		/** < Do some processing */
-		req = (int *) ((char *) pkts[batch_index]->pkt.data + hdr_size);
-		req[2] = req[1];
 
 		/** < Send out the packet on the same port it was received */
 		send_packet(pkts[batch_index], port_id, lp_info);

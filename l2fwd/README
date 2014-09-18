@@ -61,10 +61,9 @@
 	The Ethernet and IPv4 header take the 1st 34 bytes of a packet. Assume 36
 	for alignment. This leaves us 24 bytes for data.
 
-	36-39:		lcore_id of the client that sent this packet
-	40-43:		The log address for the server to start accesses from
-	44-47:		The server's response
-	48-55:		The client's timestamp when it sent the packet.
+	36-39:	lcore_id of the client that sent this packet
+	40-47:	client's tsc for end-to-end latency measurement
+	48-55:	server's tsc for server-only latency measurement	
 
 
 5. Running on xia-router* systems:
