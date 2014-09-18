@@ -48,16 +48,22 @@
         2. xia-router0/1 are Westmere machines with an I/O hub.
 
 	* Latency:
-		Minimum average RTT is around 16 us.
+		Minimum average RTT between xia-router0/1 and xia-router2 is around 16 us.
+
+	* Price of buffered TX:
+		Buffered TX reduces the echo performance of an lcore. Without buffered TX,
+		one lcore can echo 17.6 Mpps, but with buffered TX, only 14.4 Mpps.
+		
+		However, non-buffered TX can only be done if packets are being returned
+		on the port they were received on.
 
 4. Packet formatting
 	The Ethernet and IPv4 header take the 1st 34 bytes of a packet. Assume 36
 	for alignment. This leaves us 24 bytes for data.
 
-	36-39:		lcore_id of the client that sent this packet
-	40-43:		The log address for the server to start accesses from
-	44-47:		The server's response
-	48-55:		The client's timestamp when it sent the packet.
+	36-39:	lcore_id of the client that sent this packet
+	40-47:	client's tsc for end-to-end latency measurement
+	48-55:	server's tsc for server-only latency measurement	
 
 
 5. Running on xia-router* systems:

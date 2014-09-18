@@ -6,6 +6,7 @@ function blue() {
 }
 
 worker_core_mask="0x1"		# Mask for lcores running DPDK-workers
+
 blue "Re-compiling DPDK code"
 make clean
 make

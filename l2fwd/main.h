@@ -104,4 +104,3 @@ void print_ether_hdr(struct ether_hdr *eth_hdr);
 
 float get_sleep_time(void);
 
-#define NUM_ACCESSES 0
