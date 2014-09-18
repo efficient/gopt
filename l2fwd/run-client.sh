@@ -9,7 +9,7 @@ if [ "$#" -ne 1 ]; then
 	exit
 fi
 
-sudo ./build/l2fwd -c 0x555 -n 3 client $@		#AAA means all odd numbered cores
+sudo ./build/l2fwd -c 0x15 -n 3 client $@		#AAA means all odd numbered cores
 
 # Core masks: The assignment of lcores to ports is fixed. 
 # 	int lcore_to_port[12] = {0, 2, 0, 2, 0, 2, 1, 3, 1, 3, 1, 3};
