@@ -38,7 +38,7 @@ void run_client(int client_id, ULL *mac_addrs,
 	LL prev_tsc = 0, cur_tsc = 0;
 	prev_tsc = rte_rdtsc();
 
-	LL nb_tx = 0, nb_rx = 0, nb_fails = 0;
+	LL nb_tx = 0, nb_rx = 0;
 	struct ether_hdr *eth_hdr;
 	struct ipv4_hdr *ip_hdr;
 	uint8_t *src_mac_ptr, *dst_mac_ptr;
