@@ -51,7 +51,7 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 }
 
 void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
-                          uint64_t *rss_seed, struct dir_ipv4_table *ipv4_table,
+                          struct dir_ipv4_table *ipv4_table,
                           struct lcore_port_info *lp_info)
 {
 	struct ether_hdr *eth_hdr[BATCH_SIZE];
@@ -92,13 +92,6 @@ fpp_start:
 	dst_mac_ptr[I] = &eth_hdr[I]->d_addr.addr_bytes[0];
 	swap_mac(src_mac_ptr[I], dst_mac_ptr[I]);
 
-	eth_hdr[I]->ether_type = htons(ETHER_TYPE_IPv4);
-
-	/** < RSS fields */
-	ip_hdr[I]->src_addr = fastrand(rss_seed);
-	ip_hdr[I]->dst_addr = fastrand(rss_seed);
-	ip_hdr[I]->version_ihl = 0x40 | 0x05;
-
 	ip_hdr[I]->time_to_live --;
 	ip_hdr[I]->hdr_checksum ++;
 
@@ -132,7 +125,7 @@ fpp_end:
 }
 
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
-	uint64_t *rss_seed, struct dir_ipv4_table *ipv4_table, 
+	struct dir_ipv4_table *ipv4_table, 
 	struct lcore_port_info *lp_info)
 {
 	int batch_index = 0;
@@ -162,13 +155,6 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
 		swap_mac(src_mac_ptr, dst_mac_ptr);
 
-		eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
-
-		/** < RSS fields */
-		ip_hdr->src_addr = fastrand(rss_seed);
-		ip_hdr->dst_addr = fastrand(rss_seed);
-		ip_hdr->version_ihl = 0x40 | 0x05;
-
 		ip_hdr->time_to_live --;
 		ip_hdr->hdr_checksum ++;
 		
@@ -194,7 +180,6 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 void run_server(struct dir_ipv4_table *ipv4_table)
 {
 	int i;
-	uint64_t rss_seed = 0xdeadbeef;
 
 	int lcore_id = rte_lcore_id();
 	int socket_id = rte_lcore_to_socket_id(lcore_id);
@@ -246,10 +231,10 @@ void run_server(struct dir_ipv4_table *ipv4_table)
 
 #if GOTO == 1
 		process_batch_goto(rx_pkts_burst, 
-			nb_rx_new, &rss_seed, ipv4_table, lp_info);
+			nb_rx_new, ipv4_table, lp_info);
 #else
 		process_batch_nogoto(rx_pkts_burst,
-			nb_rx_new, &rss_seed, ipv4_table, lp_info);
+			nb_rx_new, ipv4_table, lp_info);
 #endif
 		
 		// STAT PRINTING

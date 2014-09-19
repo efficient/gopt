@@ -71,7 +71,7 @@ main(int argc, char **argv)
 	// Don't move this allocation: must be before EAL's ops
 	red_printf("Creating ipv4 lookup table \n");
 	dir_ipv4_init(ipv4_table, XIA_R2_PORT_MASK);
-	red_printf("\tSetting up ipv4 address cache done!\n");
+	red_printf("\tSetting up ipv4 lookup tables done!\n");
 
 	if(argc > 5) {		// Do this before eal parsing
 		is_client = 1;

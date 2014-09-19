@@ -207,21 +207,18 @@ float get_sleep_time(void)
 	FILE *fp;
 	fp = fopen("sleep_time", "r");
 	if(fp == NULL) {
-		printf("get_sleep_time failed to open sleep_time file. Returning 0\n");
+		red_printf("get_sleep_time failed to open sleep_time file.\n");
 		return 0;
 	}
 
 	char sleep_buf[100] = {0};
 	int num_read = fread(sleep_buf, 1, 10, fp);
 	if(num_read == 0) {
-		printf("get_sleep_time failed to read sleep_time file. Returning 0\n");
+		red_printf("get_sleep_time failed to read sleep_time file.\n");
 		return 0;
 	}
 	
 	fclose(fp);
-
-	float sleep_time = atof(sleep_buf);
-	printf("get_sleep_time time returning sleep_time = %f\n", sleep_time);
 
 	return atof(sleep_buf);
 }

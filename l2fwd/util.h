@@ -53,9 +53,9 @@
 #define htons(n) (((((unsigned short)(n) & 0xFF)) << 8) | (((unsigned short)(n) & 0xFF00) >> 8))
 
 #define CPE2(val, msg, error, fault) \
-	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg, error, fault);}
+	if(val) {fflush(stdout); fprintf(stderr, msg, error, fault); exit(-1);}
 #define CPE(val, msg) \
-	if(val) {fflush(stdout); rte_exit(EXIT_FAILURE, msg);}
+	if(val) {fflush(stdout); fprintf(stderr, msg); exit(-1);}
 
 void red_printf(const char *format, ...);
 void print_buf(char *A, int n);

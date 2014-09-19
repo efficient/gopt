@@ -37,7 +37,7 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 	LL prev_tsc = 0, cur_tsc = 0;
 	prev_tsc = rte_rdtsc();
 
-	LL nb_tx = 0, nb_rx = 0, nb_fails = 0;
+	LL nb_tx = 0, nb_rx = 0;
 	struct ether_hdr *eth_hdr;
 	struct ipv4_hdr *ip_hdr;
 	uint8_t *src_mac_ptr, *dst_mac_ptr;
@@ -71,10 +71,8 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 
 			eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
 	
-			// These 3 fields of ip_hdr are required for RSS
+			/** < Choose a random dst IP address */
 			ip_hdr->src_addr = fastrand(&rss_seed);
-
-			// Choose a dst IP from the ones inserted in the lookup table
 			ip_hdr->dst_addr = fastrand(&rss_seed);
 			ip_hdr->version_ihl = 0x40 | 0x05;
 			ip_hdr->total_length = 60 - sizeof(struct ether_hdr);
@@ -83,12 +81,15 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			tx_pkts_burst[i]->pkt.pkt_len = 60;
 			tx_pkts_burst[i]->pkt.data_len = 60;
 
-			// Add request, global core-identifier, and timestamp
-			int *req = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size);
-			req[0] = client_id * 1000 + lcore_id;					// 36 -> 40
+			// Add global core-identifier, and timestamp
+			int *magic = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + 
+				hdr_size);
+			magic[0] = client_id * 1000 + lcore_id;					// 36 -> 40
 			
-			LL *tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + hdr_size + 12);
-			tsc[0] = rte_rdtsc();		// 48 -> 56
+			// Add client tsc
+			LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) +
+				hdr_size + 4);
+			clt_tsc[0] = rte_rdtsc();			// 40 -> 48
 		}
 
 		int nb_tx_new = rte_eth_tx_burst(port_id, 
@@ -99,7 +100,7 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 		}
 
 		micro_sleep(sleep_us, C_FAC);
-	
+
 		// RX drain
 		while(1) {
 			int nb_rx_new = rte_eth_rx_burst(port_id, 
@@ -111,21 +112,17 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			nb_rx += nb_rx_new;
 			for(i = 0; i < nb_rx_new; i ++) {
 				// Verify the server's response
-				int *req = (int *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) + hdr_size);
-				int req_addr = req[1];
-				int resp = req[2];
-
-				if(req_addr != resp) {
-					nb_fails ++;
-				}
+				int *magic = (int *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) + 
+					hdr_size);
+				int tx_magic = magic[0];
 
 				// Retrive send-timestamp and lcore from which this pkt was sent
-				LL *tsc = (LL *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) + hdr_size + 12);
-				int tx_magic = req[0];		// Global id of core that sent this pkt
+				LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) +
+					hdr_size + 4);
 				if(client_id * 1000 + lcore_id == tx_magic) {
 					rx_samples ++;
 					LL cur_tsc = rte_rdtsc();
-					latency_tot += (cur_tsc - tsc[0]);
+					latency_tot += (cur_tsc - clt_tsc[0]);
 				}
 
 				rte_pktmbuf_free(rx_pkts_burst[i]);
@@ -133,18 +130,20 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 		}
 
 		// Print TX stats : because clients rarely process RX pkts
-		if (unlikely(nb_tx >= 10000000)) {
+		if (unlikely(nb_tx >= 2000000)) {
 			cur_tsc = rte_rdtsc();
 			double nanoseconds = C_FAC * (cur_tsc - prev_tsc);
 			prev_tsc = cur_tsc;
 
-			printf("Lcore = %d, TX per sec = %f, Avg. latency = %.2f us, samples = %lld | Fails = %lld, nb_rx = %lld\n",
+			printf("Lcore %d: TX = %.2f, latency = %.2f us, sleep = %.2f\n"
+				"\tnb_rx = %lld, magic passed = %lld\n",
 				lcore_id, nb_tx / (nanoseconds / GHZ_CPS),
-				(C_FAC * (latency_tot / (rx_samples + .01))) / 1000, rx_samples, nb_fails, nb_rx);
+				(C_FAC * (latency_tot / (rx_samples + .01))) / 1000, sleep_us,
+				nb_rx, rx_samples);
 			
 			nb_tx = 0;
 
-			nb_fails = 0;
+			nb_rx = 0;
 			rx_samples = 0;
 			latency_tot = 0;
 

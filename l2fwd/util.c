@@ -165,3 +165,4 @@ void print_mac_ull(ULL mac)
 	set_mac(__mac, mac);
 	print_mac_arr(__mac);
 }
+
