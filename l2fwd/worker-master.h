@@ -17,8 +17,8 @@
 struct wm_queue
 {
 	void *mbufs[WM_QUEUE_CAP];			/** < Book-keeping by worker thread */
-	int ipv4_address[WM_QUEUE_CAP];		/** < Input by worker thread */
-	uint8_t ports[WM_QUEUE_CAP];		/** < Output by master thread */
+	int reqs[WM_QUEUE_CAP];		/** < Input by worker thread */
+	uint8_t resps[WM_QUEUE_CAP];		/** < Output by master thread */
 
 	/** < All counters should be on separate cachelines */
 	long long head;		/** < Number of packets in queue */

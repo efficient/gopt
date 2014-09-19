@@ -88,7 +88,7 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			// Add client tsc
 			LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) +
 				hdr_size + 4);
-			clt_tsc[0] = rte_rdtsc();		// 40 -> 48
+			clt_tsc[0] = rte_rdtsc();			// 40 -> 48
 		}
 
 		int nb_tx_new = rte_eth_tx_burst(port_id, 

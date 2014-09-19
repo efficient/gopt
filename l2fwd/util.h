@@ -58,6 +58,7 @@
 	if(val) {fflush(stdout); fprintf(stderr, msg); exit(-1);}
 
 void red_printf(const char *format, ...);
+void blue_printf(const char *format, ...);
 void print_buf(char *A, int n);
 void *shm_alloc(int key, int bytes);
 void *shm_map(int key, int bytes);

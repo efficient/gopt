@@ -14,13 +14,13 @@ extern "C" {
 }
 
 __global__ void
-ipv4Gpu(int *ips, uint8_t *ports, uint8_t *ipv4_cache, int num_ips)
+ipv4Gpu(int *req, uint8_t *resp, uint8_t *ipv4_cache, int num_reqs)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (i < num_ips) {
-		int ip_addr = ips[i];
-		ports[i] = ipv4_cache[ip_addr & IPv4_CACHE_CAP_];
+	if (i < num_reqs) {
+		int ip_addr = req[i];
+		resp[i] = ipv4_cache[ip_addr & IPv4_CACHE_CAP_];
 	}
 }
 
@@ -28,9 +28,9 @@ ipv4Gpu(int *ips, uint8_t *ports, uint8_t *ipv4_cache, int num_ips)
  * wmq : the worker/master queue for all lcores. Non-NULL iff the lcore
  * 		 is an active worker.
  */
-void master_gpu(volatile struct wm_queue *wmq, 
-	int *h_ips, int *d_ips,						/**< Kernel inputs */
-	uint8_t *h_ports, uint8_t *d_ports,			/**< Kernel outputs */
+void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
+	int *h_reqs, int *d_reqs,						/**< Kernel inputs */
+	uint8_t *h_resps, uint8_t *d_resps,			/**< Kernel outputs */
 	uint8_t *d_ipv4_cache,
 	int num_workers, int *worker_lcores)
 {
@@ -38,17 +38,22 @@ void master_gpu(volatile struct wm_queue *wmq,
 	assert(worker_lcores != NULL);
 	assert(num_workers * WM_QUEUE_THRESH < WM_QUEUE_CAP);
 	
-	int i, err, iter = 0;
-	long long total_ips = 0;
+	int i, err;
 
-	/** The GPU-buffer (h_ips) start index for an lcore's packets 
+	/** Variables for batch-size and latency averaging measurements */
+	int msr_iter = 0;			// Number of kernel launches
+	long long msr_tot_req = 0;	// Total packet serviced by the master
+	struct timespec msr_start, msr_end;
+	double msr_tot_us = 0;		// Total microseconds over all iterations
+
+	/** The GPU-buffer (h_reqs) start index for an lcore's packets 
 	 *	during a kernel launch */
-	int ips_lo[WM_MAX_LCORE] = {0};
+	int req_lo[WM_MAX_LCORE] = {0};
 
-	/** Number of IPs that we'll send to the GPU = ips_cur.
-	 *  We don't need to worry about ips_cur overflowing the
-	 *  capacity of h_ips because it fits all WM_MAX_LCORE */
-	int ips_cur = 0;
+	/** Number of requests that we'll send to the GPU = nb_req.
+	 *  We don't need to worry about nb_req overflowing the
+	 *  capacity of h_reqs because it fits all WM_MAX_LCORE */
+	int nb_req = 0;
 
 	/** <  Value of the queue-head from an lcore during the last iteration*/
 	long long prev_head[WM_MAX_LCORE] = {0}, new_head[WM_MAX_LCORE] = {0};
@@ -56,10 +61,12 @@ void master_gpu(volatile struct wm_queue *wmq,
 	int w_i, w_lid;		/**< A worker-iterator and the worker's lcore-id */
 	volatile struct wm_queue *lc_wmq;	/**< Work queue of one worker */
 
+	clock_gettime(CLOCK_REALTIME, &msr_start);
+
 	while(1) {
 
-		/**< Copy all the IP-addresses supplied by workers into the 
-		  * contiguous h_ips buffer */
+		/**< Copy all the requests supplied by workers into the 
+		  * contiguous h_reqs buffer */
 		for(w_i = 0; w_i < num_workers; w_i ++) {
 			w_lid = worker_lcores[w_i];		// Don't use w_i after this
 			lc_wmq = &wmq[w_lid];
@@ -68,49 +75,44 @@ void master_gpu(volatile struct wm_queue *wmq,
 			new_head[w_lid] = lc_wmq->head;
 
 			// Note the GPU-buffer extent for this lcore
-			ips_lo[w_lid] = ips_cur;
+			req_lo[w_lid] = nb_req;
 
 			// Iterate over the new packets
 			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
 				int q_i = i & WM_QUEUE_CAP_;	// Offset in this wrkr's queue
-				int ip_addr = lc_wmq->ipv4_address[q_i];
+				int req = lc_wmq->reqs[q_i];
 
-				h_ips[ips_cur] = ip_addr;			
-				ips_cur ++;
+				h_reqs[nb_req] = req;			
+				nb_req ++;
 			}
 		}
 
-		if(ips_cur == 0) {		// No new packets?
+		if(nb_req == 0) {		// No new packets?
 			continue;
 		}
 
-		iter ++;
-		total_ips += ips_cur;
-		if(iter == 10000) {
-			red_printf("\tGPU master: average batch size = %lld\n",
-				total_ips / iter);
-			iter = 0;
-			total_ips = 0;
-		}
-
-		/**< Copy IP addresses to device */
-		err = cudaMemcpy(d_ips, h_ips, ips_cur * sizeof(uint32_t), 
-			cudaMemcpyHostToDevice);
-		CPE(err != cudaSuccess, "Failed to copy IPs from host to device\n");
+		/**< Copy requests to device */
+		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(int), 
+			cudaMemcpyHostToDevice, my_stream);
+		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
 
 		/**< Kernel launch */
 		int threadsPerBlock = 256;
-		int blocksPerGrid = (ips_cur + threadsPerBlock - 1) / threadsPerBlock;
+		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
 	
-		ipv4Gpu<<<blocksPerGrid, threadsPerBlock>>>(d_ips, 
-			d_ports, d_ipv4_cache, ips_cur);
+		ipv4Gpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
+			d_resps, d_ipv4_cache, nb_req);
 		err = cudaGetLastError();
 		CPE(err != cudaSuccess, "Failed to launch ipv4Gpu kernel\n");
 
-		err = cudaMemcpy(h_ports, d_ports, ips_cur * sizeof(uint8_t),
-			cudaMemcpyDeviceToHost);
-		CPE(err != cudaSuccess, "Failed to copy ports from device to host\n");
+		/** < Copy responses from device */
+		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(uint8_t),
+			cudaMemcpyDeviceToHost, my_stream);
+		CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
 
+		/** < Synchronize all ops */
+		cudaStreamSynchronize(my_stream);
+		
 		/**< Copy the ports back to worker queues */
 		for(w_i = 0; w_i < num_workers; w_i ++) {
 			w_lid = worker_lcores[w_i];		// Don't use w_i after this
@@ -120,8 +122,8 @@ void master_gpu(volatile struct wm_queue *wmq,
 	
 				/** < Offset in this workers' queue and the GPU-buffer */
 				int q_i = i & WM_QUEUE_CAP_;				
-				int ips_i = ips_lo[w_lid] + (i - prev_head[w_lid]);
-				lc_wmq->ports[q_i] = h_ports[ips_i];
+				int req_i = req_lo[w_lid] + (i - prev_head[w_lid]);
+				lc_wmq->resps[q_i] = h_resps[req_i];
 			}
 
 			prev_head[w_lid] = new_head[w_lid];
@@ -130,7 +132,26 @@ void master_gpu(volatile struct wm_queue *wmq,
 			lc_wmq->tail = new_head[w_lid];
 		}
 
-		ips_cur = 0;
+		/** < Do some measurements */
+		msr_iter ++;
+		msr_tot_req += nb_req;
+		if(msr_iter == 100000) {
+			clock_gettime(CLOCK_REALTIME, &msr_end);
+			msr_tot_us = (msr_end.tv_sec - msr_start.tv_sec) * 1000000 +
+				(msr_end.tv_nsec - msr_start.tv_nsec) / 1000;
+
+			blue_printf("\tGPU master: average batch size = %lld\n"
+				"\t\tAverage time for GPU communication = %f us\n",
+				msr_tot_req / msr_iter, msr_tot_us / msr_iter);
+
+			msr_iter = 0;
+			msr_tot_req = 0;
+
+			/** < Start the next measurement */
+			clock_gettime(CLOCK_REALTIME, &msr_start);
+		}
+
+		nb_req = 0;
 	}
 }
 
@@ -138,18 +159,18 @@ int main(int argc, char **argv)
 {
 	int c, i, err = cudaSuccess;
 	int lcore_mask = -1;
+	cudaStream_t my_stream;
 	volatile struct wm_queue *wmq;
 
 	/** < CUDA buffers */
-	int *h_ips, *d_ips;
-	uint8_t *h_ports, *d_ports;	
+	int *h_reqs, *d_reqs;
+	uint8_t *h_resps, *d_resps;	
 	uint8_t *h_ipv4_cache, *d_ipv4_cache;
 
 	/**< Get the worker lcore mask */
 	while ((c = getopt (argc, argv, "c:")) != -1) {
 		switch(c) {
 			case 'c':
-				printf("\tGPU master: Got lcore_mask = %s\n", optarg);
 				// atoi() doesn't work for hex representation
 				lcore_mask = strtol(optarg, NULL, 16);
 				break;
@@ -160,9 +181,13 @@ int main(int argc, char **argv)
 	}
 
 	assert(lcore_mask != -1);
-	red_printf("\tGPU master: got lcore_mask: %d\n", lcore_mask);
+	red_printf("\tGPU master: got lcore_mask: %x\n", lcore_mask);
 
-	/**< Allocate hugepages for the shared queues */
+	/** < Create a CUDA stream */
+	err = cudaStreamCreate(&my_stream);
+	CPE(err != cudaSuccess, "Failed to create cudaStream\n");
+
+	/** < Allocate hugepages for the shared queues */
 	red_printf("\tGPU master: creating worker-master shm queues\n");
 	int wm_queue_bytes = M_2;
 	while(wm_queue_bytes < WM_MAX_LCORE * sizeof(struct wm_queue)) {
@@ -172,30 +197,30 @@ int main(int argc, char **argv)
 		wm_queue_bytes / M_2);
 	wmq = (volatile struct wm_queue *) shm_alloc(WM_QUEUE_KEY, wm_queue_bytes);
 
+	/** < Ensure that queue counters are in separate cachelines */
 	for(i = 0; i < WM_MAX_LCORE; i ++) {
 		uint64_t c1 = (uint64_t) (uintptr_t) &wmq[i].head;
 		uint64_t c2 = (uint64_t) (uintptr_t) &wmq[i].tail;
 		uint64_t c3 = (uint64_t) (uintptr_t) &wmq[i].sent;
 
-		// Ensure that all counters are in separate cachelines
 		assert((c1 % 64 == 0) && (c2 % 64 == 0) && (c3 % 64 == 0));
 	}
 
 	red_printf("\tGPU master: creating worker-master shm queues done\n");
 
-	/** < Allocate buffers for IP addresses from all workers*/
-	red_printf("\tGPU master: creating buffers for IP addresses\n");
-	int ips_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint32_t);
-	err = cudaMallocHost((void **) &h_ips, ips_buf_size);
-	err = cudaMalloc((void **) &d_ips, ips_buf_size);
-	CPE(err != cudaSuccess, "Failed to cudaMalloc IP buffers\n");
+	/** < Allocate buffers for requests from all workers*/
+	red_printf("\tGPU master: creating buffers for requests\n");
+	int reqs_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(int);
+	err = cudaMallocHost((void **) &h_reqs, reqs_buf_size);
+	err = cudaMalloc((void **) &d_reqs, reqs_buf_size);
+	CPE(err != cudaSuccess, "Failed to cudaMalloc req buffer\n");
 
-	/** < Allocate buffers for ports from all workers */
-	red_printf("\tGPU master: creating buffers for ports\n");
-	int ports_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint8_t);
-	err = cudaMallocHost((void **) &h_ports, ports_buf_size);
-	err = cudaMalloc((void **) &d_ports, ports_buf_size);
-	CPE(err != cudaSuccess, "Failed to cudaMalloc port buffers\n");
+	/** < Allocate buffers for responses for all workers */
+	red_printf("\tGPU master: creating buffers for responses\n");
+	int resps_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint8_t);
+	err = cudaMallocHost((void **) &h_resps, resps_buf_size);
+	err = cudaMalloc((void **) &d_resps, resps_buf_size);
+	CPE(err != cudaSuccess, "Failed to cudaMalloc resp buffers\n");
 
 	/** < Create the IPv4 cache and copy it over */
 	red_printf("\tGPU master: creating IPv4 cache\n");
@@ -211,9 +236,9 @@ int main(int argc, char **argv)
 	
 	/** < Launch the GPU master */
 	red_printf("\tGPU master: launching GPU code\n");
-	master_gpu(wmq, 
-		h_ips, d_ips, 
-		h_ports, d_ports, 
+	master_gpu(wmq, my_stream,
+		h_reqs, d_reqs, 
+		h_resps, d_resps, 
 		d_ipv4_cache,
 		num_workers, worker_lcores);
 	
