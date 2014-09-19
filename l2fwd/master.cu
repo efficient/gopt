@@ -18,6 +18,8 @@ masterGpu(int *req, int *resp, int num_reqs)
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < num_reqs) {
+		/** < The GPU-added latency measurement code in server.c depends
+		  *   on the GPU copying the req in the resp */
 		resp[i] = req[i];
 	}
 }

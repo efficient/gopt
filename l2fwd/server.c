@@ -59,12 +59,13 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 {
 	int batch_index = 0, hdr_size = 36;
 
+	struct ether_hdr *eth_hdr;
+	void *dst_mac_ptr, *src_mac_ptr;
+
 	int head = lc_wmq->head;
+	LL *srv_tsc;
 
 	foreach(batch_index, nb_pkts) {
-		struct ether_hdr *eth_hdr;
-
-		void *dst_mac_ptr, *src_mac_ptr;
 
 		if(batch_index != nb_pkts - 1) {
 			rte_prefetch0(pkts[batch_index + 1]->pkt.data);
@@ -83,6 +84,14 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 
 		lc_wmq->reqs[head & WM_QUEUE_CAP_] = req[0];
 		lc_wmq->mbufs[head & WM_QUEUE_CAP_] = (void *) pkts[batch_index];
+
+		/** < Timestamp some pkts before putting on work queue */
+		if((req[0] & 0xf) == 0) {
+			srv_tsc = (LL *) (rte_pktmbuf_mtod(pkts[batch_index], char *) +
+				hdr_size + 12);
+			srv_tsc[0] = rte_rdtsc();
+		}
+
 		head ++;
 	}
 
@@ -96,10 +105,20 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 	int tail = lc_wmq->tail;
 	while(lc_wmq->sent != tail) {
 		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		// Offset in queue
+		struct rte_mbuf *send_mbuf = lc_wmq->mbufs[q_i];
 		
 		/** < Use the GPU's response to determine the next port */
 		int resp = lc_wmq->resps[q_i];
-		send_packet(lc_wmq->mbufs[q_i], resp & 3, lp_info);
+
+		/** < Measure latency added by GPU for stamped packets */
+		if((resp & 0xf) == 0) {
+			srv_tsc = (LL *) (rte_pktmbuf_mtod(send_mbuf, char *) +
+				hdr_size + 12);
+			lp_info[0].gpu_added_latency += rte_rdtsc() - srv_tsc[0];
+			lp_info[0].gpu_added_latency_samples += 1;
+		}
+		
+		send_packet(send_mbuf, resp & 3, lp_info);
 
 		lc_wmq->sent ++;
 	}
@@ -175,8 +194,13 @@ void run_server(volatile struct wm_queue *wmq)
 			double seconds = nanoseconds / GHZ_CPS;
 			tput_tsc[0] = tput_tsc[1];
 
-			red_printf("Lcore %d, total: %f\n", lcore_id, 
-				lp_info[0].nb_tx_all_ports / seconds);
+			double gpu_added_ns = S_FAC * lp_info[0].gpu_added_latency;
+			double gpu_added_us = gpu_added_ns / 1000;
+
+			red_printf("Lcore %d, total: %f. gpu_added_us %f\n", 
+				lcore_id, 
+				lp_info[0].nb_tx_all_ports / seconds,
+				gpu_added_us / lp_info[0].gpu_added_latency_samples);
 
 			for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
 				if(ISSET(XIA_R2_PORT_MASK, i)) {
@@ -189,6 +213,8 @@ void run_server(volatile struct wm_queue *wmq)
 				lp_info[i].nb_rx = 0;
 	
 				lp_info[i].nb_tx_all_ports = 0;
+				lp_info[i].gpu_added_latency = 0;
+				lp_info[i].gpu_added_latency_samples = 0;
 			}
 
 			printf("\tLcore %d, Average TX burst size: %lld\n", lcore_id, 

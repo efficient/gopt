@@ -129,11 +129,6 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 					latency_tot += (cur_tsc - clt_tsc[0]);
 				}
 
-				// Check the response from the server
-				int *resp = (int *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) +
-					hdr_size + 20);
-				assert(resp[0] <= 7);
-
 				rte_pktmbuf_free(rx_pkts_burst[i]);
 			}
 		}

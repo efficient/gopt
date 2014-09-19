@@ -77,7 +77,11 @@ struct lcore_port_info {
 	int nb_buf;
 	int nb_tx;
 	int nb_rx;
-	int nb_tx_all_ports;
+	int nb_tx_all_ports;				// Use @port 0
+
+	// For measuring latency added by the GPU
+	long long gpu_added_latency;			// Use @port 0
+	long long gpu_added_latency_samples;	// Use @port 0
 
 	// Information passed between functions to avoid re-calculation
 	int queue_id;
