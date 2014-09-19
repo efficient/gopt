@@ -62,7 +62,6 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 
 	while(1) {
 
-
 		/**< Copy all the requests supplied by workers into the 
 		  * contiguous h_reqs buffer */
 		for(w_i = 0; w_i < num_workers; w_i ++) {
@@ -133,14 +132,14 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		/** < Do some measurements */
 		msr_iter ++;
 		msr_tot_req += nb_req;
-		if(iter == 100000) {
+		if(msr_iter == 100000) {
 			clock_gettime(CLOCK_REALTIME, &msr_end);
 			msr_tot_us = (msr_end.tv_sec - msr_start.tv_sec) * 1000000 +
 				(msr_end.tv_nsec - msr_start.tv_nsec) / 1000;
 
 			blue_printf("\tGPU master: average batch size = %lld\n"
 				"\t\tAverage time for GPU communication = %f us\n",
-				msr_tot_req / iter, msr_tot_us / msr_iter);
+				msr_tot_req / msr_iter, msr_tot_us / msr_iter);
 
 			msr_iter = 0;
 			msr_tot_req = 0;
