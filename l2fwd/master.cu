@@ -167,7 +167,6 @@ int main(int argc, char **argv)
 	while ((c = getopt (argc, argv, "c:")) != -1) {
 		switch(c) {
 			case 'c':
-				printf("\tGPU master: Got lcore_mask = %s\n", optarg);
 				// atoi() doesn't work for hex representation
 				lcore_mask = strtol(optarg, NULL, 16);
 				break;
@@ -178,7 +177,7 @@ int main(int argc, char **argv)
 	}
 
 	assert(lcore_mask != -1);
-	red_printf("\tGPU master: got lcore_mask: %d\n", lcore_mask);
+	red_printf("\tGPU master: got lcore_mask: %x\n", lcore_mask);
 
 	/** < Create a CUDA stream */
 	err = cudaStreamCreate(&my_stream);
