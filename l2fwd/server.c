@@ -200,11 +200,10 @@ void run_server(volatile struct wm_queue *wmq)
 			double gpu_added_ns = S_FAC * lp_info[0].gpu_added_latency;
 			double gpu_added_us = gpu_added_ns / 1000;
 
-			red_printf("Lcore %d, total: %f. gpu_added_us %f, gpu_lat_msr_rate = %f\n", 
+			red_printf("Lcore %d, total: %f. gpu_added_us %f\n", 
 				lcore_id, 
 				lp_info[0].nb_tx_all_ports / seconds,
-				gpu_added_us / lp_info[0].gpu_added_latency_samples,
-				lp_info[0].gpu_added_latency_samples / seconds);
+				gpu_added_us / lp_info[0].gpu_added_latency_samples);
 
 			for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
 				if(ISSET(XIA_R2_PORT_MASK, i)) {
