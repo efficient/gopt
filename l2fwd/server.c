@@ -73,6 +73,15 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
 
+		/** < Timestamp some pkts before putting on work queue 
+		  *   This works because the src mac address for most packets
+		  *   is 0xdeadbeef */
+		if(eth_hdr->s_addr.addr_bytes[0] != 0xef) {
+			srv_tsc = (LL *) (rte_pktmbuf_mtod(pkts[batch_index], char *) +
+				hdr_size + 12);
+			srv_tsc[0] = rte_rdtsc();
+		}
+
 		/** < Swap src and dst mac */
 		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
 		src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
@@ -85,12 +94,6 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		lc_wmq->reqs[head & WM_QUEUE_CAP_] = req[0];
 		lc_wmq->mbufs[head & WM_QUEUE_CAP_] = (void *) pkts[batch_index];
 
-		/** < Timestamp some pkts before putting on work queue */
-		if((req[0] & 0xf) == 0) {
-			srv_tsc = (LL *) (rte_pktmbuf_mtod(pkts[batch_index], char *) +
-				hdr_size + 12);
-			srv_tsc[0] = rte_rdtsc();
-		}
 
 		head ++;
 	}
@@ -107,18 +110,18 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		// Offset in queue
 		struct rte_mbuf *send_mbuf = lc_wmq->mbufs[q_i];
 		
-		/** < Use the GPU's response to determine the next port */
-		int resp = lc_wmq->resps[q_i];
-
-		/** < Measure latency added by GPU for stamped packets */
-		if((resp & 0xf) == 0) {
+		/** < Measure latency added by GPU for stamped packets.
+		  *   Use the destination address here because of swap_mac */
+		eth_hdr = (struct ether_hdr *) send_mbuf->pkt.data;
+		if(eth_hdr->d_addr.addr_bytes[0] != 0xef) {
 			srv_tsc = (LL *) (rte_pktmbuf_mtod(send_mbuf, char *) +
 				hdr_size + 12);
 			lp_info[0].gpu_added_latency += rte_rdtsc() - srv_tsc[0];
 			lp_info[0].gpu_added_latency_samples += 1;
 		}
 		
-		send_packet(send_mbuf, resp & 3, lp_info);
+		/** < Use the GPU's response to determine the output port */
+		send_packet(send_mbuf, lc_wmq->resps[q_i] & 3, lp_info);
 
 		lc_wmq->sent ++;
 	}
@@ -197,10 +200,11 @@ void run_server(volatile struct wm_queue *wmq)
 			double gpu_added_ns = S_FAC * lp_info[0].gpu_added_latency;
 			double gpu_added_us = gpu_added_ns / 1000;
 
-			red_printf("Lcore %d, total: %f. gpu_added_us %f\n", 
+			red_printf("Lcore %d, total: %f. gpu_added_us %f, gpu_lat_msr_rate = %f\n", 
 				lcore_id, 
 				lp_info[0].nb_tx_all_ports / seconds,
-				gpu_added_us / lp_info[0].gpu_added_latency_samples);
+				gpu_added_us / lp_info[0].gpu_added_latency_samples,
+				lp_info[0].gpu_added_latency_samples / seconds);
 
 			for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
 				if(ISSET(XIA_R2_PORT_MASK, i)) {

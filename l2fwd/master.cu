@@ -18,9 +18,7 @@ masterGpu(int *req, int *resp, int num_reqs)
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < num_reqs) {
-		/** < The GPU-added latency measurement code in server.c depends
-		  *   on the GPU copying the req in the resp */
-		resp[i] = req[i];
+		resp[i] = req[i] & 0xff;
 	}
 }
 
@@ -28,7 +26,7 @@ masterGpu(int *req, int *resp, int num_reqs)
  * wmq : the worker/master queue for all lcores. Non-NULL iff the lcore
  * 		 is an active worker.
  */
-void master_gpu(volatile struct wm_queue *wmq, 
+void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 	int *h_reqs, int *d_reqs,						/**< Kernel inputs */
 	int *h_resps, int *d_resps,			/**< Kernel outputs */
 	int num_workers, int *worker_lcores)
@@ -93,22 +91,27 @@ void master_gpu(volatile struct wm_queue *wmq,
 		}
 
 		/**< Copy requests to device */
-		err = cudaMemcpy(d_reqs, h_reqs, nb_req * sizeof(int), 
-			cudaMemcpyHostToDevice);
-		CPE(err != cudaSuccess, "Failed to copy requests from host to device\n");
+		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(int), 
+			cudaMemcpyHostToDevice, my_stream);
+		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
 
 		/**< Kernel launch */
 		int threadsPerBlock = 256;
 		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
 	
-		masterGpu<<<blocksPerGrid, threadsPerBlock>>>(d_reqs, d_resps, nb_req);
+		masterGpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
+			d_resps, nb_req);
 		err = cudaGetLastError();
 		CPE(err != cudaSuccess, "Failed to launch masterGpu kernel\n");
 
-		err = cudaMemcpy(h_resps, d_resps, nb_req * sizeof(int),
-			cudaMemcpyDeviceToHost);
-		CPE(err != cudaSuccess, "Failed to copy responses from device to host\n");
+		/** < Copy responses from device */
+		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(int),
+			cudaMemcpyDeviceToHost, my_stream);
+		CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
 
+		/** < Synchronize all ops */
+		cudaStreamSynchronize(my_stream);
+		
 		/**< Copy the ports back to worker queues */
 		for(w_i = 0; w_i < num_workers; w_i ++) {
 			w_lid = worker_lcores[w_i];		// Don't use w_i after this
@@ -136,6 +139,7 @@ int main(int argc, char **argv)
 {
 	int c, i, err = cudaSuccess;
 	int lcore_mask = -1;
+	cudaStream_t my_stream;
 	volatile struct wm_queue *wmq;
 
 	/** < CUDA buffers */
@@ -159,7 +163,11 @@ int main(int argc, char **argv)
 	assert(lcore_mask != -1);
 	red_printf("\tGPU master: got lcore_mask: %d\n", lcore_mask);
 
-	/**< Allocate hugepages for the shared queues */
+	/** < Create a CUDA stream */
+	err = cudaStreamCreate(&my_stream);
+	CPE(err != cudaSuccess, "Failed to create cudaStream\n");
+
+	/** < Allocate hugepages for the shared queues */
 	red_printf("\tGPU master: creating worker-master shm queues\n");
 	int wm_queue_bytes = M_2;
 	while(wm_queue_bytes < WM_MAX_LCORE * sizeof(struct wm_queue)) {
@@ -169,12 +177,12 @@ int main(int argc, char **argv)
 		wm_queue_bytes / M_2);
 	wmq = (volatile struct wm_queue *) shm_alloc(WM_QUEUE_KEY, wm_queue_bytes);
 
+	/** < Ensure that queue counters are in separate cachelines */
 	for(i = 0; i < WM_MAX_LCORE; i ++) {
 		uint64_t c1 = (uint64_t) (uintptr_t) &wmq[i].head;
 		uint64_t c2 = (uint64_t) (uintptr_t) &wmq[i].tail;
 		uint64_t c3 = (uint64_t) (uintptr_t) &wmq[i].sent;
 
-		// Ensure that all counters are in separate cachelines
 		assert((c1 % 64 == 0) && (c2 % 64 == 0) && (c3 % 64 == 0));
 	}
 
@@ -199,7 +207,7 @@ int main(int argc, char **argv)
 	
 	/** < Launch the GPU master */
 	red_printf("\tGPU master: launching GPU code\n");
-	master_gpu(wmq, 
+	master_gpu(wmq, my_stream,
 		h_reqs, d_reqs, 
 		h_resps, d_resps, 
 		num_workers, worker_lcores);
