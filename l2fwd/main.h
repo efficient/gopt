@@ -19,7 +19,6 @@
 #include "fpp.h"
 #include "worker-master.h"
 #include "util.h"
-#include "ipv4.h"
 
 #define GOTO 0
 

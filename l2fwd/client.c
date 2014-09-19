@@ -88,7 +88,12 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			// Add client tsc
 			LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) +
 				hdr_size + 4);
-			clt_tsc[0] = rte_rdtsc();		// 40 -> 48
+			clt_tsc[0] = rte_rdtsc();			// 40 -> 48
+
+			// Add an integer as a dummy request
+			int *req = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) +
+				hdr_size + 20);
+			req[0] = fastrand(&rss_seed);		// 56 -> 60
 		}
 
 		int nb_tx_new = rte_eth_tx_burst(port_id, 
@@ -123,6 +128,11 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 					LL cur_tsc = rte_rdtsc();
 					latency_tot += (cur_tsc - clt_tsc[0]);
 				}
+
+				// Check the response from the server
+				int *resp = (int *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) +
+					hdr_size + 20);
+				assert(resp[0] <= 7);
 
 				rte_pktmbuf_free(rx_pkts_burst[i]);
 			}

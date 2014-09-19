@@ -64,6 +64,7 @@
 	36-39:	lcore_id of the client that sent this packet
 	40-47:	client's tsc for end-to-end latency measurement
 	48-55:	server's tsc for server-only latency measurement	
+	56-59:	an integer for the GPU
 
 
 5. Running on xia-router* systems:

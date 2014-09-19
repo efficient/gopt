@@ -8,19 +8,17 @@
 // nvcc assumes that all header files are C++ files. Tell it
 // that these are C header files
 extern "C" {
-#include "ipv4.h"
 #include "worker-master.h"
 #include "util.h"
 }
 
 __global__ void
-ipv4Gpu(int *ips, uint8_t *ports, uint8_t *ipv4_cache, int num_ips)
+masterGpu(int *req, int *resp, int num_reqs)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (i < num_ips) {
-		int ip_addr = ips[i];
-		ports[i] = ipv4_cache[ip_addr & IPv4_CACHE_CAP_];
+	if (i < num_reqs) {
+		resp[i] = 7;
 	}
 }
 
@@ -29,9 +27,8 @@ ipv4Gpu(int *ips, uint8_t *ports, uint8_t *ipv4_cache, int num_ips)
  * 		 is an active worker.
  */
 void master_gpu(volatile struct wm_queue *wmq, 
-	int *h_ips, int *d_ips,						/**< Kernel inputs */
-	uint8_t *h_ports, uint8_t *d_ports,			/**< Kernel outputs */
-	uint8_t *d_ipv4_cache,
+	int *h_reqs, int *d_reqs,						/**< Kernel inputs */
+	int *h_resps, int *d_resps,			/**< Kernel outputs */
 	int num_workers, int *worker_lcores)
 {
 	assert(num_workers != 0);
@@ -39,16 +36,16 @@ void master_gpu(volatile struct wm_queue *wmq,
 	assert(num_workers * WM_QUEUE_THRESH < WM_QUEUE_CAP);
 	
 	int i, err, iter = 0;
-	long long total_ips = 0;
+	long long total_req = 0;
 
-	/** The GPU-buffer (h_ips) start index for an lcore's packets 
+	/** The GPU-buffer (h_reqs) start index for an lcore's packets 
 	 *	during a kernel launch */
-	int ips_lo[WM_MAX_LCORE] = {0};
+	int req_lo[WM_MAX_LCORE] = {0};
 
-	/** Number of IPs that we'll send to the GPU = ips_cur.
-	 *  We don't need to worry about ips_cur overflowing the
-	 *  capacity of h_ips because it fits all WM_MAX_LCORE */
-	int ips_cur = 0;
+	/** Number of requests that we'll send to the GPU = nb_req.
+	 *  We don't need to worry about nb_req overflowing the
+	 *  capacity of h_reqs because it fits all WM_MAX_LCORE */
+	int nb_req = 0;
 
 	/** <  Value of the queue-head from an lcore during the last iteration*/
 	long long prev_head[WM_MAX_LCORE] = {0}, new_head[WM_MAX_LCORE] = {0};
@@ -58,8 +55,8 @@ void master_gpu(volatile struct wm_queue *wmq,
 
 	while(1) {
 
-		/**< Copy all the IP-addresses supplied by workers into the 
-		  * contiguous h_ips buffer */
+		/**< Copy all the requests supplied by workers into the 
+		  * contiguous h_reqs buffer */
 		for(w_i = 0; w_i < num_workers; w_i ++) {
 			w_lid = worker_lcores[w_i];		// Don't use w_i after this
 			lc_wmq = &wmq[w_lid];
@@ -68,48 +65,47 @@ void master_gpu(volatile struct wm_queue *wmq,
 			new_head[w_lid] = lc_wmq->head;
 
 			// Note the GPU-buffer extent for this lcore
-			ips_lo[w_lid] = ips_cur;
+			req_lo[w_lid] = nb_req;
 
 			// Iterate over the new packets
 			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
 				int q_i = i & WM_QUEUE_CAP_;	// Offset in this wrkr's queue
-				int ip_addr = lc_wmq->ipv4_address[q_i];
+				int req = lc_wmq->reqs[q_i];
 
-				h_ips[ips_cur] = ip_addr;			
-				ips_cur ++;
+				h_reqs[nb_req] = req;			
+				nb_req ++;
 			}
 		}
 
-		if(ips_cur == 0) {		// No new packets?
+		if(nb_req == 0) {		// No new packets?
 			continue;
 		}
 
 		iter ++;
-		total_ips += ips_cur;
+		total_req += nb_req;
 		if(iter == 10000) {
 			red_printf("\tGPU master: average batch size = %lld\n",
-				total_ips / iter);
+				total_req / iter);
 			iter = 0;
-			total_ips = 0;
+			total_req = 0;
 		}
 
-		/**< Copy IP addresses to device */
-		err = cudaMemcpy(d_ips, h_ips, ips_cur * sizeof(uint32_t), 
+		/**< Copy requests to device */
+		err = cudaMemcpy(d_reqs, h_reqs, nb_req * sizeof(int), 
 			cudaMemcpyHostToDevice);
-		CPE(err != cudaSuccess, "Failed to copy IPs from host to device\n");
+		CPE(err != cudaSuccess, "Failed to copy requests from host to device\n");
 
 		/**< Kernel launch */
 		int threadsPerBlock = 256;
-		int blocksPerGrid = (ips_cur + threadsPerBlock - 1) / threadsPerBlock;
+		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
 	
-		ipv4Gpu<<<blocksPerGrid, threadsPerBlock>>>(d_ips, 
-			d_ports, d_ipv4_cache, ips_cur);
+		masterGpu<<<blocksPerGrid, threadsPerBlock>>>(d_reqs, d_resps, nb_req);
 		err = cudaGetLastError();
-		CPE(err != cudaSuccess, "Failed to launch ipv4Gpu kernel\n");
+		CPE(err != cudaSuccess, "Failed to launch masterGpu kernel\n");
 
-		err = cudaMemcpy(h_ports, d_ports, ips_cur * sizeof(uint8_t),
+		err = cudaMemcpy(h_resps, d_resps, nb_req * sizeof(int),
 			cudaMemcpyDeviceToHost);
-		CPE(err != cudaSuccess, "Failed to copy ports from device to host\n");
+		CPE(err != cudaSuccess, "Failed to copy responses from device to host\n");
 
 		/**< Copy the ports back to worker queues */
 		for(w_i = 0; w_i < num_workers; w_i ++) {
@@ -120,8 +116,8 @@ void master_gpu(volatile struct wm_queue *wmq,
 	
 				/** < Offset in this workers' queue and the GPU-buffer */
 				int q_i = i & WM_QUEUE_CAP_;				
-				int ips_i = ips_lo[w_lid] + (i - prev_head[w_lid]);
-				lc_wmq->ports[q_i] = h_ports[ips_i];
+				int req_i = req_lo[w_lid] + (i - prev_head[w_lid]);
+				lc_wmq->resps[q_i] = h_resps[req_i];
 			}
 
 			prev_head[w_lid] = new_head[w_lid];
@@ -130,7 +126,7 @@ void master_gpu(volatile struct wm_queue *wmq,
 			lc_wmq->tail = new_head[w_lid];
 		}
 
-		ips_cur = 0;
+		nb_req = 0;
 	}
 }
 
@@ -141,9 +137,8 @@ int main(int argc, char **argv)
 	volatile struct wm_queue *wmq;
 
 	/** < CUDA buffers */
-	int *h_ips, *d_ips;
-	uint8_t *h_ports, *d_ports;	
-	uint8_t *h_ipv4_cache, *d_ipv4_cache;
+	int *h_reqs, *d_reqs;
+	int *h_resps, *d_resps;	
 
 	/**< Get the worker lcore mask */
 	while ((c = getopt (argc, argv, "c:")) != -1) {
@@ -183,28 +178,19 @@ int main(int argc, char **argv)
 
 	red_printf("\tGPU master: creating worker-master shm queues done\n");
 
-	/** < Allocate buffers for IP addresses from all workers*/
-	red_printf("\tGPU master: creating buffers for IP addresses\n");
-	int ips_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint32_t);
-	err = cudaMallocHost((void **) &h_ips, ips_buf_size);
-	err = cudaMalloc((void **) &d_ips, ips_buf_size);
-	CPE(err != cudaSuccess, "Failed to cudaMalloc IP buffers\n");
+	/** < Allocate buffers for requests from all workers*/
+	red_printf("\tGPU master: creating buffers for requests\n");
+	int reqs_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(int);
+	err = cudaMallocHost((void **) &h_reqs, reqs_buf_size);
+	err = cudaMalloc((void **) &d_reqs, reqs_buf_size);
+	CPE(err != cudaSuccess, "Failed to cudaMalloc req buffer\n");
 
-	/** < Allocate buffers for ports from all workers */
-	red_printf("\tGPU master: creating buffers for ports\n");
-	int ports_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint8_t);
-	err = cudaMallocHost((void **) &h_ports, ports_buf_size);
-	err = cudaMalloc((void **) &d_ports, ports_buf_size);
-	CPE(err != cudaSuccess, "Failed to cudaMalloc port buffers\n");
-
-	/** < Create the IPv4 cache and copy it over */
-	red_printf("\tGPU master: creating IPv4 cache\n");
-	ipv4_cache_init(&h_ipv4_cache, IPv4_PORT_MASK);
-
-	int ipv4_buf_size = IPv4_CACHE_CAP * sizeof(uint8_t);
-	err = cudaMalloc((void **) &d_ipv4_cache, ipv4_buf_size);
-	cudaMemcpy(d_ipv4_cache, h_ipv4_cache, ipv4_buf_size, 
-		cudaMemcpyHostToDevice);
+	/** < Allocate buffers for responses for all workers */
+	red_printf("\tGPU master: creating buffers for responses\n");
+	int resps_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(int);
+	err = cudaMallocHost((void **) &h_resps, resps_buf_size);
+	err = cudaMalloc((void **) &d_resps, resps_buf_size);
+	CPE(err != cudaSuccess, "Failed to cudaMalloc resp buffers\n");
 
 	int num_workers = bitcount(lcore_mask);
 	int *worker_lcores = get_active_bits(lcore_mask);
@@ -212,9 +198,8 @@ int main(int argc, char **argv)
 	/** < Launch the GPU master */
 	red_printf("\tGPU master: launching GPU code\n");
 	master_gpu(wmq, 
-		h_ips, d_ips, 
-		h_ports, d_ports, 
-		d_ipv4_cache,
+		h_reqs, d_reqs, 
+		h_resps, d_resps, 
 		num_workers, worker_lcores);
 	
 }

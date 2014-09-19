@@ -54,35 +54,34 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
  * lc_wmq = the worker/master queue for this lcore.
  * lp_info = port statistics for this lcore
  */
-void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
+void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	 struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq)
 {
-	int batch_index = 0;
+	int batch_index = 0, hdr_size = 36;
 
 	int head = lc_wmq->head;
 
 	foreach(batch_index, nb_pkts) {
-		// Boilerplate for TX pkt
 		struct ether_hdr *eth_hdr;
-		struct ipv4_hdr *ip_hdr;
-		void *src_mac_ptr, *dst_mac_ptr;
-		uint32_t dst_ip;
+
+		void *dst_mac_ptr, *src_mac_ptr;
 
 		if(batch_index != nb_pkts - 1) {
 			rte_prefetch0(pkts[batch_index + 1]->pkt.data);
 		}
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
-		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 
-		src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
+		/** < Swap src and dst mac */
 		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
-		swap_mac(src_mac_ptr, dst_mac_ptr);
+		src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
+		swap_mac(dst_mac_ptr, src_mac_ptr);
 
-		/** < RSS fields */
-		dst_ip = ip_hdr->src_addr;
+		/** < Extract the client's request and put it into the W/M queue */
+		int *req = (int *) (rte_pktmbuf_mtod(pkts[batch_index], char *) +
+			hdr_size + 20);
 
-		lc_wmq->ipv4_address[head & WM_QUEUE_CAP_] = dst_ip;
+		lc_wmq->reqs[head & WM_QUEUE_CAP_] = req[0];
 		lc_wmq->mbufs[head & WM_QUEUE_CAP_] = (void *) pkts[batch_index];
 		head ++;
 	}
@@ -97,7 +96,15 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 	int tail = lc_wmq->tail;
 	while(lc_wmq->sent != tail) {
 		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		// Offset in queue
-		send_packet(lc_wmq->mbufs[q_i], lc_wmq->ports[q_i], lp_info);
+		struct rte_mbuf *send_mbuf = (struct rte_mbuf *) lc_wmq->mbufs[q_i];
+		
+		/** < Put the response computed by the GPU into the packet */
+		int *resp = (int *) (rte_pktmbuf_mtod(send_mbuf, char *) +
+			hdr_size + 20);
+		resp[0] = lc_wmq->resps[q_i];
+
+		/** < Send the packet on the same port as it came on */
+		send_packet(send_mbuf, port_id, lp_info);
 		lc_wmq->sent ++;
 	}
 	
@@ -158,7 +165,7 @@ void run_server(volatile struct wm_queue *wmq)
 	
 		lp_info[port_id].nb_rx += nb_rx_new;
 
-		process_batch_gpu(rx_pkts_burst, nb_rx_new, lp_info, lc_wmq);
+		process_batch_gpu(rx_pkts_burst, nb_rx_new, port_id, lp_info, lc_wmq);
 		
 		// STAT PRINTING
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {

@@ -11,16 +11,15 @@ blue "Killing existing GPU-master processes"
 sudo killall master
 
 blue "Re-compiling master's CUDA code"
-nvcc -O3 -o master util.c ipv4.c master.cu -lrt
+nvcc -O3 -o master util.c master.cu -lrt
 
 blue "Re-compiling DPDK code"
 make clean
 make
 
-blue "Removing DPDK's hugepages and shm keys 1 and 2"
+blue "Removing DPDK's hugepages and shm keys 1"
 sudo rm -rf /mnt/huge/*
 sudo ipcrm -M 1			# WM_QUEUE_KEY
-sudo ipcrm -M 2			# IPv4_CACHE_KEY
 
 blue "Running gpu master on core 15 and sleeping for 2 seconds"
 sudo taskset -c 14 ./master -c $worker_core_mask &
