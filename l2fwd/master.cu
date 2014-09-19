@@ -35,8 +35,13 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 	assert(worker_lcores != NULL);
 	assert(num_workers * WM_QUEUE_THRESH < WM_QUEUE_CAP);
 	
-	int i, err, iter = 0;
-	long long total_req = 0;
+	int i, err;
+
+	/** Variables for batch-size and latency averaging measurements */
+	int msr_iter = 0;			// Number of kernel launches
+	long long msr_tot_req = 0;	// Total packet serviced by the master
+	struct timespec msr_start, msr_end;
+	double msr_tot_us = 0;		// Total microseconds over all iterations
 
 	/** The GPU-buffer (h_reqs) start index for an lcore's packets 
 	 *	during a kernel launch */
@@ -53,7 +58,10 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 	int w_i, w_lid;		/**< A worker-iterator and the worker's lcore-id */
 	volatile struct wm_queue *lc_wmq;	/**< Work queue of one worker */
 
+	clock_gettime(CLOCK_REALTIME, &msr_start);
+
 	while(1) {
+
 
 		/**< Copy all the requests supplied by workers into the 
 		  * contiguous h_reqs buffer */
@@ -79,15 +87,6 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 
 		if(nb_req == 0) {		// No new packets?
 			continue;
-		}
-
-		iter ++;
-		total_req += nb_req;
-		if(iter == 10000) {
-			red_printf("\tGPU master: average batch size = %lld\n",
-				total_req / iter);
-			iter = 0;
-			total_req = 0;
 		}
 
 		/**< Copy requests to device */
@@ -129,6 +128,25 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		
 			/** < Update tail for this worker */
 			lc_wmq->tail = new_head[w_lid];
+		}
+
+		/** < Do some measurements */
+		msr_iter ++;
+		msr_tot_req += nb_req;
+		if(iter == 100000) {
+			clock_gettime(CLOCK_REALTIME, &msr_end);
+			msr_tot_us = (msr_end.tv_sec - msr_start.tv_sec) * 1000000 +
+				(msr_end.tv_nsec - msr_start.tv_nsec) / 1000;
+
+			blue_printf("\tGPU master: average batch size = %lld\n"
+				"\t\tAverage time for GPU communication = %f us\n",
+				msr_tot_req / iter, msr_tot_us / msr_iter);
+
+			msr_iter = 0;
+			msr_tot_req = 0;
+
+			/** < Start the next measurement */
+			clock_gettime(CLOCK_REALTIME, &msr_start);
 		}
 
 		nb_req = 0;
