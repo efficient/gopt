@@ -51,16 +51,15 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 }
 
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
-	uint64_t *rss_seed, struct lcore_port_info *lp_info, int port_id)
+	struct lcore_port_info *lp_info)
 {
 	int batch_index = 0;
 
 	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
-	// int hdr_size = 36;
+	int hdr_size = 36;
 
 	foreach(batch_index, nb_pkts) {
 		struct ether_hdr *eth_hdr;
-		struct ipv4_hdr *ip_hdr;
 
 		void *dst_mac_ptr, *src_mac_ptr;
 
@@ -69,7 +68,6 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		}
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
-		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 
 		/** < Swap src and dst mac */
 		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
@@ -78,24 +76,20 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 
 		eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
 
-		/** < RSS fields */
-		ip_hdr->src_addr = fastrand(rss_seed);
-		ip_hdr->dst_addr = fastrand(rss_seed);
-		ip_hdr->version_ihl = 0x40 | 0x05;
+		/** < Extract the client's request and compute response */
+		int *req = (int *) (rte_pktmbuf_mtod(pkts[batch_index], char *) +
+			hdr_size + 20);
 
-		pkts[batch_index]->pkt.nb_segs = 1;
-		pkts[batch_index]->pkt.pkt_len = 60;
-		pkts[batch_index]->pkt.data_len = 60;
+		int resp = req[0] & 0xff;
 
-		/** < Send out the packet on the same port it was received */
-		send_packet(pkts[batch_index], port_id, lp_info);
+		/** < Send out the packet based on the value of resp */
+		send_packet(pkts[batch_index], resp & 3, lp_info);
 	}
 }
 
 void run_server(void)
 {
 	int i;
-	uint64_t rss_seed = 0xdeadbeef;
 
 	int lcore_id = rte_lcore_id();
 	int socket_id = rte_lcore_to_socket_id(lcore_id);
@@ -103,6 +97,11 @@ void run_server(void)
 
 	int queue_id = get_lcore_rank(lcore_id, socket_id);
 	printf("Server on lcore %d. Queue Id = %d\n", lcore_id, queue_id);
+
+	/** < This check is required because the process_batch_gpu function
+	 *   uses the GPU's resp to determine the port to send the packet
+	 * 	 on as follows: port = resp % 4 */
+	assert(XIA_R2_PORT_MASK == 0xf);
 
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
@@ -145,8 +144,7 @@ void run_server(void)
 	
 		lp_info[port_id].nb_rx += nb_rx_new;
 
-		process_batch_nogoto(rx_pkts_burst, nb_rx_new, 
-			&rss_seed, lp_info, port_id);
+		process_batch_nogoto(rx_pkts_burst, nb_rx_new, lp_info);
 		
 		// STAT PRINTING
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {
@@ -160,7 +158,7 @@ void run_server(void)
 
 			for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
 				if(ISSET(XIA_R2_PORT_MASK, i)) {
-					printf("\tLcore: %d, port %d: S: %f\n", lcore_id, i,
+					printf("\tLcore: %d, port: %d: %f\n", lcore_id, i, 
 						lp_info[i].nb_tx / seconds);
 				}
 

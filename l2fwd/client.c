@@ -49,7 +49,7 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 	int hdr_size = 36;
 
 	float sleep_us = 2;
-		
+	
 	while (1) {
 
 		for(i = 0; i < MAX_CLT_TX_BURST; i ++) {
@@ -60,8 +60,6 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 		
 			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
-
-			// Occassionally, put the correct src mac address
 			if((fastrand(&rss_seed) & 0xff) == 0) {
 				set_mac(src_mac_ptr, src_mac_arr[client_id][port_id]);
 			} else {
@@ -90,7 +88,12 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			// Add client tsc
 			LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) +
 				hdr_size + 4);
-			clt_tsc[0] = rte_rdtsc();		// 40 -> 48
+			clt_tsc[0] = rte_rdtsc();			// 40 -> 48
+
+			// Add an integer as a dummy request
+			int *req = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) +
+				hdr_size + 20);
+			req[0] = fastrand(&rss_seed);		// 56 -> 60
 		}
 
 		int nb_tx_new = rte_eth_tx_burst(port_id, 
