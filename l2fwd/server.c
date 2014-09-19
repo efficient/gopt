@@ -54,7 +54,7 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
  * lc_wmq = the worker/master queue for this lcore.
  * lp_info = port statistics for this lcore
  */
-void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 	 struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq)
 {
 	int batch_index = 0, hdr_size = 36;
@@ -96,15 +96,11 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	int tail = lc_wmq->tail;
 	while(lc_wmq->sent != tail) {
 		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		// Offset in queue
-		struct rte_mbuf *send_mbuf = (struct rte_mbuf *) lc_wmq->mbufs[q_i];
 		
-		/** < Put the response computed by the GPU into the packet */
-		int *resp = (int *) (rte_pktmbuf_mtod(send_mbuf, char *) +
-			hdr_size + 20);
-		resp[0] = lc_wmq->resps[q_i];
+		/** < Use the GPU's response to determine the next port */
+		int resp = lc_wmq->resps[q_i];
+		send_packet(lc_wmq->mbufs[q_i], resp & 3, lp_info);
 
-		/** < Send the packet on the same port as it came on */
-		send_packet(send_mbuf, port_id, lp_info);
 		lc_wmq->sent ++;
 	}
 	
@@ -122,6 +118,11 @@ void run_server(volatile struct wm_queue *wmq)
 
 	int queue_id = get_lcore_rank(lcore_id, socket_id);
 	printf("Server on lcore %d. Queue Id = %d\n", lcore_id, queue_id);
+
+	/** < This check is required because the process_batch_gpu function
+	 *   uses the GPU's resp to determine the port to send the packet
+	 * 	 on as follows: port = resp % 4 */
+	assert(XIA_R2_PORT_MASK == 0xf);
 
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
@@ -165,7 +166,7 @@ void run_server(volatile struct wm_queue *wmq)
 	
 		lp_info[port_id].nb_rx += nb_rx_new;
 
-		process_batch_gpu(rx_pkts_burst, nb_rx_new, port_id, lp_info, lc_wmq);
+		process_batch_gpu(rx_pkts_burst, nb_rx_new, lp_info, lc_wmq);
 		
 		// STAT PRINTING
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {

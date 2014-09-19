@@ -18,7 +18,7 @@ masterGpu(int *req, int *resp, int num_reqs)
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < num_reqs) {
-		resp[i] = 7;
+		resp[i] = req[i];
 	}
 }
 
