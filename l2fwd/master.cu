@@ -36,32 +36,39 @@ void master_gpu(volatile struct wm_queue *wmq,
 {
 	assert(num_workers != 0);
 	assert(worker_lcores != NULL);
+	assert(num_workers * WM_QUEUE_THRESH < WM_QUEUE_CAP);
 	
 	int i, err, iter = 0;
 	long long total_ips = 0;
 
-	/** < The h_ips buffer start index for an lcore during a kernel launch */
+	/** The GPU-buffer (h_ips) start index for an lcore's packets 
+	 *	during a kernel launch */
 	int ips_lo[WM_MAX_LCORE] = {0};
+
+	/** Number of IPs that we'll send to the GPU = ips_cur.
+	 *  We don't need to worry about ips_cur overflowing the
+	 *  capacity of h_ips because it fits all WM_MAX_LCORE */
 	int ips_cur = 0;
 
 	/** <  Value of the queue-head from an lcore during the last iteration*/
 	long long prev_head[WM_MAX_LCORE] = {0}, new_head[WM_MAX_LCORE] = {0};
 	
-	int w_it, w_lid;		/**< A worker-iterator and the worker's lcore-id */
+	int w_i, w_lid;		/**< A worker-iterator and the worker's lcore-id */
 	volatile struct wm_queue *lc_wmq;	/**< Work queue of one worker */
 
 	while(1) {
+
 		/**< Copy all the IP-addresses supplied by workers into the 
 		  * contiguous h_ips buffer */
-		for(w_it = 0; w_it < num_workers; w_it ++) {
-			w_lid = worker_lcores[w_it];		// Don't use w_it after this
+		for(w_i = 0; w_i < num_workers; w_i ++) {
+			w_lid = worker_lcores[w_i];		// Don't use w_i after this
 			lc_wmq = &wmq[w_lid];
 			
-			// Start the GPU-buffer extent for this lcore
-			ips_lo[w_lid] = ips_cur;
-
 			// Snapshot this worker queue's head
 			new_head[w_lid] = lc_wmq->head;
+
+			// Note the GPU-buffer extent for this lcore
+			ips_lo[w_lid] = ips_cur;
 
 			// Iterate over the new packets
 			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
@@ -73,7 +80,7 @@ void master_gpu(volatile struct wm_queue *wmq,
 			}
 		}
 
-		if(ips_cur == 0) {		// Number of IPs = ips_cur
+		if(ips_cur == 0) {		// No new packets?
 			continue;
 		}
 
@@ -86,8 +93,8 @@ void master_gpu(volatile struct wm_queue *wmq,
 			total_ips = 0;
 		}
 
-		/**< Copy packets to device */
-		err = cudaMemcpy(d_ips, h_ips, ips_cur * WM_INPUT_SIZE, 
+		/**< Copy IP addresses to device */
+		err = cudaMemcpy(d_ips, h_ips, ips_cur * sizeof(uint32_t), 
 			cudaMemcpyHostToDevice);
 		CPE(err != cudaSuccess, "Failed to copy IPs from host to device\n");
 
@@ -100,17 +107,19 @@ void master_gpu(volatile struct wm_queue *wmq,
 		err = cudaGetLastError();
 		CPE(err != cudaSuccess, "Failed to launch ipv4Gpu kernel\n");
 
-		err = cudaMemcpy(h_ports, d_ports, ips_cur * WM_OUTPUT_SIZE,
+		err = cudaMemcpy(h_ports, d_ports, ips_cur * sizeof(uint8_t),
 			cudaMemcpyDeviceToHost);
 		CPE(err != cudaSuccess, "Failed to copy ports from device to host\n");
 
 		/**< Copy the ports back to worker queues */
-		for(w_it = 0; w_it < num_workers; w_it ++) {
-			w_lid = worker_lcores[w_it];		// Don't use w_it after this
+		for(w_i = 0; w_i < num_workers; w_i ++) {
+			w_lid = worker_lcores[w_i];		// Don't use w_i after this
 
 			lc_wmq = &wmq[w_lid];
 			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
-				int q_i = i & WM_QUEUE_CAP_;	// Offset in this wrkr's queue
+	
+				/** < Offset in this workers' queue and the GPU-buffer */
+				int q_i = i & WM_QUEUE_CAP_;				
 				int ips_i = ips_lo[w_lid] + (i - prev_head[w_lid]);
 				lc_wmq->ports[q_i] = h_ports[ips_i];
 			}
@@ -176,14 +185,14 @@ int main(int argc, char **argv)
 
 	/** < Allocate buffers for IP addresses from all workers*/
 	red_printf("\tGPU master: creating buffers for IP addresses\n");
-	int ips_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * WM_INPUT_SIZE;
+	int ips_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint32_t);
 	err = cudaMallocHost((void **) &h_ips, ips_buf_size);
 	err = cudaMalloc((void **) &d_ips, ips_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMalloc IP buffers\n");
 
 	/** < Allocate buffers for ports from all workers */
 	red_printf("\tGPU master: creating buffers for ports\n");
-	int ports_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * WM_OUTPUT_SIZE;
+	int ports_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint8_t);
 	err = cudaMallocHost((void **) &h_ports, ports_buf_size);
 	err = cudaMalloc((void **) &d_ports, ports_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMalloc port buffers\n");

@@ -58,7 +58,7 @@ l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 int
 main(int argc, char **argv)
 {
-	int ret;
+	int ret, wm_queue_bytes = M_2;
 	uint8_t nb_ports;
 	uint8_t port_id;
 	unsigned lcore_id;
@@ -69,11 +69,16 @@ main(int argc, char **argv)
 	} else {
 		is_client = 0;
 
+		/** < Create the worker-master queues for all workers */
 		red_printf("\tDPDK main: Mapping worker-master shared queues\n");
-		// W/M queues should fit in one hugepage
-		assert(WM_MAX_LCORE * sizeof(struct wm_queue) < M_2);
-	
-		wmq = shm_map(WM_QUEUE_KEY, M_2);
+
+		while(wm_queue_bytes < (int) (WM_MAX_LCORE * sizeof(struct wm_queue))) {
+			wm_queue_bytes += M_2;
+		}
+		printf("\t\tDPDK main: Total size of wm_queues = %d hugepages\n",
+			wm_queue_bytes / M_2);
+
+		wmq = shm_map(WM_QUEUE_KEY, wm_queue_bytes);
 		red_printf("\tDPDK main: Mapping worker-master queues done\n");
 	}
 

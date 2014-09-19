@@ -1,6 +1,6 @@
 // Capacity of a queue between a PS-style worker thread and the master thread
-#define WM_QUEUE_CAP 8192
-#define WM_QUEUE_CAP_ 8191
+#define WM_QUEUE_CAP 16384
+#define WM_QUEUE_CAP_ 16383
 
 // Maximum outstanding packets maintained by a worker for the master
 #define WM_QUEUE_THRESH 2048
@@ -8,9 +8,6 @@
 
 /**< Maximum worker lcores supported by the master */
 #define WM_MAX_LCORE 16
-
-#define WM_INPUT_SIZE 4			/** < Input is IPv4 address */
-#define WM_OUTPUT_SIZE 1		/** < Output is a portnum */
 
 /**
  * A shared queue between a worker and a master.
