@@ -52,12 +52,11 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 
 /**
  * lc_wmq = the worker/master queue for this lcore.
+ * lp_info = port statistics for this lcore
  */
-void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, uint64_t *rss_seed,
+void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 	 struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq)
 {
-	// sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for 4 byte alignment
-	int hdr_size = 36;
 	int batch_index = 0;
 
 	int head = lc_wmq->head;
@@ -67,6 +66,7 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, uint64_t *rss_seed,
 		struct ether_hdr *eth_hdr;
 		struct ipv4_hdr *ip_hdr;
 		void *src_mac_ptr, *dst_mac_ptr;
+		uint32_t dst_ip;
 
 		if(batch_index != nb_pkts - 1) {
 			rte_prefetch0(pkts[batch_index + 1]->pkt.data);
@@ -79,29 +79,16 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, uint64_t *rss_seed,
 		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
 		swap_mac(src_mac_ptr, dst_mac_ptr);
 
-		eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
+		/** < RSS fields */
+		dst_ip = ip_hdr->src_addr;
 
-		// These 3 fields of ip_hdr are required for RSS
-		ip_hdr->src_addr = fastrand(rss_seed);
-		ip_hdr->dst_addr = fastrand(rss_seed);
-		ip_hdr->version_ihl = 0x40 | 0x05;
-
-		pkts[batch_index]->pkt.nb_segs = 1;
-		pkts[batch_index]->pkt.pkt_len = 60;
-		pkts[batch_index]->pkt.data_len = 60;
-
-		// Put the request data into the w/m queue. 
-		int *req = (int *) ((char *) pkts[batch_index]->pkt.data + hdr_size);
-		
-		lc_wmq->ipv4_address[head & WM_QUEUE_CAP_] = req[1];
+		lc_wmq->ipv4_address[head & WM_QUEUE_CAP_] = dst_ip;
 		lc_wmq->mbufs[head & WM_QUEUE_CAP_] = (void *) pkts[batch_index];
 		head ++;
 	}
 
 	// Update the shared head to enque the entire batch	
 	lc_wmq->head = head;
-	/*printf("Worker [lcore %d]: head = %lld\n", 
-		lp_info->lcore_id, lc_wmq->head);*/
 	while(lc_wmq->head - lc_wmq->tail >= WM_QUEUE_THRESH) {
 		// Do nothing
 	}
@@ -109,9 +96,6 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, uint64_t *rss_seed,
 	// Snapshot the tail into a local variable
 	int tail = lc_wmq->tail;
 	while(lc_wmq->sent != tail) {
-		/*printf("Worker [lcore %d]: sending: %lld\n", 
-			lp_info->lcore_id, lc_wmq->sent);*/
-
 		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		// Offset in queue
 		send_packet(lc_wmq->mbufs[q_i], lc_wmq->ports[q_i], lp_info);
 		lc_wmq->sent ++;
@@ -122,7 +106,6 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, uint64_t *rss_seed,
 void run_server(volatile struct wm_queue *wmq)
 {
 	int i;
-	uint64_t rss_seed = 0xdeadbeef;
 
 	int lcore_id = rte_lcore_id();
 	volatile struct wm_queue *lc_wmq = &wmq[lcore_id];
@@ -175,7 +158,7 @@ void run_server(volatile struct wm_queue *wmq)
 	
 		lp_info[port_id].nb_rx += nb_rx_new;
 
-		process_batch_gpu(rx_pkts_burst, nb_rx_new, &rss_seed, lp_info, lc_wmq);
+		process_batch_gpu(rx_pkts_burst, nb_rx_new, lp_info, lc_wmq);
 		
 		// STAT PRINTING
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {

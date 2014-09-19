@@ -22,9 +22,9 @@ sudo rm -rf /mnt/huge/*
 sudo ipcrm -M 1			# WM_QUEUE_KEY
 sudo ipcrm -M 2			# IPv4_CACHE_KEY
 
-blue "Running gpu master on core 15 and sleeping for 1 seconds"
+blue "Running gpu master on core 15 and sleeping for 2 seconds"
 sudo taskset -c 14 ./master -c $worker_core_mask &
-sleep 3
+sleep 2
 
 blue "Running workers"
 sudo ./build/l2fwd -c $worker_core_mask -n 4
