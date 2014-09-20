@@ -51,12 +51,11 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 }
 
 void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
-                          uint64_t *rss_seed, struct cuckoo_bucket *ht_index,
+                          struct cuckoo_bucket *ht_index,
                           struct lcore_port_info *lp_info, int port_id)
 {
 	int i[BATCH_SIZE];
 	struct ether_hdr *eth_hdr[BATCH_SIZE];
-	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
 	void *dst_mac_ptr[BATCH_SIZE];
 	ULL dst_mac[BATCH_SIZE];
 	int fwd_port[BATCH_SIZE];
@@ -81,21 +80,11 @@ fpp_start:
 	}
 
 	eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
-	ip_hdr[I] = (struct ipv4_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
 
 	dst_mac_ptr[I] = &eth_hdr[I]->d_addr.addr_bytes[0];
 	dst_mac[I] = get_mac(eth_hdr[I]->d_addr.addr_bytes);
 
 	eth_hdr[I]->ether_type = htons(ETHER_TYPE_IPv4);
-
-	// These 3 fields of ip_hdr are required for RSS
-	ip_hdr[I]->src_addr = fastrand(rss_seed);
-	ip_hdr[I]->dst_addr = fastrand(rss_seed);
-	ip_hdr[I]->version_ihl = 0x40 | 0x05;
-
-	pkts[I]->pkt.nb_segs = 1;
-	pkts[I]->pkt.pkt_len = 60;
-	pkts[I]->pkt.data_len = 60;
 
 	bkt_1[I] = CityHash32(dst_mac_ptr[I], 6) & NUM_BKT_;
 	FPP_PSS(&ht_index[bkt_1[I]], fpp_label_1, nb_pkts);
@@ -141,7 +130,7 @@ fpp_end:
 }
 
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
-	uint64_t *rss_seed, struct cuckoo_bucket *ht_index,
+	struct cuckoo_bucket *ht_index,
 	struct lcore_port_info *lp_info, int port_id)
 {
 	int batch_index = 0;
@@ -149,7 +138,6 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 	foreach(batch_index, nb_pkts) {
 		int i;
 		struct ether_hdr *eth_hdr;
-		struct ipv4_hdr *ip_hdr;
 
 		void *dst_mac_ptr;
 		ULL dst_mac;
@@ -160,22 +148,10 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		}
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
-		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 
 		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
 		/** < We need the dst_mac for comparison with the key in hash-table */
 		dst_mac = get_mac(eth_hdr->d_addr.addr_bytes);
-
-		eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
-
-		/** < RSS fields */
-		ip_hdr->src_addr = fastrand(rss_seed);
-		ip_hdr->dst_addr = fastrand(rss_seed);
-		ip_hdr->version_ihl = 0x40 | 0x05;
-
-		pkts[batch_index]->pkt.nb_segs = 1;
-		pkts[batch_index]->pkt.pkt_len = 60;
-		pkts[batch_index]->pkt.data_len = 60;
 
 		/** < Compute the 1st bucket using the full mac address */
 		bkt_1 = CityHash32(dst_mac_ptr, 6) & NUM_BKT_;
@@ -216,7 +192,6 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 void run_server(struct cuckoo_bucket *ht_index)
 {
 	int i;
-	uint64_t rss_seed = 0xdeadbeef;
 
 	int lcore_id = rte_lcore_id();
 	int socket_id = rte_lcore_to_socket_id(lcore_id);
@@ -268,10 +243,10 @@ void run_server(struct cuckoo_bucket *ht_index)
 
 #if GOTO == 1
 		process_batch_goto(rx_pkts_burst, 
-			nb_rx_new, &rss_seed, ht_index, lp_info, port_id);
+			nb_rx_new, ht_index, lp_info, port_id);
 #else
 		process_batch_nogoto(rx_pkts_burst,
-			nb_rx_new, &rss_seed, ht_index, lp_info, port_id);
+			nb_rx_new, ht_index, lp_info, port_id);
 #endif
 		
 		// STAT PRINTING

@@ -53,10 +53,10 @@
 #define S_FAC ((double) GHZ_CPS / XIA_R2_CPS)
 
 // All xia hardware specific features need to be prefixed by XIA_
-#define XIA_R0_PORT_MASK 0x1	// xge0,1
+#define XIA_R0_PORT_MASK 0x3	// xge0,1
 #define XIA_R0_CPS 2270000000	// Client cycles per second
 
-#define XIA_R2_PORT_MASK 0x5	// xge0,2
+#define XIA_R2_PORT_MASK 0xf	// xge0,1,2,3
 #define XIA_R2_CPS 2700000000	// Server cycles per second
 
 // On all xia-router* machines, even numbered lcores are on socket 0

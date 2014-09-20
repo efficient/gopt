@@ -5,7 +5,6 @@ function blue() {
 	echo "${es}$1${ee}"
 }
 
-worker_core_mask="0x55"		# Mask for lcores running DPDK-workers
 blue "Re-compiling DPDK code"
 make clean
 make
@@ -21,7 +20,7 @@ sudo rm -rf /mnt/huge/*
 sudo ipcrm -M 1
 sudo ipcrm -M 2
 
-sudo ./build/l2fwd -c 0x15 -n 3 client $@		#AAA means all odd numbered cores
+sudo ./build/l2fwd -c 0x555 -n 3 client $@		#AAA means all odd numbered cores
 
 # Core masks: The assignment of lcores to ports is fixed. 
 # 	int lcore_to_port[12] = {0, 2, 0, 2, 0, 2, 1, 3, 1, 3, 1, 3};

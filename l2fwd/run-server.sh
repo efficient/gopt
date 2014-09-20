@@ -5,7 +5,7 @@ function blue() {
 	echo "${es}$1${ee}"
 }
 
-worker_core_mask="0x1"		# Mask for lcores running DPDK-workers
+worker_core_mask="0x555"		# Mask for lcores running DPDK-workers
 
 blue "Re-compiling DPDK code"
 make clean
