@@ -34,30 +34,36 @@ int *ipv4_get_active_ports(int portmask)
 	return active_ports;
 }
 
-void ipv4_cache_init(uint8_t **ipv4_cache, int portmask)
+void dir_ipv4_init(struct dir_ipv4_table *ipv4_table, int portmask)
 {
 	int i;
+
+	int tbl_24_bytes = (1 << 24) * sizeof(int);
+	int tbl_long_bytes = IPv4_TABLE_LONG_CAP * sizeof(int);
 
 	int num_active_ports = ipv4_bitcount(portmask);
 	int *port_arr = ipv4_get_active_ports(portmask);
 
-	printf("Initializing ipv4 address cache of size = %lu bytes\n", 
-		IPv4_CACHE_CAP * sizeof(uint8_t));
+	printf("Initializing DIR-24-8-BASIC lookup table\n"
+		"\ttbl_24: %d bytes, tbl_long: %d bytes\n",
+		tbl_24_bytes, tbl_long_bytes);
 
-	int sid = shmget(IPv4_CACHE_KEY, IPv4_CACHE_CAP * sizeof(uint8_t), 
-		IPC_CREAT | 0666 | SHM_HUGETLB);
+	ipv4_table->tbl_24 = shm_alloc(IPv4_TABLE_24_KEY, tbl_24_bytes);
+	ipv4_table->tbl_long = shm_alloc(IPv4_TABLE_LONG_KEY, tbl_long_bytes);
 
-	if(sid < 0) {
-		printf("Could not create ipv4 address cache.\n");
-		exit(-1);
+	/** < Fill both tables with random ports */
+	for(i = 0; i < (1 << 24); i ++) {
+		ipv4_table->tbl_24[i] = port_arr[rand() % num_active_ports];
 	}
 
-	*ipv4_cache = shmat(sid, 0, 0);
+	for(i = 0; i < IPv4_TABLE_LONG_CAP; i ++) {
+		ipv4_table->tbl_long[i] = port_arr[rand() % num_active_ports];
+	}
 
-	// Each entry in the IPv4 cache contains an enabled portid
-	printf("Putting ports into ipv4 address cache randomly\n");
-
-	for(i = 0; i < IPv4_CACHE_CAP; i++) {
-		(*ipv4_cache)[i] = port_arr[rand() % num_active_ports];
+	/** < Fill 3% of the in the direct table with pointers */
+	for(i = 0; i < (3 * (1 << 24)) / 100; i ++) {
+		int invalidate_idx = rand() % (1 << 24);
+		ipv4_table->tbl_24[invalidate_idx] = (0x8000) | 
+			rand() % IPv4_TABLE_LONG_CAP;
 	}
 }

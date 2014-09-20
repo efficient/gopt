@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <assert.h>
 
+#include <rte_byteorder.h>
 #include <rte_common.h>
 #include <rte_cycles.h>
 #include <rte_prefetch.h>
@@ -21,7 +22,6 @@
 #include "util.h"
 #include "ipv4.h"
 
-#define GOTO 0
 
 // sizeof(rte_mbuf) = 64, RTE_PKTMBUF_HEADROOM = 128
 #define MBUF_SIZE (2048 + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)
@@ -107,5 +107,6 @@ void micro_sleep(double us, double cycles_to_ns_fac);
 
 void print_ether_hdr(struct ether_hdr *eth_hdr);
 
+inline int is_valid_ipv4_pkt(struct ipv4_hdr *pkt, uint32_t link_len);
 float get_sleep_time(void);
 

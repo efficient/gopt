@@ -76,6 +76,11 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
 		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 
+		if(is_valid_ipv4_pkt(ip_hdr, pkts[batch_index]->pkt.pkt_len) < 0) {
+			rte_pktmbuf_free(pkts[batch_index]);
+			continue;
+		}	
+
 		/** < Timestamp some pkts before putting on work queue 
 		  *   This works because the src mac address for most packets
 		  *   is 0xdeadbeef */
@@ -85,12 +90,10 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 			srv_tsc[0] = rte_rdtsc();
 		}
 
-		/** < Swap src and dst mac */
-		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
 		src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
-		swap_mac(dst_mac_ptr, src_mac_ptr);
+		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
+		swap_mac(src_mac_ptr, dst_mac_ptr);
 
-		/** < RSS fields */
 		dst_ip = ip_hdr->src_addr;
 
 		lc_wmq->reqs[head & WM_QUEUE_CAP_] = dst_ip;

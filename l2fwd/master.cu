@@ -14,13 +14,21 @@ extern "C" {
 }
 
 __global__ void
-ipv4Gpu(int *req, uint8_t *resp, uint8_t *ipv4_cache, int num_reqs)
+ipv4Gpu(int *req, int *resp, 
+	int *tbl_24, int *tbl_long,
+	int num_reqs)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < num_reqs) {
-		int ip_addr = req[i];
-		resp[i] = ipv4_cache[ip_addr & IPv4_CACHE_CAP_];
+		uint32_t dst_ip = req[i];
+		int dst_port = tbl_24[dst_ip >> 8];
+
+		if(dst_port & 0x8000) {
+			dst_port = tbl_long[(dst_port & 0x7fff) << 8 | (dst_port & 0xff)];
+		}
+
+		resp[i] = dst_port;
 	}
 }
 
@@ -29,9 +37,9 @@ ipv4Gpu(int *req, uint8_t *resp, uint8_t *ipv4_cache, int num_reqs)
  * 		 is an active worker.
  */
 void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
-	int *h_reqs, int *d_reqs,						/**< Kernel inputs */
-	uint8_t *h_resps, uint8_t *d_resps,			/**< Kernel outputs */
-	uint8_t *d_ipv4_cache,
+	int *h_reqs, int *d_reqs,				/** < Kernel inputs */
+	int *h_resps, int *d_resps,				/** < Kernel outputs */
+	int *d_tbl_24, int *d_tbl_long,			/** < IPv4 lookup tables */
 	int num_workers, int *worker_lcores)
 {
 	assert(num_workers != 0);
@@ -101,12 +109,12 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
 	
 		ipv4Gpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
-			d_resps, d_ipv4_cache, nb_req);
+			d_resps, d_tbl_24, d_tbl_long, nb_req);
 		err = cudaGetLastError();
 		CPE(err != cudaSuccess, "Failed to launch ipv4Gpu kernel\n");
 
 		/** < Copy responses from device */
-		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(uint8_t),
+		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(int),
 			cudaMemcpyDeviceToHost, my_stream);
 		CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
 
@@ -164,8 +172,10 @@ int main(int argc, char **argv)
 
 	/** < CUDA buffers */
 	int *h_reqs, *d_reqs;
-	uint8_t *h_resps, *d_resps;	
-	uint8_t *h_ipv4_cache, *d_ipv4_cache;
+	int *h_resps, *d_resps;	
+	int *d_tbl_24, *d_tbl_long;
+
+	struct dir_ipv4_table *ipv4_table;
 
 	/**< Get the worker lcore mask */
 	while ((c = getopt (argc, argv, "c:")) != -1) {
@@ -175,20 +185,20 @@ int main(int argc, char **argv)
 				lcore_mask = strtol(optarg, NULL, 16);
 				break;
 			default:
-				red_printf("\tGPU master: I need coremask. Exiting!\n");
+				blue_printf("\tGPU master: I need coremask. Exiting!\n");
 				exit(-1);
 		}
 	}
 
 	assert(lcore_mask != -1);
-	red_printf("\tGPU master: got lcore_mask: %x\n", lcore_mask);
+	blue_printf("\tGPU master: got lcore_mask: %x\n", lcore_mask);
 
 	/** < Create a CUDA stream */
 	err = cudaStreamCreate(&my_stream);
 	CPE(err != cudaSuccess, "Failed to create cudaStream\n");
 
 	/** < Allocate hugepages for the shared queues */
-	red_printf("\tGPU master: creating worker-master shm queues\n");
+	blue_printf("\tGPU master: creating worker-master shm queues\n");
 	int wm_queue_bytes = M_2;
 	while(wm_queue_bytes < WM_MAX_LCORE * sizeof(struct wm_queue)) {
 		wm_queue_bytes += M_2;
@@ -206,40 +216,53 @@ int main(int argc, char **argv)
 		assert((c1 % 64 == 0) && (c2 % 64 == 0) && (c3 % 64 == 0));
 	}
 
-	red_printf("\tGPU master: creating worker-master shm queues done\n");
+	blue_printf("\tGPU master: creating worker-master shm queues done\n");
 
 	/** < Allocate buffers for requests from all workers*/
-	red_printf("\tGPU master: creating buffers for requests\n");
+	blue_printf("\tGPU master: creating buffers for requests\n");
 	int reqs_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(int);
 	err = cudaMallocHost((void **) &h_reqs, reqs_buf_size);
+	CPE(err != cudaSuccess, "Failed to cudaMallocHost req buffer\n");
 	err = cudaMalloc((void **) &d_reqs, reqs_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMalloc req buffer\n");
 
 	/** < Allocate buffers for responses for all workers */
-	red_printf("\tGPU master: creating buffers for responses\n");
-	int resps_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint8_t);
+	blue_printf("\tGPU master: creating buffers for responses\n");
+	int resps_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(int);
 	err = cudaMallocHost((void **) &h_resps, resps_buf_size);
+	CPE(err != cudaSuccess, "Failed to cudaMallocHost resp buffers\n");
 	err = cudaMalloc((void **) &d_resps, resps_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMalloc resp buffers\n");
 
 	/** < Create the IPv4 cache and copy it over */
-	red_printf("\tGPU master: creating IPv4 cache\n");
-	ipv4_cache_init(&h_ipv4_cache, IPv4_PORT_MASK);
+	blue_printf("\tGPU master: creating IPv4 lookup table\n");
 
-	int ipv4_buf_size = IPv4_CACHE_CAP * sizeof(uint8_t);
-	err = cudaMalloc((void **) &d_ipv4_cache, ipv4_buf_size);
-	cudaMemcpy(d_ipv4_cache, h_ipv4_cache, ipv4_buf_size, 
+	ipv4_table = (struct dir_ipv4_table *) malloc(sizeof(struct dir_ipv4_table));
+	dir_ipv4_init(ipv4_table, IPv4_PORT_MASK);
+
+	int tbl_24_bytes = (1 << 24) * sizeof(int);
+	int tbl_long_bytes = IPv4_TABLE_LONG_CAP * sizeof(int);
+	
+	blue_printf("\tGPU master: alloc-ing DIR-24 tables on device\n");
+	err = cudaMalloc((void **) &d_tbl_24, tbl_24_bytes);
+	CPE(err != cudaSuccess, "Failed to cudaMalloc tbl_24\n");
+	cudaMemcpy(d_tbl_24, ipv4_table->tbl_24, tbl_24_bytes, 
+		cudaMemcpyHostToDevice);
+
+	err = cudaMalloc((void **) &d_tbl_long, tbl_long_bytes);
+	CPE(err != cudaSuccess, "Failed to cudaMalloc tbl_long\n");
+	cudaMemcpy(d_tbl_long, ipv4_table->tbl_long, tbl_long_bytes, 
 		cudaMemcpyHostToDevice);
 
 	int num_workers = bitcount(lcore_mask);
 	int *worker_lcores = get_active_bits(lcore_mask);
 	
 	/** < Launch the GPU master */
-	red_printf("\tGPU master: launching GPU code\n");
+	blue_printf("\tGPU master: launching GPU code\n");
 	master_gpu(wmq, my_stream,
 		h_reqs, d_reqs, 
 		h_resps, d_resps, 
-		d_ipv4_cache,
+		d_tbl_24, d_tbl_long,
 		num_workers, worker_lcores);
 	
 }

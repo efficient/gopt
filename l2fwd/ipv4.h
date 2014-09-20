@@ -4,16 +4,18 @@
 #include <assert.h>
 
 #include "city.h"
+#include "util.h"
 
-#define IPv4_CACHE_KEY 2
+#define IPv4_TABLE_24_KEY 2
+#define IPv4_TABLE_LONG_KEY 3
 
-#define IPv4_CACHE_CAP (2 * 1024 * 1024)		// Number of IPv4 addresses cached
-#define IPv4_CACHE_CAP_ ((2 * 1024 * 1024) - 1)
+#define IPv4_TABLE_LONG_CAP (64 * 1024 * 1024)		// 256 MB
 
-#define IPv4_PORT_MASK 0xf		// Same as XIA_R2_PORT_MASK in main.h
+#define IPv4_PORT_MASK 0xf
 
-/**
- * Initialize an array of IPv4_CACHE_CAP integers, each randomly chosen
- * from the set bits of portmask
- */
-void ipv4_cache_init(uint8_t **ipv4_cache, int portmask);
+struct dir_ipv4_table {
+	int *tbl_24;
+	int *tbl_long;
+};
+
+void dir_ipv4_init(struct dir_ipv4_table *ipv4_table, int portmask);

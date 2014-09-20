@@ -17,10 +17,11 @@ blue "Re-compiling DPDK code"
 make clean
 make
 
-blue "Removing DPDK's hugepages and shm keys 1 and 2"
+blue "Removing DPDK's hugepages and shm key 1, 2, 3"
 sudo rm -rf /mnt/huge/*
 sudo ipcrm -M 1			# WM_QUEUE_KEY
-sudo ipcrm -M 2			# IPv4_CACHE_KEY
+sudo ipcrm -M 2			# IPv4_TABLE_24_KEY
+sudo ipcrm -M 3			# IPv4_TABLE_LONG_KEY
 
 blue "Running gpu master on core 15 and sleeping for 2 seconds"
 sudo taskset -c 14 ./master -c $worker_core_mask &

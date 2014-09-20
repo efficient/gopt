@@ -3,7 +3,7 @@
 #define WM_QUEUE_CAP_ 16383
 
 // Maximum outstanding packets maintained by a worker for the master
-#define WM_QUEUE_THRESH 2048
+#define WM_QUEUE_THRESH 1024
 #define WM_QUEUE_KEY 1
 
 /**< Maximum worker lcores supported by the master */
@@ -18,7 +18,7 @@ struct wm_queue
 {
 	void *mbufs[WM_QUEUE_CAP];			/** < Book-keeping by worker thread */
 	int reqs[WM_QUEUE_CAP];		/** < Input by worker thread */
-	uint8_t resps[WM_QUEUE_CAP];		/** < Output by master thread */
+	int resps[WM_QUEUE_CAP];		/** < Output by master thread */
 
 	/** < All counters should be on separate cachelines */
 	long long head;		/** < Number of packets in queue */
