@@ -1,9 +1,58 @@
-#include "common.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include <assert.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
+#include <cuda_runtime.h>
+#include <time.h>
+#include "common.h"
+
+extern "C" {
+#include "city.h"
+}
 
 cudaStream_t myStream;
+
+/** < Functions for hashing from within a CUDA kernel */
+static const uint32_t cu_c1 = 0xcc9e2d51;
+static const uint32_t cu_c2 = 0x1b873593;
+
+__device__ uint32_t cu_Rotate32(uint32_t val, int shift) 
+{
+	return shift == 0 ? val : ((val >> shift) | (val << (32 - shift)));
+}
+
+__device__ uint32_t cu_Mur(uint32_t a, uint32_t h) 
+{
+	a *= cu_c1;
+	a = cu_Rotate32(a, 17);
+	a *= cu_c2;
+	h ^= a;
+	h = cu_Rotate32(h, 19);
+	return h * 5 + 0xe6546b64;
+}
+
+__device__ uint32_t cu_fmix(uint32_t h)
+{
+	h ^= h >> 16;
+	h *= 0x85ebca6b;
+	h ^= h >> 13;
+	h *= 0xc2b2ae35;
+	h ^= h >> 16;
+	return h;
+}
+
+__device__ uint32_t Hash32Len0to4(char *s, int len) 
+{
+	uint32_t b = 0;
+	uint32_t c = 9;
+	int i;
+	for(i = 0; i < len; i++) {
+		b = b * cu_c1 + s[i];
+		c ^= b;
+	}
+	return cu_fmix(cu_Mur(b, cu_Mur(len, c)));
+}
+/** < Hashing functions for CUDA kernels end here */
 
 __global__ void
 vectorAdd(int *pkts, int num_pkts)
@@ -11,7 +60,7 @@ vectorAdd(int *pkts, int num_pkts)
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < num_pkts) {
-		pkts[i] = (pkts[i] + 1) * pkts[i];
+		pkts[i] = Hash32Len0to4((char *) &pkts[i], 4);
 	}
 }
 
@@ -22,7 +71,7 @@ double cpu_run(int *pkts, int num_pkts)
 	clock_gettime(CLOCK_REALTIME, &start);
 
 	for(i = 0; i < num_pkts; i += 1) {
-		pkts[i] = (pkts[i] + 1) * pkts[i];
+		pkts[i] = CityHash32((char *) &pkts[i], 4);
 	}
 
 	clock_gettime(CLOCK_REALTIME, &end);
@@ -135,8 +184,8 @@ int main(int argc, char *argv[])
 	err = cudaMalloc((void **) &d_pkts_gpu, MAX_PKTS * sizeof(int));
 
 	/** <Test for different batch sizes */
-	assert(MAX_PKTS % 8 == 0);
-	for(int num_pkts = 8; num_pkts < MAX_PKTS; num_pkts += 8) {
+	assert(MAX_PKTS % 128 == 0);
+	for(int num_pkts = 128; num_pkts < MAX_PKTS; num_pkts += 128) {
 
 		double cpu_time = 0, gpu_time = 0;
 
