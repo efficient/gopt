@@ -2,10 +2,8 @@
 #include <assert.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
-#include <unistd.h>
 
-#define CPU_GHZ 2.7		// xia-router2
-#define COMPUTE 20
+cudaStream_t myStream;
 
 __global__ void
 vectorAdd(int *pkts, int num_pkts)
@@ -13,10 +11,7 @@ vectorAdd(int *pkts, int num_pkts)
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < num_pkts) {
-		int j;
-		for(j = 0; j < COMPUTE; j ++) {
-			pkts[i] = (pkts[i] + 1) * pkts[i];
-		}
+		pkts[i] = (pkts[i] + 1) * pkts[i];
 	}
 }
 
@@ -26,18 +21,9 @@ double cpu_run(int *pkts, int num_pkts)
 	struct timespec start, end;
 	clock_gettime(CLOCK_REALTIME, &start);
 
-	long long c1 = get_cycles();
-
 	for(i = 0; i < num_pkts; i += 1) {
-		int j;
-		for(j = 0; j < COMPUTE; j ++) {
-			pkts[i] = (pkts[i] + 1) * pkts[i];
-		}
+		pkts[i] = (pkts[i] + 1) * pkts[i];
 	}
-
-	long long c2 = get_cycles();
-	printf("Nanoseconds per packet = %f\n", 
-		(double) (c2 - c1 - 90) / (CPU_GHZ * num_pkts));
 
 	clock_gettime(CLOCK_REALTIME, &end);
 	double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
@@ -45,75 +31,131 @@ double cpu_run(int *pkts, int num_pkts)
 	return time;
 }
 
-double gpu_run(int *h_pkts, int num_pkts)
+#if INCLUDE_COPY_TIME == 1
+/**< Include copy overhead in measurement */
+double gpu_run(int *h_pkts, int *d_pkts, int num_pkts)
 {
 	struct timespec start, end;
-	int *d_pkts = NULL;
 	int err = cudaSuccess;
 
-	err = cudaMalloc((void **) &d_pkts, num_pkts * sizeof(int));
-	CPE(err != cudaSuccess, "Failed to cudaMalloc\n", -1);
-
-	// Start the clock
 	clock_gettime(CLOCK_REALTIME, &start);
-	
-	err = cudaMemcpy(d_pkts, h_pkts, num_pkts * sizeof(int), cudaMemcpyHostToDevice);
+
+	/**< Copy packets to device */
+	err = cudaMemcpyAsync(d_pkts, h_pkts, num_pkts * sizeof(int), 
+		cudaMemcpyHostToDevice, myStream);
 	CPE(err != cudaSuccess, "Failed to copy to device memory\n", -1);
 
-	// Launch the Vector Add CUDA Kernel
+	/**< Kernel launch */
+	int threadsPerBlock = 256;
+	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
+
+	vectorAdd<<<blocksPerGrid, threadsPerBlock, 0, myStream>>>(d_pkts, 
+		num_pkts);
+	err = cudaGetLastError();
+	CPE(err != cudaSuccess, "Failed to launch vectorAdd kernel\n", -1);
+
+	/**< Copy back the results */
+	err = cudaMemcpyAsync(h_pkts, d_pkts, num_pkts * sizeof(int),
+		cudaMemcpyDeviceToHost, myStream);
+	CPE(err != cudaSuccess, "Failed to copy C from device to host\n", -1);
+
+	/**< Wait for all stream ops to complete */
+	cudaStreamSynchronize(myStream);
+
+	clock_gettime(CLOCK_REALTIME, &end);
+	double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
+		(end.tv_sec - start.tv_sec);
+
+	return time;
+}
+
+#else
+/**< Don't include copy overhead in measurement */
+double gpu_run(int *h_pkts, int *d_pkts, int num_pkts)
+{
+	struct timespec start, end;
+	int err = cudaSuccess;
+
+
+	/**< Copy packets to device */
+	err = cudaMemcpy(d_pkts, h_pkts, num_pkts * sizeof(int), 
+		cudaMemcpyHostToDevice);
+	CPE(err != cudaSuccess, "Failed to copy to device memory\n", -1);
+
+	/**< Memcpy has completed: start timer */
+	clock_gettime(CLOCK_REALTIME, &start);
+
+	/**< Kernel launch */
 	int threadsPerBlock = 256;
 	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
 
 	vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_pkts, num_pkts);
 	err = cudaGetLastError();
 	CPE(err != cudaSuccess, "Failed to launch vectorAdd kernel\n", -1);
+	cudaDeviceSynchronize();
 
-	// Copy back the result
-	err = cudaMemcpy(h_pkts, d_pkts, num_pkts * sizeof(int), cudaMemcpyDeviceToHost);
+	/**< Kernel execution finished: stop timer */
+	clock_gettime(CLOCK_REALTIME, &end);
+
+	/**< Copy back the results */
+	err = cudaMemcpy(h_pkts, d_pkts, num_pkts * sizeof(int),
+		cudaMemcpyDeviceToHost);
 	CPE(err != cudaSuccess, "Failed to copy C from device to host\n", -1);
 
-	clock_gettime(CLOCK_REALTIME, &end);
 	double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
 		(end.tv_sec - start.tv_sec);
 
-	// Free device global memory
-	err = cudaFree(d_pkts);
-	CPE(err != cudaSuccess, "Failed to cudaFree\n", -1);
-
 	return time;
 }
+
+#endif
 
 int main(int argc, char *argv[])
 {
 	int err = cudaSuccess;
 	int i;
+	int *h_pkts_cpu;
+	/** <Separate packet buffer to compare GPU's result with the CPU's */
+	int *h_pkts_gpu, *d_pkts_gpu;
 
 	srand(time(NULL));
 
 	printDeviceProperties();
 
-	for(int num_pkts = 8; num_pkts < 8 * 1024; num_pkts += 8) {
+	/** <Initialize a cudaStream for async calls */
+	err = cudaStreamCreate(&myStream);
+	CPE(err != cudaSuccess, "Failed to create cudaStream\n", -1);
 
-		int *h_pkts_cpu = (int *) malloc(num_pkts * sizeof(int));
-		int *h_pkts_gpu = (int *) malloc(num_pkts * sizeof(int));
-		double cpu_time, gpu_time;
 
-		// Verify that allocations succeeded
-		if (h_pkts_cpu == NULL || h_pkts_gpu == NULL) {
-			fprintf(stderr, "Failed to allocate host mem!\n");
-			exit(-1);
-		}
-		
-		// Initialize packets
+	/** <Initialize the packet arrays for CPU and GPU code */
+	h_pkts_cpu =  (int *) malloc(MAX_PKTS * sizeof(int));
+
+	/** <The host packet-array for GPU code should be pinned */
+	err = cudaMallocHost((void **) &h_pkts_gpu, MAX_PKTS * sizeof(int));
+	err = cudaMalloc((void **) &d_pkts_gpu, MAX_PKTS * sizeof(int));
+
+	/** <Test for different batch sizes */
+	assert(MAX_PKTS % 8 == 0);
+	for(int num_pkts = 8; num_pkts < MAX_PKTS; num_pkts += 8) {
+
+		double cpu_time = 0, gpu_time = 0;
+
+		/** <Initialize packets */
 		for(i = 0; i < num_pkts; i ++) {
 			h_pkts_cpu[i] = rand();
 			h_pkts_gpu[i] = h_pkts_cpu[i];
 		}
 	
-		cpu_time = cpu_run(h_pkts_cpu, num_pkts);
-		gpu_time = gpu_run(h_pkts_gpu, num_pkts);
+		/** Perform several measurements for averaging */
+		for(i = 0; i < ITERS; i ++) {
+			cpu_time += cpu_run(h_pkts_cpu, num_pkts);
+			gpu_time += gpu_run(h_pkts_gpu, d_pkts_gpu, num_pkts);
+		}
+		
+		cpu_time = cpu_time / ITERS;
+		gpu_time = gpu_time / ITERS;
 	
-		// Verify that the result vector is correct
+		/** <Verify that the result vector is correct */
 		for(int i = 0; i < num_pkts; i ++) {
 			if (h_pkts_cpu[i] != h_pkts_gpu[i]) {
 				fprintf(stderr, "Result verification failed at element %d!\n", i);
@@ -123,15 +165,25 @@ int main(int argc, char *argv[])
 		}
 	
 		printf("Test PASSED for num_pkts = %d\n", num_pkts);
+		printf("CPU: time per packet %.2f ns\n", 
+			(cpu_time * 1000000000) / num_pkts);
+		printf("GPU: time per packet %.2f ns\n", 
+			(gpu_time * 1000000000) / num_pkts);
 
-		// Emit the results to stderr. Use only space for delimiting
+		/** <Emit the results to stderr. Use only space for delimiting */
 		fprintf(stderr, "Batch size  %d CPU %f GPU %f CPU/GPU %f\n",
 			num_pkts, cpu_time, gpu_time, cpu_time / gpu_time);
+
+		printf("\n");
 	
-		// Free host memory
-		free(h_pkts_cpu);
-		free(h_pkts_gpu);
 	}
+
+	// Free device memory
+	cudaFree(d_pkts_gpu);
+
+	// Free host memory
+	free(h_pkts_cpu);
+	cudaFreeHost(h_pkts_gpu);
 
 	// Reset the device and exit
 	err = cudaDeviceReset();
