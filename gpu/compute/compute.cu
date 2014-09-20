@@ -175,7 +175,6 @@ int main(int argc, char *argv[])
 	err = cudaStreamCreate(&myStream);
 	CPE(err != cudaSuccess, "Failed to create cudaStream\n", -1);
 
-
 	/** <Initialize the packet arrays for CPU and GPU code */
 	h_pkts_cpu =  (int *) malloc(MAX_PKTS * sizeof(int));
 
