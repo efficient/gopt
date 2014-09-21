@@ -11,7 +11,7 @@ void cuckoo_init(uint32_t **mac_addrs,
 	uint32_t rand_1, rand_2;
 	uint32_t mac_32;
 
-	int bkt_1, bkt_2, bkt, slot_i;
+	int bkt, slot_i;
 
 	int num_active_ports = bitcount(portmask);
 	int *port_arr = get_active_bits(portmask);
@@ -44,15 +44,9 @@ void cuckoo_init(uint32_t **mac_addrs,
 		(*mac_addrs)[i] = mac_32;
 
 		// Choose one of the two candidate buckets randomly
-		bkt_1 = CityHash32((char *) &mac_32, 4) & NUM_BKT_;
-		bkt_2 = CityHash32((char *) &bkt_1, 4) & NUM_BKT_;
-
+		bkt = CityHash32((char *) &mac_32, 4) & NUM_BKT_;
 		if(rand() % 2 != 0) {
-			printf("Inserting mac %u in bkt_1. bkt_1 = %d, bkt_2 = %d\n", mac_32, bkt_1, bkt_2);
-			bkt = bkt_1;
-		} else {
-			printf("Inserting mac %u in bkt_2. bkt_1 = %d, bkt_2 = %d\n", mac_32, bkt_1, bkt_2);
-			bkt = bkt_2;
+			bkt = CityHash32((char *) &bkt, 4) & NUM_BKT_;
 		}
 
 		int success = 0;

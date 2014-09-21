@@ -62,9 +62,9 @@ cuckooGpu(uint32_t *req, int *resp, struct cuckoo_bucket *ht_index, int num_reqs
 
 	if (i < num_reqs) {
 		int bkt_1, bkt_2, fwd_port = -1;
+
 		uint32_t dst_mac = req[i];
 		bkt_1 = cu_Hash32Len0to4((char *) &dst_mac, 4) & NUM_BKT_;
-		bkt_2 = cu_Hash32Len0to4((char *) &bkt_1, 4) & NUM_BKT_;
 
 		for(int j = 0; j < 8; j ++) {
 			uint32_t slot_mac = ht_index[bkt_1].slot[j].mac;
@@ -77,6 +77,7 @@ cuckooGpu(uint32_t *req, int *resp, struct cuckoo_bucket *ht_index, int num_reqs
 		}
 
 		if(fwd_port == -1) {
+			bkt_2 = cu_Hash32Len0to4((char *) &bkt_1, 4) & NUM_BKT_;
 
 			for(int j = 0; j < 8; j ++) {
 				uint32_t slot_mac = ht_index[bkt_2].slot[j].mac;
