@@ -47,6 +47,9 @@ void gpu_run(int *h_A, int *h_B, int *h_C, int N)
 	err = cudaMalloc((void **) &d_C, N * sizeof(int));
 	CPE(err != cudaSuccess, "Failed to cudaMalloc\n", -1);
 
+	// Start the clock
+	clock_gettime(CLOCK_REALTIME, &start);
+
 	err = cudaMemcpy(d_A, h_A, N * sizeof(int), cudaMemcpyHostToDevice);
 	err = cudaMemcpy(d_B, h_B, N * sizeof(int), cudaMemcpyHostToDevice);
 	CPE(err != cudaSuccess, "Failed to copy to device memory\n", -1);
@@ -56,16 +59,8 @@ void gpu_run(int *h_A, int *h_B, int *h_C, int N)
 	int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
 	printf("CUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid, threadsPerBlock);
 
-	// Start the clock
-	clock_gettime(CLOCK_REALTIME, &start);
-
 	vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, d_B, d_C, N);
 	cudaDeviceSynchronize();
-
-	clock_gettime(CLOCK_REALTIME, &end);
-	double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
-		(end.tv_sec - start.tv_sec);
-	printf("GPU time = %f\n", time);
 
 	err = cudaGetLastError();
 	CPE(err != cudaSuccess, "Failed to launch vectorAdd kernel\n", -1);
@@ -74,6 +69,11 @@ void gpu_run(int *h_A, int *h_B, int *h_C, int N)
 	printf("Copy output data from the CUDA device to the host memory\n");
 	err = cudaMemcpy(h_C, d_C, N * sizeof(int), cudaMemcpyDeviceToHost);
 	CPE(err != cudaSuccess, "Failed to copy C from device to host\n", -1);
+
+	clock_gettime(CLOCK_REALTIME, &end);
+	double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
+		(end.tv_sec - start.tv_sec);
+	printf("GPU time = %f\n", time);
 
 	// Free device global memory
 	err = cudaFree(d_A);
