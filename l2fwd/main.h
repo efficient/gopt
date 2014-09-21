@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <assert.h>
 
-#include <rte_byteorder.h>
 #include <rte_common.h>
 #include <rte_cycles.h>
 #include <rte_prefetch.h>
@@ -20,7 +19,7 @@
 #include "fpp.h"
 #include "worker-master.h"
 #include "util.h"
-#include "ipv4.h"
+#include "cuckoo.h"
 
 
 // sizeof(rte_mbuf) = 64, RTE_PKTMBUF_HEADROOM = 128
@@ -77,6 +76,7 @@ struct lcore_port_info {
 	struct rte_mbuf *mbufs[MAX_SRV_BURST];
 	int nb_buf;
 	int nb_tx;
+	int nb_tx_fail;			// Port not found for a dst mac
 	int nb_rx;
 	int nb_tx_all_ports;				// Use @port 0
 
@@ -101,12 +101,12 @@ int get_socket_id_from_macaddr(int port_id);
 void check_all_ports_link_status(uint8_t port_num, int portmask);
 
 void run_server(volatile struct wm_queue *wmq);
-void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool);
+void run_client(int client_id, uint32_t *mac_addrs,
+	struct rte_mempool **l2fwd_pktmbuf_pool);
 
 void micro_sleep(double us, double cycles_to_ns_fac);
 
 void print_ether_hdr(struct ether_hdr *eth_hdr);
 
-inline int is_valid_ipv4_pkt(struct ipv4_hdr *pkt, uint32_t link_len);
 float get_sleep_time(void);
 

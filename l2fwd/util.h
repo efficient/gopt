@@ -66,8 +66,8 @@ inline uint32_t fastrand(uint64_t* seed);
 int bitcount(int n);
 int *get_active_bits(int mask);
 
-inline void set_mac(uint8_t *mac_ptr, ULL mac_addr);
-inline ULL get_mac(uint8_t *mac_ptr);
+inline void set_mac(uint8_t *mac_ptr, uint32_t mac_addr);
+inline uint32_t get_mac(uint8_t *mac_ptr);
 inline void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr);
 
 void print_mac_arr(uint8_t *mac);

@@ -154,25 +154,21 @@ int *get_active_bits(int mask)
 	return active_bits;
 }
 
-inline void set_mac(uint8_t *mac_ptr, ULL mac_addr)
+inline void set_mac(uint8_t *mac_ptr, uint32_t mac_addr)
 {
    	mac_ptr[0] = mac_addr & 0xFF;
     mac_ptr[1] = (mac_addr >> 8) & 0xFF;
     mac_ptr[2] = (mac_addr >> 16) & 0xFF;
     mac_ptr[3] = (mac_addr >> 24) & 0xFF;
-    mac_ptr[4] = (mac_addr >> 32) & 0xFF;
-    mac_ptr[5] = (mac_addr >> 40) & 0xFF;
 }
 
-inline ULL get_mac(uint8_t *mac_ptr)
+inline uint32_t get_mac(uint8_t *mac_ptr)
 {
-	ULL ret = 0;
+	uint32_t ret = 0;
 	ret = mac_ptr[0] + 
-		((ULL) mac_ptr[1] << 8) + 
-		((ULL) mac_ptr[2] << 16) +
-		((ULL) mac_ptr[3] << 24) +
-		((ULL) mac_ptr[4] << 32) +
-		((ULL) mac_ptr[5] << 40);
+		((uint32_t) mac_ptr[1] << 8) + 
+		((uint32_t) mac_ptr[2] << 16) +
+		((uint32_t) mac_ptr[3] << 24);
 
 	return ret;
 }

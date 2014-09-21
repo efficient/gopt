@@ -17,7 +17,7 @@
 struct wm_queue
 {
 	void *mbufs[WM_QUEUE_CAP];			/** < Book-keeping by worker thread */
-	int reqs[WM_QUEUE_CAP];		/** < Input by worker thread */
+	uint32_t reqs[WM_QUEUE_CAP];		/** < Input by worker thread */
 	int resps[WM_QUEUE_CAP];		/** < Output by master thread */
 
 	/** < All counters should be on separate cachelines */

@@ -8,27 +8,88 @@
 // nvcc assumes that all header files are C++ files. Tell it
 // that these are C header files
 extern "C" {
-#include "ipv4.h"
+#include "cuckoo.h"
 #include "worker-master.h"
 #include "util.h"
 }
 
+/** < Functions for hashing from within a CUDA kernel */
+static const uint32_t cu_c1 = 0xcc9e2d51;
+static const uint32_t cu_c2 = 0x1b873593;
+
+__device__ uint32_t cu_Rotate32(uint32_t val, int shift) 
+{
+	return shift == 0 ? val : ((val >> shift) | (val << (32 - shift)));
+}
+
+__device__ uint32_t cu_Mur(uint32_t a, uint32_t h) 
+{
+	a *= cu_c1;
+	a = cu_Rotate32(a, 17);
+	a *= cu_c2;
+	h ^= a;
+	h = cu_Rotate32(h, 19);
+	return h * 5 + 0xe6546b64;
+}
+
+__device__ uint32_t cu_fmix(uint32_t h)
+{
+	h ^= h >> 16;
+	h *= 0x85ebca6b;
+	h ^= h >> 13;
+	h *= 0xc2b2ae35;
+	h ^= h >> 16;
+	return h;
+}
+
+__device__ uint32_t cu_Hash32Len0to4(char *s, int len) 
+{
+	uint32_t b = 0;
+	uint32_t c = 9;
+	int i;
+	for(i = 0; i < len; i++) {
+		b = b * cu_c1 + s[i];
+		c ^= b;
+	}
+	return cu_fmix(cu_Mur(b, cu_Mur(len, c)));
+}
+/** < Hashing functions for CUDA kernels end here */
+
 __global__ void
-ipv4Gpu(int *req, int *resp, 
-	int *tbl_24, int *tbl_long,
-	int num_reqs)
+cuckooGpu(uint32_t *req, int *resp, struct cuckoo_bucket *ht_index, int num_reqs)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < num_reqs) {
-		uint32_t dst_ip = req[i];
-		int dst_port = tbl_24[dst_ip >> 8];
+		int bkt_1, bkt_2, fwd_port = -1;
+		uint32_t dst_mac = req[i];
+		bkt_1 = cu_Hash32Len0to4((char *) &dst_mac, 4) & NUM_BKT_;
+		bkt_2 = cu_Hash32Len0to4((char *) &bkt_1, 4) & NUM_BKT_;
 
-		if(dst_port & 0x8000) {
-			dst_port = tbl_long[(dst_port & 0x7fff) << 8 | (dst_port & 0xff)];
+		for(int j = 0; j < 8; j ++) {
+			uint32_t slot_mac = ht_index[bkt_1].slot[j].mac;
+			int slot_port = ht_index[bkt_1].slot[j].port;
+
+			if(slot_mac == dst_mac) {
+				fwd_port = slot_port;
+				// Don't break: avoid divergence
+			}
 		}
 
-		resp[i] = dst_port;
+		if(fwd_port == -1) {
+
+			for(int j = 0; j < 8; j ++) {
+				uint32_t slot_mac = ht_index[bkt_2].slot[j].mac;
+				int slot_port = ht_index[bkt_2].slot[j].port;
+
+				if(slot_mac == dst_mac) {
+					fwd_port = slot_port;
+					// Don't break: avoid divergence
+				}
+			}
+		}
+
+		resp[i] = fwd_port;
 	}
 }
 
@@ -37,9 +98,9 @@ ipv4Gpu(int *req, int *resp,
  * 		 is an active worker.
  */
 void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
-	int *h_reqs, int *d_reqs,				/** < Kernel inputs */
+	uint32_t *h_reqs, uint32_t *d_reqs,				/** < Kernel inputs */
 	int *h_resps, int *d_resps,				/** < Kernel outputs */
-	int *d_tbl_24, int *d_tbl_long,			/** < IPv4 lookup tables */
+	struct cuckoo_bucket *d_ht_index,		/** < MAC lookup index */
 	int num_workers, int *worker_lcores)
 {
 	assert(num_workers != 0);
@@ -88,7 +149,7 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 			// Iterate over the new packets
 			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
 				int q_i = i & WM_QUEUE_CAP_;	// Offset in this wrkr's queue
-				int req = lc_wmq->reqs[q_i];
+				uint32_t req = lc_wmq->reqs[q_i];
 
 				h_reqs[nb_req] = req;			
 				nb_req ++;
@@ -100,7 +161,7 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		}
 
 		/**< Copy requests to device */
-		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(int), 
+		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(uint32_t), 
 			cudaMemcpyHostToDevice, my_stream);
 		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
 
@@ -108,10 +169,10 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		int threadsPerBlock = 256;
 		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
 	
-		ipv4Gpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
-			d_resps, d_tbl_24, d_tbl_long, nb_req);
+		cuckooGpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
+			d_resps, d_ht_index, nb_req);
 		err = cudaGetLastError();
-		CPE(err != cudaSuccess, "Failed to launch ipv4Gpu kernel\n");
+		CPE(err != cudaSuccess, "Failed to launch cuckooGpu kernel\n");
 
 		/** < Copy responses from device */
 		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(int),
@@ -171,11 +232,11 @@ int main(int argc, char **argv)
 	volatile struct wm_queue *wmq;
 
 	/** < CUDA buffers */
-	int *h_reqs, *d_reqs;
+	uint32_t *h_reqs, *d_reqs;
 	int *h_resps, *d_resps;	
-	int *d_tbl_24, *d_tbl_long;
 
-	struct dir_ipv4_table *ipv4_table;
+	struct cuckoo_bucket *h_ht_index, *d_ht_index;
+	uint32_t *mac_addrs;
 
 	/**< Get the worker lcore mask */
 	while ((c = getopt (argc, argv, "c:")) != -1) {
@@ -220,7 +281,7 @@ int main(int argc, char **argv)
 
 	/** < Allocate buffers for requests from all workers*/
 	blue_printf("\tGPU master: creating buffers for requests\n");
-	int reqs_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(int);
+	int reqs_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint32_t);
 	err = cudaMallocHost((void **) &h_reqs, reqs_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMallocHost req buffer\n");
 	err = cudaMalloc((void **) &d_reqs, reqs_buf_size);
@@ -234,24 +295,17 @@ int main(int argc, char **argv)
 	err = cudaMalloc((void **) &d_resps, resps_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMalloc resp buffers\n");
 
-	/** < Create the IPv4 cache and copy it over */
-	blue_printf("\tGPU master: creating IPv4 lookup table\n");
+	/** < Create the cuckoo hash-index and copy it over */
+	blue_printf("\tGPU master: creating cuckoo hash index\n");
 
-	ipv4_table = (struct dir_ipv4_table *) malloc(sizeof(struct dir_ipv4_table));
-	dir_ipv4_init(ipv4_table, IPv4_PORT_MASK);
+	cuckoo_init(&mac_addrs, &h_ht_index, CUCKOO_PORT_MASK);
 
-	int tbl_24_bytes = (1 << 24) * sizeof(int);
-	int tbl_long_bytes = IPv4_TABLE_LONG_CAP * sizeof(int);
+	int ht_index_bytes = NUM_BKT * sizeof(struct cuckoo_bucket);
 	
-	blue_printf("\tGPU master: alloc-ing DIR-24 tables on device\n");
-	err = cudaMalloc((void **) &d_tbl_24, tbl_24_bytes);
-	CPE(err != cudaSuccess, "Failed to cudaMalloc tbl_24\n");
-	cudaMemcpy(d_tbl_24, ipv4_table->tbl_24, tbl_24_bytes, 
-		cudaMemcpyHostToDevice);
-
-	err = cudaMalloc((void **) &d_tbl_long, tbl_long_bytes);
-	CPE(err != cudaSuccess, "Failed to cudaMalloc tbl_long\n");
-	cudaMemcpy(d_tbl_long, ipv4_table->tbl_long, tbl_long_bytes, 
+	blue_printf("\tGPU master: alloc-ing hash index on device\n");
+	err = cudaMalloc((void **) &d_ht_index, ht_index_bytes);
+	CPE(err != cudaSuccess, "Failed to cudaMalloc ht_index\n");
+	cudaMemcpy(d_ht_index, h_ht_index, ht_index_bytes, 
 		cudaMemcpyHostToDevice);
 
 	int num_workers = bitcount(lcore_mask);
@@ -262,7 +316,7 @@ int main(int argc, char **argv)
 	master_gpu(wmq, my_stream,
 		h_reqs, d_reqs, 
 		h_resps, d_resps, 
-		d_tbl_24, d_tbl_long,
+		d_ht_index,
 		num_workers, worker_lcores);
 	
 }

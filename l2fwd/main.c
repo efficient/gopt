@@ -2,6 +2,9 @@
 int is_client = -1, client_id;
 volatile struct wm_queue *wmq;
 
+struct cuckoo_bucket *ht_index;
+uint32_t *mac_addrs;
+
 // Disable all offload features
 static const struct rte_eth_conf port_conf = {
 	.rxmode = {
@@ -48,7 +51,7 @@ static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, l2fwd_pktmbuf_pool);
+		run_client(client_id, mac_addrs, l2fwd_pktmbuf_pool);
 	} else {
 		run_server(wmq);
 	}
@@ -66,6 +69,12 @@ main(int argc, char **argv)
 	if(argc > 5) {		// Do this before eal parsing
 		is_client = 1;
 		client_id = atoi(argv[6]);
+
+		red_printf("Client getting MAC addresses for server's cuckoo index\n");
+		// The cuckoo index will map mac addresses in the "mac_addrs" array to 
+		// port-numbers from the portmask. Clients only need "mac_addrs".
+		cuckoo_init(&mac_addrs, &ht_index, XIA_R2_PORT_MASK);
+		red_printf("\tGot mac addresses!\n");
 	} else {
 		is_client = 0;
 
@@ -163,6 +172,11 @@ main(int argc, char **argv)
 		printf("Port %d, MAC: ", port_id);
 		print_mac_arr(l2fwd_ports_eth_addr[port_id].addr_bytes);
 		printf("\n");
+
+		// The server acts as an L2 switch: it should accept all dst macs
+		if(!is_client) {
+			rte_eth_promiscuous_enable(port_id);
+		}
 
 		ret = rte_eth_dev_start(port_id);
 		CPE2(ret < 0, "rte_eth_dev_start: %d, %u\n", ret, (unsigned) port_id);

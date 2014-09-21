@@ -2,20 +2,21 @@
 #define MAX_CLT_TX_BURST 16
 #define MAX_CLT_RX_BURST 16
 
-void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
+void run_client(int client_id, uint32_t *mac_addrs, 
+	struct rte_mempool **l2fwd_pktmbuf_pool)
 {
 	// [xia-router0 - xge0,1,2,3], [xia-router1 - xge0,1,2,3]
 	LL src_mac_arr[2][4] = {{0x36d3bd211b00, 0x37d3bd211b00, 0xa8d6a3211b00, 0xa9d6a3211b00},
 							{0x44d7a3211b00, 0x45d7a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00}};
 
 	// [xia-router2 - xge0,1,4,5], [xia-router2 - xge2,3,6,7]
-	LL dst_mac_arr[2][4] = {{0x6c10bb211b00, 0x6d10bb211b00, 0xc8a610ca0568, 0xc9a610ca0568},
-							{0x64d2bd211b00, 0x65d2bd211b00, 0xa2a610ca0568, 0xa3a610ca0568}};
+	/*LL dst_mac_arr[2][4] = {{0x6c10bb211b00, 0x6d10bb211b00, 0xc8a610ca0568, 0xc9a610ca0568},
+							{0x64d2bd211b00, 0x65d2bd211b00, 0xa2a610ca0568, 0xa3a610ca0568}};*/
 
 	// Even cores take xge0,1. Odd cores take xge2, xge3
 	int lcore_to_port[12] = {0, 2, 0, 2, 0, 2, 1, 3, 1, 3, 1, 3};
 
-	int i;
+	int i, mac_i;
 
 	struct rte_mbuf *rx_pkts_burst[MAX_CLT_RX_BURST];
 	struct rte_mbuf *tx_pkts_burst[MAX_CLT_TX_BURST];
@@ -49,8 +50,11 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 	int hdr_size = 36;
 
 	float sleep_us = 2;
-	
+
 	while (1) {
+
+		// Reduce the number of random accesses into the mac_addrs array
+		mac_i = rand();
 
 		for(i = 0; i < MAX_CLT_TX_BURST; i ++) {
 			tx_pkts_burst[i] = rte_pktmbuf_alloc(l2fwd_pktmbuf_pool[lcore_id]);
@@ -60,22 +64,24 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 		
 			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
+			dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
+
+			// Choose a dst mac from the ones inserted in the cuckoo index
+			set_mac(dst_mac_ptr, mac_addrs[(mac_i + i) & NUM_MAC_]);
+
+			// Occassionally, put the correct src mac address
 			if((fastrand(&rss_seed) & 0xff) == 0) {
 				set_mac(src_mac_ptr, src_mac_arr[client_id][port_id]);
 			} else {
 				set_mac(src_mac_ptr, 0xdeadbeef);
 			}
 
-			dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
-			set_mac(dst_mac_ptr, dst_mac_arr[client_id][port_id]);
-
 			eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
 	
-			/** < Choose a random dst IP address */
+			// These 3 fields of ip_hdr are required for RSS
 			ip_hdr->src_addr = fastrand(&rss_seed);
 			ip_hdr->dst_addr = fastrand(&rss_seed);
 			ip_hdr->version_ihl = 0x40 | 0x05;
-			ip_hdr->total_length = 60 - sizeof(struct ether_hdr);
 
 			tx_pkts_burst[i]->pkt.nb_segs = 1;
 			tx_pkts_burst[i]->pkt.pkt_len = 60;
@@ -89,7 +95,7 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			// Add client tsc
 			LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) +
 				hdr_size + 4);
-			clt_tsc[0] = rte_rdtsc();			// 40 -> 48
+			clt_tsc[0] = rte_rdtsc();		// 40 -> 48
 		}
 
 		int nb_tx_new = rte_eth_tx_burst(port_id, 
