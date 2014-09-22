@@ -82,9 +82,7 @@ void *gpu_run(void *ptr)
 int main(int argc, char **argv)
 {
 	assert(argc == 2);
-
 	num_pkts = atoi(argv[1]);
-	assert(num_pkts > 0 && num_pkts <= 256);
 
 	int err = cudaSuccess;
 	printDeviceProperties();
@@ -136,9 +134,7 @@ int main(int argc, char **argv)
 
 	// Launch the kernel once
 	printf("Launching CUDA kernel\n");
-	int threadsPerBlock = num_pkts;
-	assert(threadsPerBlock <= 256);
-
+	int threadsPerBlock = 256;
 	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
 
 	cudaStream_t my_stream;
