@@ -1,0 +1,197 @@
+#include <cuda_runtime.h>
+
+extern "C" {
+#include "city.h"
+}
+
+#include "common.h"
+
+int volatile *h_A, *h_B;
+int volatile *d_A, *d_B;
+int volatile *h_flag, *d_flag;
+int num_pkts = -1;			/** < Passed as a command-line flag */
+
+pthread_t cpu_thread;		/** < CPU thread that talks to the GPU */
+
+/** < Functions for hashing from within a CUDA kernel */
+static const uint32_t cu_c1 = 0xcc9e2d51;
+static const uint32_t cu_c2 = 0x1b873593;
+
+__device__ uint32_t cu_Rotate32(uint32_t val, int shift) 
+{
+	return shift == 0 ? val : ((val >> shift) | (val << (32 - shift)));
+}
+
+__device__ uint32_t cu_Mur(uint32_t a, uint32_t h) 
+{
+	a *= cu_c1;
+	a = cu_Rotate32(a, 17);
+	a *= cu_c2;
+	h ^= a;
+	h = cu_Rotate32(h, 19);
+	return h * 5 + 0xe6546b64;
+}
+
+__device__ uint32_t cu_fmix(uint32_t h)
+{
+	h ^= h >> 16;
+	h *= 0x85ebca6b;
+	h ^= h >> 13;
+	h *= 0xc2b2ae35;
+	h ^= h >> 16;
+	return h;
+}
+
+__device__ uint32_t cu_Hash32Len0to4(char *s, int len) 
+{
+	uint32_t b = 0;
+	uint32_t c = 9;
+	int i;
+	for(i = 0; i < len; i++) {
+		b = b * cu_c1 + s[i];
+		c ^= b;
+	}
+	return cu_fmix(cu_Mur(b, cu_Mur(len, c)));
+}
+/** < Hashing functions for CUDA kernels end here */
+
+__global__ void
+vectorAdd(volatile int *A, volatile int *B, volatile int *flag, int N)
+{
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+	int iter = 0;
+	
+	if(i < N) {
+		/** < Wait for CPU flag a finite number of times */
+		for(iter = 0; iter < ITERS; iter ++) {
+			while(flag[0] == iter - 1) {
+				// Do nothing
+			}
+
+			int inp = A[i];
+			/** < Don't touch A[i] twice */
+			B[i] = cu_Hash32Len0to4((char *) &inp, 4);
+		}
+	}
+}
+
+void *gpu_run(void *ptr)
+{
+	/** < We can only get full execution measurements */
+	struct timespec start, end;
+	double diff[ITERS];
+	double tot;
+	int sum = 0;
+
+	int iter = 0, j = 0;
+
+	for(iter = 0; iter < ITERS; iter ++) {
+
+		/** < Set B to zero: the GPU will make it non-zero */
+		memset((char *) h_B, 0, num_pkts * sizeof(int));
+	
+		/** < Start a timer */
+		clock_gettime(CLOCK_REALTIME, &start);
+		
+		/** < Write input data into A */
+		for(j = 0; j < num_pkts; j ++) {
+			h_A[j] = j + iter + 1;		// Always > 0
+		}
+
+		/** < Raise a flag for the GPU */
+		h_flag[0] = iter;
+
+		/** < Wait till the GPU makes all of h_B non-zero */
+		waitForNonZero(h_B, num_pkts);
+
+		/** < Stop timer */
+		clock_gettime(CLOCK_REALTIME, &end);
+
+		for(j = 0; j < num_pkts; j ++) {
+			if(h_B[j] != CityHash32((char *) &h_A[j], 4)) {
+				fprintf(stderr, "Kernel output mismatch error\n");
+				exit(-1);
+			}
+			sum += h_B[j];
+		}
+
+		diff[iter] = get_timespec_us(start, end);
+		tot += diff[iter];
+
+		printf("\tIter %d: %.2f us, sum = %d\n", iter, diff[iter], sum);
+	}
+
+	/** < Sort the times for percentile */
+	qsort(diff, ITERS, sizeof(double), cmpfunc);
+	red_printf("Average %.2f 5th %.2f 95th %.2f\n",
+		tot / ITERS, diff[0], diff[(ITERS * 95) / 100]);
+
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	/** < num_pkts is passed as a command-line flag */
+	assert(argc == 2);
+	num_pkts = atoi(argv[1]);
+
+	int threadsPerBlock = 256;
+	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
+
+	int err = cudaSuccess;
+	printDeviceProperties();
+
+	/** < Enable mapped-memory on device */
+	cudaSetDeviceFlags(cudaDeviceMapHost);
+
+	/** < Allocate the mapped-memory regions */
+	err = cudaHostAlloc(&h_A, num_pkts * sizeof(int), cudaHostAllocMapped);
+	err = cudaHostAlloc(&h_B, num_pkts * sizeof(int), cudaHostAllocMapped);
+	err = cudaHostAlloc(&h_flag, sizeof(int), cudaHostAllocMapped);
+	CPE(err != cudaSuccess, "Could not allocate mapped memory\n");
+
+	/** Get device pointers for mapped memory */
+	err = cudaHostGetDevicePointer((void **) &d_A, (void *) h_A, 0);
+	err = cudaHostGetDevicePointer((void **) &d_B, (void *) h_B, 0);
+	err = cudaHostGetDevicePointer((void **) &d_flag, (void *) h_flag, 0);
+	CPE(err != cudaSuccess, "Could not get device pointer for mapped memory\n");
+
+	/** < Init. mapped memory: For iteration #i, i >= 0, the flag is i */
+	h_flag[0] = -1;
+	for(int i = 0; i < num_pkts; i++) {
+		h_A[i] = 0;
+		h_B[i] = 0;
+	}
+
+	/** < Launch a CPU thread that talks to the GPU */
+	pthread_create(&cpu_thread, NULL, gpu_run, NULL);
+
+	/** < Launch the kernel once */
+	red_printf("Launching CUDA kernel\n");
+
+	cudaStream_t my_stream;
+	err = cudaStreamCreate(&my_stream);
+	CPE(err != cudaSuccess, "Failed to create cudaStream\n");
+
+	vectorAdd<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_A, 
+		d_B, d_flag, num_pkts);
+	cudaStreamQuery(my_stream);
+	err = cudaGetLastError();
+	CPE(err != cudaSuccess, "Failed to launch kernel\n");
+
+	printf("Waiting for CPU thread to finish\n");
+	pthread_join(cpu_thread, NULL);
+
+	/** < Free allocated mapped memory */
+	cudaFreeHost((void *) h_A);
+	cudaFreeHost((void *) h_B);
+	cudaFreeHost((void *) h_flag);
+
+	/** < Reset the device and exit */
+	err = cudaDeviceReset();
+	CPE(err != cudaSuccess, "Failed to de-initialize the device\n");
+
+	printf("Done\n");
+	return 0;
+}
+
