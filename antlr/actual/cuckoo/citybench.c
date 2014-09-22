@@ -6,6 +6,7 @@
 #include "city.h"
 
 #define NUM_PKTS (16 * 1024 * 1024)
+#define NUM_LONGS 4
 
 int main(int argc, char **argv)
 {
@@ -13,9 +14,14 @@ int main(int argc, char **argv)
 	struct timespec start, end;
 	clock_gettime(CLOCK_REALTIME, &start);
 
-	int sum = 0, i = 0;
+	int sum = 0, i = 0, j = 0;
+	long long A[NUM_LONGS];
+
 	for(i = 0; i < NUM_PKTS; i ++) {
-		sum += CityHash32((char *) &i, 4);
+		for(j = 0; j < NUM_LONGS; j ++) {
+			A[j] = 0xffffffffffffffffL + i;
+		}
+		sum += CityHash32((char *) A, NUM_LONGS * sizeof(long long));
 	}
 
 	clock_gettime(CLOCK_REALTIME, &end);
