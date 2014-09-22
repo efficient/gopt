@@ -11,7 +11,7 @@ vectorAdd(const int *A, const int *B, int *C, int N)
 		int j;
 		for(j = 0; j < COMPUTE; j ++) {
 			C[i] += A[i] + B[i];
-			C[i] *= C[i];
+			C[i] += C[i];
 		}
 	}
 }
@@ -26,14 +26,15 @@ void cpu_run(int *A, int *B, int *C, int N)
 		int j;
 		for(j = 0; j < COMPUTE; j ++) {
 			C[i] += A[i] + B[i];
-			C[i] *= C[i];
+			C[i] += C[i];
 		}
 	}
 
 	clock_gettime(CLOCK_REALTIME, &end);
-	double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
-		(end.tv_sec - start.tv_sec);
-	printf("CPU time = %f\n", time);
+	double ns = (double) (end.tv_nsec - start.tv_nsec) + 
+		(end.tv_sec - start.tv_sec) * 1000000000;
+	red_printf("CPU time = %.2f us, time per packet = %.2f ns\n", 
+		ns / 1000, ns / N);
 }
 
 void gpu_run(int *h_A, int *h_B, int *h_C, int N)
@@ -71,9 +72,10 @@ void gpu_run(int *h_A, int *h_B, int *h_C, int N)
 	CPE(err != cudaSuccess, "Failed to copy C from device to host\n", -1);
 
 	clock_gettime(CLOCK_REALTIME, &end);
-	double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
-		(end.tv_sec - start.tv_sec);
-	printf("GPU time = %f\n", time);
+	double ns = (double) (end.tv_nsec - start.tv_nsec) + 
+		(end.tv_sec - start.tv_sec) * 1000000000;
+	red_printf("GPU time = %.2f us, time per packet = %.2f ns\n",
+		ns / 1000, ns / N);
 
 	// Free device global memory
 	err = cudaFree(d_A);
@@ -81,9 +83,12 @@ void gpu_run(int *h_A, int *h_B, int *h_C, int N)
 	err = cudaFree(d_C);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
-	int err = cudaSuccess, N = 500000;
+	assert(argc == 2);
+	int N = atoi(argv[1]);
+
+	int err = cudaSuccess;
 
 	printDeviceProperties();
 
@@ -107,7 +112,10 @@ int main(void)
 		h_B[i] = rand() / (int) RAND_MAX;
 	}
 
+	red_printf("Running CPU code\n");
 	cpu_run(h_A, h_B, h_C_CPU, N);
+	red_printf("Running GPU code twice\n");
+	gpu_run(h_A, h_B, h_C, N);
 	gpu_run(h_A, h_B, h_C, N);
 
 	// Verify that the result vector is correct
