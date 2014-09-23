@@ -147,6 +147,7 @@ int main(int argc, char *argv[])
 	err = cudaStreamCreate(&myStream);
 	CPE(err != cudaSuccess, "Failed to create cudaStream\n", -1);
 
+	red_printf("Allocating host log of size %lu bytes\n", LOG_CAP * sizeof(int));
 	/** <Initialize hugepage log and copy it to the device: do it once */
 #if USE_HUGEPAGE == 1
 	int sid = shmget(1, LOG_CAP * sizeof(int), SHM_HUGETLB | 0666 | IPC_CREAT);
@@ -160,9 +161,12 @@ int main(int argc, char *argv[])
 	for(i = 0; i < LOG_CAP; i ++) {
 		h_log[i] = rand() % LOG_CAP;
 	}
+
+	red_printf("Allocating device log\n");
 	err = cudaMalloc((void **) &d_log, LOG_CAP * sizeof(int));
 	CPE(err != cudaSuccess, "Failed to allocate log on device\n", -1);
 
+	red_printf("Copying log to device\n");
 	err = cudaMemcpy(d_log, h_log, LOG_CAP * sizeof(int), cudaMemcpyHostToDevice);
 	CPE(err != cudaSuccess, "Failed to copy to device memory\n", -1);
 
@@ -175,7 +179,7 @@ int main(int argc, char *argv[])
 
 	/** <Test for different batch sizes */
 	assert(MAX_PKTS % 8 == 0);
-	for(int num_pkts = 8; num_pkts < MAX_PKTS; num_pkts += 8) {
+	for(int num_pkts = 16; num_pkts < MAX_PKTS; num_pkts *= 4) {
 
 		double cpu_time = 0, gpu_time = 0;
 
@@ -208,12 +212,12 @@ int main(int argc, char *argv[])
 			(int) ((num_pkts * DEPTH) / (cpu_time * 1000000)));
 		printf("GPU: %dM cachelines/sec\n", 
 			(int) ((num_pkts * DEPTH) / (gpu_time * 1000000)));
-		printf("\n");
 
 		/** <Emit the results to stderr. Use only space for delimiting */
 		fprintf(stderr, "Batch size  %d CPU %f GPU %f CPU/GPU %f\n",
 			num_pkts, cpu_time, gpu_time, cpu_time / gpu_time);
-	
+
+		printf("\n");
 	}
 
 	// Free device memory
