@@ -10,33 +10,28 @@ Allocating host log of size 1073741824 bytes
 Allocating device log
 Copying log to device
 
-Test PASSED for num_pkts = 16
-CPU: 25M cachelines/sec
-GPU: 0M cachelines/sec
-Batch size  16 CPU 0.000001 GPU 0.000029 CPU/GPU 0.021361
+PASS for num_pkts = 16. Million cachelines/s:
+num_pkts 16 CPU 26 GPU 0
+num_pkts 16 CPU time 0.000001 us GPU time 0.000029 us CPU/GPU 0.020251
 
-Test PASSED for num_pkts = 64
-CPU: 63M cachelines/sec
-GPU: 2M cachelines/sec
-Batch size  64 CPU 0.000001 GPU 0.000029 CPU/GPU 0.034916
+PASS for num_pkts = 64. Million cachelines/s:
+num_pkts 64 CPU 60 GPU 2
+num_pkts 64 CPU time 0.000001 us GPU time 0.000028 us CPU/GPU 0.037092
 
-Test PASSED for num_pkts = 256
-CPU: 86M cachelines/sec
-GPU: 8M cachelines/sec
-Batch size  256 CPU 0.000003 GPU 0.000029 CPU/GPU 0.101715
+PASS for num_pkts = 256. Million cachelines/s:
+num_pkts 256 CPU 80 GPU 8
+num_pkts 256 CPU time 0.000003 us GPU time 0.000029 us CPU/GPU 0.110873
 
-Test PASSED for num_pkts = 1024
-CPU: 96M cachelines/sec
-GPU: 34M cachelines/sec
-Batch size  1024 CPU 0.000011 GPU 0.000030 CPU/GPU 0.360559
+PASS for num_pkts = 1024. Million cachelines/s:
+num_pkts 1024 CPU 96 GPU 34
+num_pkts 1024 CPU time 0.000011 us GPU time 0.000029 us CPU/GPU 0.363258
 
-Test PASSED for num_pkts = 4096
-CPU: 100M cachelines/sec
-GPU: 104M cachelines/sec
-Batch size  4096 CPU 0.000041 GPU 0.000039 CPU/GPU 1.038123
+PASS for num_pkts = 4096. Million cachelines/s:
+num_pkts 4096 CPU 96 GPU 104
+num_pkts 4096 CPU time 0.000042 us GPU time 0.000039 us CPU/GPU 1.079787
 
-Test PASSED for num_pkts = 16384
-CPU: 101M cachelines/sec
-GPU: 291M cachelines/sec
-Batch size  16384 CPU 0.000161 GPU 0.000056 CPU/GPU 2.865612
+PASS for num_pkts = 16384. Million cachelines/s:
+num_pkts 16384 CPU 100 GPU 291
+num_pkts 16384 CPU time 0.000163 us GPU time 0.000056 us CPU/GPU 2.902226
+
 

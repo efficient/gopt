@@ -207,14 +207,13 @@ int main(int argc, char *argv[])
 			}
 		}
 	
-		printf("Test PASSED for num_pkts = %d\n", num_pkts);
-		printf("CPU: %dM cachelines/sec\n", 
-			(int) ((num_pkts * DEPTH) / (cpu_time * 1000000)));
-		printf("GPU: %dM cachelines/sec\n", 
+		printf("PASS for num_pkts = %d. Million cachelines/s:\n", num_pkts);
+		printf("num_pkts %d CPU %d GPU %d\n", num_pkts,
+			(int) ((num_pkts * DEPTH) / (cpu_time * 1000000)),
 			(int) ((num_pkts * DEPTH) / (gpu_time * 1000000)));
 
 		/** <Emit the results to stderr. Use only space for delimiting */
-		fprintf(stderr, "Batch size  %d CPU %f GPU %f CPU/GPU %f\n",
+		fprintf(stderr, "num_pkts %d CPU time %f us GPU time %f us CPU/GPU %f\n",
 			num_pkts, cpu_time, gpu_time, cpu_time / gpu_time);
 
 		printf("\n");
