@@ -208,9 +208,9 @@ int main(int argc, char *argv[])
 		}
 	
 		printf("PASS for num_pkts = %d. Million cachelines/s:\n", num_pkts);
-		printf("num_pkts %d CPU %d GPU %d\n", num_pkts,
-			(int) ((num_pkts * DEPTH) / (cpu_time * 1000000)),
-			(int) ((num_pkts * DEPTH) / (gpu_time * 1000000)));
+		printf("num_pkts %d CPU %.2f GPU %.2f\n", num_pkts,
+			(num_pkts * DEPTH) / (cpu_time * 1000000),
+			(num_pkts * DEPTH) / (gpu_time * 1000000));
 
 		/** <Emit the results to stderr. Use only space for delimiting */
 		fprintf(stderr, "num_pkts %d CPU time %f us GPU time %f us CPU/GPU %f\n",
