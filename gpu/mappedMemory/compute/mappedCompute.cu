@@ -123,8 +123,9 @@ void *gpu_run(void *ptr)
 
 	/** < Sort the times for percentile */
 	qsort(diff, ITERS, sizeof(double), cmpfunc);
-	red_printf("Average %.2f 5th %.2f 95th %.2f\n",
-		tot / ITERS, diff[0], diff[(ITERS * 95) / 100]);
+	double gpu_min_us = diff[0];
+	printf("num_pkts %d hashes per second (million) %.2f\n", num_pkts,
+		num_pkts / gpu_min_us);
 
 	return 0;
 }
