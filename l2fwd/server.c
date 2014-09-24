@@ -50,14 +50,12 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
-void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
+void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
                           struct dir_ipv4_table *ipv4_table,
                           struct lcore_port_info *lp_info)
 {
 	struct ether_hdr *eth_hdr[BATCH_SIZE];
 	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
-	void *dst_mac_ptr[BATCH_SIZE];
-	void *src_mac_ptr[BATCH_SIZE];
 	uint32_t dst_ip[BATCH_SIZE];
 	int dst_port[BATCH_SIZE];
 
@@ -88,9 +86,7 @@ fpp_start:
 		goto fpp_end;
 	}
 
-	src_mac_ptr[I] = &eth_hdr[I]->s_addr.addr_bytes[0];
-	dst_mac_ptr[I] = &eth_hdr[I]->d_addr.addr_bytes[0];
-	swap_mac(src_mac_ptr[I], dst_mac_ptr[I]);
+	set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
 
 	ip_hdr[I]->time_to_live --;
 	ip_hdr[I]->hdr_checksum ++;
@@ -107,9 +103,8 @@ fpp_label_1:
 		lp_info[0].nb_tbl_24 ++;
 	}
 
-	pkts[I]->pkt.nb_segs = 1;
-	pkts[I]->pkt.pkt_len = 60;
-	pkts[I]->pkt.data_len = 60;
+	/** < Use the looked-up port to determine dst MAC */
+	set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[dst_port[I]]);
 
 	send_packet(pkts[I], dst_port[I], lp_info);
 
@@ -124,7 +119,7 @@ fpp_end:
 
 }
 
-void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
+void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	struct dir_ipv4_table *ipv4_table, 
 	struct lcore_port_info *lp_info)
 {
@@ -134,7 +129,6 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		// Boilerplate for TX pkt
 		struct ether_hdr *eth_hdr;
 		struct ipv4_hdr *ip_hdr;
-		void *src_mac_ptr, *dst_mac_ptr;
 
 		uint32_t dst_ip;		/** < Must be unsigned */
 		int dst_port;
@@ -151,9 +145,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			continue;
 		}	
 
-		src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
-		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
-		swap_mac(src_mac_ptr, dst_mac_ptr);
+		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[port_id]);
 
 		ip_hdr->time_to_live --;
 		ip_hdr->hdr_checksum ++;
@@ -169,9 +161,8 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			lp_info[0].nb_tbl_24 ++;		
 		}
 
-		pkts[batch_index]->pkt.nb_segs = 1;
-		pkts[batch_index]->pkt.pkt_len = 60;
-		pkts[batch_index]->pkt.data_len = 60;
+		/** < Use the looked-up port to determine dst MAC */
+		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
 
 		send_packet(pkts[batch_index], dst_port, lp_info);
 	}
@@ -230,11 +221,11 @@ void run_server(struct dir_ipv4_table *ipv4_table)
 		lp_info[port_id].nb_rx += nb_rx_new;
 
 #if GOTO == 1
-		process_batch_goto(rx_pkts_burst, 
-			nb_rx_new, ipv4_table, lp_info);
+		process_batch_goto(rx_pkts_burst, nb_rx_new, port_id,
+			ipv4_table, lp_info);
 #else
-		process_batch_nogoto(rx_pkts_burst,
-			nb_rx_new, ipv4_table, lp_info);
+		process_batch_nogoto(rx_pkts_burst, nb_rx_new, port_id,
+			ipv4_table, lp_info);
 #endif
 		
 		// STAT PRINTING
