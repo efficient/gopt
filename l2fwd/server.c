@@ -114,8 +114,11 @@ fpp_label_2:
 		lp_info[port_id].nb_tx_fail ++;
 		rte_pktmbuf_free(pkts[I]);
 	} else {
-		set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
 		set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[fwd_port[I]]);
+		if(eth_hdr[I]->s_addr.addr_bytes[0] == 0xef) {
+			eth_hdr[I]->d_addr.addr_bytes[0] ++;
+		}
+		set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
 		send_packet(pkts[I], fwd_port[I], lp_info);
 	}
 
@@ -182,8 +185,14 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			lp_info[port_id].nb_tx_fail ++;
 			rte_pktmbuf_free(pkts[batch_index]);
 		} else {
-			set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[port_id]);
 			set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[fwd_port]);
+		
+			/** < Reduce RX load on client: If the client sent a bad 
+			 *    src address, garble dst address */
+			if(eth_hdr->s_addr.addr_bytes[0] == 0xef) {
+				eth_hdr->d_addr.addr_bytes[0] ++;
+			}
+			set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[port_id]);
 			send_packet(pkts[batch_index], fwd_port, lp_info);
 		}
 	}
