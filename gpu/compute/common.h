@@ -1,6 +1,6 @@
 #define INCLUDE_COPY_TIME 1
 
-#define ITERS 100			/** < Number of measurements to average on */
+#define ITERS 10000			/** < Number of measurements to average on */
 
 #define MAX_PKTS (1024 * 32)
 

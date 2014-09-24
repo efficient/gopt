@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
 
 	/** <Test for different batch sizes */
 	assert(MAX_PKTS % 128 == 0);
-	for(int num_pkts = 128; num_pkts < MAX_PKTS; num_pkts += 128) {
+	for(int num_pkts = 16; num_pkts < MAX_PKTS; num_pkts *= 4) {
 
 		double cpu_time = 0, gpu_time = 0;
 
@@ -213,10 +213,10 @@ int main(int argc, char *argv[])
 		}
 	
 		printf("Test PASSED for num_pkts = %d\n", num_pkts);
-		printf("CPU: time per packet %.2f ns\n", 
-			(cpu_time * 1000000000) / num_pkts);
-		printf("GPU: time per packet %.2f ns\n", 
-			(gpu_time * 1000000000) / num_pkts);
+		printf("num_pkts %d CPU %.2f GPU %.2f (million hashes per second)\n",
+			num_pkts, 
+			num_pkts / (cpu_time * 1000000),
+			num_pkts / (gpu_time * 1000000));
 
 		/** <Emit the results to stderr. Use only space for delimiting */
 		fprintf(stderr, "Batch size  %d CPU %f GPU %f CPU/GPU %f\n",
