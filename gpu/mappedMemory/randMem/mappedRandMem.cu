@@ -74,7 +74,9 @@ void *gpu_run(void *ptr)
 		tot += iter_us;
 	}
 
-	printf("Average %.2f us\n", tot / ITERS);
+	double average_us = tot	 / ITERS;
+	printf("num_pkts %d Cachelines per sec (million) %.2f\n", num_pkts,
+		num_pkts / average_us);
 
 	return 0;
 }

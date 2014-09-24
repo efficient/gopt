@@ -10,7 +10,7 @@
 
 #define LOG_KEY 1
 
-#define ITERS 10000
+#define ITERS 1000
 
 void printDeviceProperties();
 long long get_cycles();
