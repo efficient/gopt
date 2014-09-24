@@ -33,7 +33,6 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 {
 	assert(num_workers != 0);
 	assert(worker_lcores != NULL);
-	assert(num_workers * WM_QUEUE_THRESH < WM_QUEUE_CAP);
 	
 	int i, err;
 
