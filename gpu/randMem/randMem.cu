@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
 
 	/** <Test for different batch sizes */
 	assert(MAX_PKTS % 8 == 0);
-	for(int num_pkts = 16; num_pkts < MAX_PKTS; num_pkts *= 4) {
+	for(int num_pkts = 16; num_pkts < MAX_PKTS; num_pkts *= 2) {
 
 		double cpu_time = 0, gpu_time = 0;
 
@@ -213,8 +213,8 @@ int main(int argc, char *argv[])
 			(num_pkts * DEPTH) / (gpu_time * 1000000));
 
 		/** <Emit the results to stderr. Use only space for delimiting */
-		fprintf(stderr, "num_pkts %d CPU time %f us GPU time %f us CPU/GPU %f\n",
-			num_pkts, cpu_time, gpu_time, cpu_time / gpu_time);
+		//fprintf(stderr, "num_pkts %d CPU time %f us GPU time %f us CPU/GPU %f\n",
+		//	num_pkts, cpu_time, gpu_time, cpu_time / gpu_time);
 
 		printf("\n");
 	}

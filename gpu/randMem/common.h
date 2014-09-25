@@ -11,7 +11,7 @@
 #define ITERS 100			/** < Number of measurements to average on */
 #define DEPTH 1
 
-#define MAX_PKTS 32768
+#define MAX_PKTS (32768 * 128)
 
 #define LOG_CAP (256 * 1024 * 1024)		// 256 M log
 #define LOG_CAP_ ((256 * 1024 * 1024) - 1)	// 256 M log
