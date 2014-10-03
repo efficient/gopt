@@ -3,11 +3,11 @@
 #include <time.h>
 
 #define USE_HUGEPAGE 1
-#define WR_ONLY 0
+#define WR_ONLY 1
 
-#define CUDA_THREADS (1536 * 32)		// GTX 690 has 1536 cores
-#define LOG_CAP (64 * 1024 * 1024)		// 512 M log
-#define LOG_CAP_ ((64 * 1024 * 1024) - 1)	// 512 M log
+#define CUDA_THREADS (2048 * 32)		// GTX 980 has 2048 cores
+#define LOG_CAP (256 * 1024 * 1024)		// 2 GB
+#define LOG_CAP_ ((256 * 1024 * 1024) - 1)
 
 void printDeviceProperties();
 
