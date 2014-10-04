@@ -3,12 +3,13 @@
 #include<assert.h>
 #include<pthread.h>
 #include<stdint.h>
+#include<errno.h>
 
 #include "city.h"
 #include "util.h"
 
-#define NUM_THREADS 4
-#define WRITER_COMPUTE 30
+#define NUM_THREADS 2
+#define WRITER_COMPUTE 300		/** < # of CityHash steps by the writer */
 
 #define NUM_LOCKS 1024
 #define NUM_LOCKS_ (NUM_LOCKS - 1)
@@ -18,6 +19,10 @@
 
 #define GHZ_CPS 1000000000
 #define ITERS_PER_MEASUREMENT 10000000
+
+#define USE_SKIP 1				/** < Should reader skip if trylock fails? */
+#define NUM_WRITER_LOCKS 10		/** < Number of locks a writer should grab */
+#define WRITER_LOCK_STRIDE 100	/** < Writer grabs locks separated by 'stride' */
 
 typedef struct {
 	long long a;
@@ -115,12 +120,18 @@ void *reader( void *ptr)
 		node_id = fastrand(&seed) & NUM_NODES_;
 		lock_id = node_id & NUM_LOCKS_;
 
+#if USE_SKIP == 1
+		while(pthread_spin_trylock(&locks[lock_id].lock) == EBUSY) {
+			lock_id = (lock_id + 1) & NUM_LOCKS_;
+		}
+#else
 		pthread_spin_lock(&locks[lock_id].lock);
 
 		/** < Critical section begin */
 		if(nodes[node_id].b != nodes[node_id].a + 1) {
 			red_printf("Invariant violated\n");
 		}
+#endif
 		sum += nodes[node_id].a + nodes[node_id].b;
 		
 		/** < Critical section end */
@@ -140,7 +151,7 @@ void *writer( void *ptr)
 	int sum = 0;
 
 	/** < The node and lock to use in an iteration */
-	int i, node_id, lock_id;
+	int i, j, node_id, lock_id;
 	
 	/** < Total number of iterations (for measurement) */
 	int num_iters = 0;
@@ -167,15 +178,22 @@ void *writer( void *ptr)
 		node_id = fastrand(&seed) & NUM_NODES_;
 		lock_id = node_id & NUM_LOCKS_;
 
-		pthread_spin_lock(&locks[lock_id].lock);
+		for(j = 0; j < NUM_WRITER_LOCKS; j ++) {
+			int lock_index = (lock_id + (j * WRITER_LOCK_STRIDE)) & NUM_LOCKS_;
+			pthread_spin_lock(&locks[lock_index].lock);
+		}
 
-		/** < Critical section begin */
-		nodes[node_id].a ++;
-		nodes[node_id].b ++;
-		
-		/** < Critical section end */
+		/** < Update node.a and node.b after some expensive computation */
+		for(i = 0; i < WRITER_COMPUTE; i ++) {
+			nodes[node_id].a = CityHash32((char *) &nodes[node_id].a, 4);
+		}
 
-		pthread_spin_unlock(&locks[lock_id].lock);
+		nodes[node_id].b = nodes[node_id].a + 1;
+
+		for(j = 0; j < NUM_WRITER_LOCKS; j ++) {
+			int lock_index = (lock_id + (j * WRITER_LOCK_STRIDE)) & NUM_LOCKS_;
+			pthread_spin_unlock(&locks[lock_index].lock);
+		}
 
 		num_iters ++;
 	}

@@ -8,7 +8,7 @@
 #include "util.h"
 
 #define NUM_THREADS 4
-#define WRITER_COMPUTE 30
+#define WRITER_COMPUTE 1
 
 #define NUM_LOCKS 1024
 #define NUM_LOCKS_ (NUM_LOCKS - 1)
@@ -177,9 +177,9 @@ void *writer( void *ptr)
 		
 			node_id = fastrand(&seed) & NUM_NODES_;
 
-			printf("Writer thread %d: rate = %.2f M/s. Sum = %d\n", tid, 
-				num_iters / (1000000 * seconds), sum);
-			printf("Writer thread %d: random node: (%lld, %lld)\n", tid, 
+			red_printf("Writer thread %d: rate = %.2f M/s. "
+				"Random node: (%lld, %lld)\n", tid, 
+				num_iters / (1000000 * seconds),
 				nodes[node_id].a, nodes[node_id].b);
 				
 			num_iters = 0;
