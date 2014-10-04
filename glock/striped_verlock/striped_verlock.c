@@ -23,8 +23,7 @@ typedef struct {
 } node_t;
 
 typedef struct {
-	volatile int lock;
-	int index;
+	volatile long long lock;
 	long long pad[7];
 } lock_t;
 
@@ -154,6 +153,7 @@ void *writer( void *ptr)
 	int sum = 0;
 	
 	uint64_t seed = 0xdeadbeef + tid;
+
 	clock_gettime(CLOCK_REALTIME, &start);
 
 	while(1) {
