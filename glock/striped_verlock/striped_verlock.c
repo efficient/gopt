@@ -2,10 +2,11 @@
 #include<stdlib.h>
 #include<assert.h>
 #include<pthread.h>
+#include<stdint.h>
 
 #include "util.h"
 
-#define NUM_THREADS 2
+#define NUM_THREADS 4
 
 #define NUM_LOCKS 1024
 #define NUM_LOCKS_ (NUM_LOCKS - 1)
@@ -14,15 +15,15 @@
 #define NUM_NODES_ (NUM_NODES - 1)
 
 #define GHZ_CPS 1000000000
-#define ITERS_PER_MEASUREMENT 1000000
+#define ITERS_PER_MEASUREMENT 10000000
 
 typedef struct {
-	int a;
-	int b;
+	long long a;
+	long long b;
 } node_t;
 
 typedef struct {
-	pthread_spinlock_t lock;
+	volatile int lock;
 	int index;
 	long long pad[7];
 } lock_t;
@@ -59,7 +60,7 @@ int main()
 	assert(locks != NULL);
 	
 	for(i = 0; i < NUM_LOCKS; i++) {
-		pthread_spin_init(&locks[i].lock, 0);
+		locks[i].lock = 0;
 	}
 	
 	/** < Launch several reader threads and a writer thread */
@@ -87,8 +88,13 @@ void *reader( void *ptr)
 	struct timespec start, end;
 	int tid = *((int *) ptr);
 	int sum = 0;
+
+	int lock_version;
+	node_t node_snapshot;
+	int num_tries = 0;
 	
-	srand(tid);
+	uint64_t seed = 0xdeadbeef + tid;
+
 	clock_gettime(CLOCK_REALTIME, &start);
 
 	while(1) {
@@ -97,27 +103,43 @@ void *reader( void *ptr)
 			double seconds = (end.tv_sec - start.tv_sec) + 
 				(double) (end.tv_nsec - start.tv_nsec) / GHZ_CPS;
 		
-			printf("Reader thread %d: rate = %.2f M/s. Sum = %d\n", tid, 
-				num_iters / (1000000 * seconds), sum);
+			printf("Reader %d: rate = %.2f M/s. Sum = %d. Avg. tries = %f\n", tid, 
+				num_iters / (1000000 * seconds), sum, (double) num_tries / num_iters);
 				
 			num_iters = 0;
+			num_tries = 0;
+
 			clock_gettime(CLOCK_REALTIME, &start);
 		}
 
-		int node_id = rand() & NUM_NODES_;
+		int node_id = fastrand(&seed) & NUM_NODES_;
 		int lock_id = node_id & NUM_LOCKS_;
 
-		pthread_spin_lock(&locks[lock_id].lock);
+try_again:
+		num_tries ++;
 
-		/** < Critical section begin */
-		if(nodes[node_id].b != nodes[node_id].a + 1) {
-			red_printf("Invariant violated\n");
+		/** < Enter the critical section when the version is even */
+		lock_version = locks[lock_id].lock; 
+		if((lock_version & 1) != 0) {
+			goto try_again;
 		}
-		sum += nodes[node_id].a + nodes[node_id].b;
-		
-		/** < Critical section end */
+	
+		/** < version load #1 --> snapshot loads */
+		asm volatile("" ::: "memory");
 
-		pthread_spin_unlock(&locks[lock_id].lock);
+		node_snapshot.a = nodes[node_id].a;
+		node_snapshot.b = nodes[node_id].b;
+	
+		/** < snapshot loads --> version load #2 */
+		asm volatile("" ::: "memory");
+
+		if(locks[lock_id].lock == lock_version) {
+			// Snapshot was correct
+			assert(node_snapshot.b == node_snapshot.a + 1);
+			sum += node_snapshot.a + node_snapshot.b;
+		} else {
+			goto try_again;
+		}
 
 		num_iters ++;
 	}
@@ -131,7 +153,7 @@ void *writer( void *ptr)
 	int tid = *((int *) ptr);
 	int sum = 0;
 	
-	srand(tid);
+	uint64_t seed = 0xdeadbeef + tid;
 	clock_gettime(CLOCK_REALTIME, &start);
 
 	while(1) {
@@ -147,18 +169,22 @@ void *writer( void *ptr)
 			clock_gettime(CLOCK_REALTIME, &start);
 		}
 
-		int node_id = rand() & NUM_NODES_;
+		int node_id = fastrand(&seed) & NUM_NODES_;
 		int lock_id = node_id & NUM_LOCKS_;
 
-		pthread_spin_lock(&locks[lock_id].lock);
+		locks[lock_id].lock ++;
+
+		/** < version store #1 --> node stores */
+		asm volatile("" ::: "memory");
 
 		/** < Critical section begin */
 		nodes[node_id].a ++;
 		nodes[node_id].b ++;
 		
-		/** < Critical section end */
+		/** < node stores --> version store #2 */
+		asm volatile("" ::: "memory");
 
-		pthread_spin_unlock(&locks[lock_id].lock);
+		locks[lock_id].lock ++;
 
 		num_iters ++;
 	}
