@@ -14,7 +14,7 @@
 #define NUM_NODES_ (NUM_NODES - 1)
 
 #define GHZ_CPS 1000000000
-#define ITERS_PER_MEASUREMENT 10000000
+#define ITERS_PER_MEASUREMENT 1000000
 
 typedef struct {
 	int a;

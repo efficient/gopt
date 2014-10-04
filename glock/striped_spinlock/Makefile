@@ -1,5 +1,5 @@
 all:
-	gcc -O3 -o trylock trylock.c util.c -lpthread -lrt
+	gcc -O3 -o striped_spinlock striped_spinlock.c util.c -lpthread -lrt
 clean:
-	rm -f trylock
+	rm -f striped_spinlock
 
