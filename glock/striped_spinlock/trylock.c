@@ -43,6 +43,7 @@ int main()
 	/** < Ensure that locks are cacheline aligned */
 	assert(sizeof(lock_t) == 64);
 
+	/** < Allocate the shared nodes */
 	red_printf("Allocting %d nodes\n", NUM_NODES);
 	nodes = (node_t *) malloc(NUM_NODES * sizeof(node_t));
 	assert(nodes != NULL);
@@ -52,6 +53,7 @@ int main()
 		nodes[i].b = nodes[i].a + 1;
 	}
 
+	/** < Allocate the striped spinlocks */
 	red_printf("Allocting %d locks\n", NUM_LOCKS);
 	locks = (lock_t *) malloc(NUM_LOCKS * sizeof(lock_t));
 	assert(locks != NULL);
@@ -60,6 +62,7 @@ int main()
 		pthread_spin_init(&locks[i].lock, 0);
 	}
 	
+	/** < Launch several reader threads and a writer thread */
 	for(i = 0; i < NUM_THREADS; i++) {
 		tid[i] = i;
 		if(i == 0) {
