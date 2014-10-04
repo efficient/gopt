@@ -2,10 +2,13 @@
 #include<stdlib.h>
 #include<assert.h>
 #include<pthread.h>
+#include<stdint.h>
 
+#include "city.h"
 #include "util.h"
 
-#define NUM_THREADS 2
+#define NUM_THREADS 4
+#define WRITER_COMPUTE 30
 
 #define NUM_LOCKS 1024
 #define NUM_LOCKS_ (NUM_LOCKS - 1)
@@ -14,11 +17,11 @@
 #define NUM_NODES_ (NUM_NODES - 1)
 
 #define GHZ_CPS 1000000000
-#define ITERS_PER_MEASUREMENT 1000000
+#define ITERS_PER_MEASUREMENT 10000000
 
 typedef struct {
-	int a;
-	int b;
+	long long a;
+	long long b;
 } node_t;
 
 typedef struct {
@@ -83,12 +86,17 @@ int main()
 
 void *reader( void *ptr)
 {
-	int num_iters = 0;
 	struct timespec start, end;
 	int tid = *((int *) ptr);
+	uint64_t seed = 0xdeadbeef + tid;
 	int sum = 0;
-	
-	srand(tid);
+
+	/** < The node and lock to use in an iteration */
+	int node_id, lock_id;
+
+	/** < Total number of iterations (for measurement) */
+	int num_iters = 0;
+
 	clock_gettime(CLOCK_REALTIME, &start);
 
 	while(1) {
@@ -104,8 +112,8 @@ void *reader( void *ptr)
 			clock_gettime(CLOCK_REALTIME, &start);
 		}
 
-		int node_id = rand() & NUM_NODES_;
-		int lock_id = node_id & NUM_LOCKS_;
+		node_id = fastrand(&seed) & NUM_NODES_;
+		lock_id = node_id & NUM_LOCKS_;
 
 		pthread_spin_lock(&locks[lock_id].lock);
 
@@ -126,12 +134,17 @@ void *reader( void *ptr)
 
 void *writer( void *ptr)
 {
-	int num_iters = 0;
 	struct timespec start, end;
 	int tid = *((int *) ptr);
+	uint64_t seed = 0xdeadbeef + tid;
 	int sum = 0;
+
+	/** < The node and lock to use in an iteration */
+	int i, node_id, lock_id;
 	
-	srand(tid);
+	/** < Total number of iterations (for measurement) */
+	int num_iters = 0;
+
 	clock_gettime(CLOCK_REALTIME, &start);
 
 	while(1) {
@@ -140,15 +153,19 @@ void *writer( void *ptr)
 			double seconds = (end.tv_sec - start.tv_sec) + 
 				(double) (end.tv_nsec - start.tv_nsec) / GHZ_CPS;
 		
-			printf("Writer thread %d: rate = %.2f M/s. Sum = %d\n", tid, 
-				num_iters / (1000000 * seconds), sum);
+			node_id = fastrand(&seed) & NUM_NODES_;
+
+			red_printf("Writer thread %d: rate = %.2f M/s. "
+				"Random node: (%lld, %lld)\n", tid, 
+				num_iters / (1000000 * seconds),
+				nodes[node_id].a, nodes[node_id].b);
 				
 			num_iters = 0;
 			clock_gettime(CLOCK_REALTIME, &start);
 		}
 
-		int node_id = rand() & NUM_NODES_;
-		int lock_id = node_id & NUM_LOCKS_;
+		node_id = fastrand(&seed) & NUM_NODES_;
+		lock_id = node_id & NUM_LOCKS_;
 
 		pthread_spin_lock(&locks[lock_id].lock);
 

@@ -34,3 +34,8 @@ void red_printf(const char *format, ...)
     va_end(args);
 }
 
+inline uint32_t fastrand(uint64_t* seed)
+{
+    *seed = *seed * 1103515245 + 12345;
+    return (uint32_t)(*seed >> 32);
+}
