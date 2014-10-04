@@ -4,9 +4,11 @@
 #include<pthread.h>
 #include<stdint.h>
 
+#include "city.h"
 #include "util.h"
 
 #define NUM_THREADS 4
+#define WRITER_COMPUTE 30
 
 #define NUM_LOCKS 1024
 #define NUM_LOCKS_ (NUM_LOCKS - 1)
@@ -83,16 +85,23 @@ int main()
 
 void *reader( void *ptr)
 {
-	int num_iters = 0;
 	struct timespec start, end;
 	int tid = *((int *) ptr);
+	uint64_t seed = 0xdeadbeef + tid;
 	int sum = 0;
 
+	/** < The node and lock to use in an iteration */
+	int node_id, lock_id;
+
+	/** < The snapshotted lock version and node data */
 	int lock_version;
 	node_t node_snapshot;
+
+	/** < Total number of times we start the snapshotting procedure */
 	int num_tries = 0;
-	
-	uint64_t seed = 0xdeadbeef + tid;
+
+	/** < Total number of iterations (for measurement) */
+	int num_iters = 0;
 
 	clock_gettime(CLOCK_REALTIME, &start);
 
@@ -111,8 +120,8 @@ void *reader( void *ptr)
 			clock_gettime(CLOCK_REALTIME, &start);
 		}
 
-		int node_id = fastrand(&seed) & NUM_NODES_;
-		int lock_id = node_id & NUM_LOCKS_;
+		node_id = fastrand(&seed) & NUM_NODES_;
+		lock_id = node_id & NUM_LOCKS_;
 
 try_again:
 		num_tries ++;
@@ -147,12 +156,16 @@ try_again:
 
 void *writer( void *ptr)
 {
-	int num_iters = 0;
 	struct timespec start, end;
 	int tid = *((int *) ptr);
-	int sum = 0;
-	
 	uint64_t seed = 0xdeadbeef + tid;
+	int sum = 0;
+
+	/** < The node and lock to use in an iteration */
+	int i, node_id, lock_id;
+	
+	/** < Total number of iterations (for measurement) */
+	int num_iters = 0;
 
 	clock_gettime(CLOCK_REALTIME, &start);
 
@@ -162,24 +175,31 @@ void *writer( void *ptr)
 			double seconds = (end.tv_sec - start.tv_sec) + 
 				(double) (end.tv_nsec - start.tv_nsec) / GHZ_CPS;
 		
+			node_id = fastrand(&seed) & NUM_NODES_;
+
 			printf("Writer thread %d: rate = %.2f M/s. Sum = %d\n", tid, 
 				num_iters / (1000000 * seconds), sum);
+			printf("Writer thread %d: random node: (%lld, %lld)\n", tid, 
+				nodes[node_id].a, nodes[node_id].b);
 				
 			num_iters = 0;
 			clock_gettime(CLOCK_REALTIME, &start);
 		}
 
-		int node_id = fastrand(&seed) & NUM_NODES_;
-		int lock_id = node_id & NUM_LOCKS_;
+		node_id = fastrand(&seed) & NUM_NODES_;
+		lock_id = node_id & NUM_LOCKS_;
 
 		locks[lock_id].lock ++;
 
 		/** < version store #1 --> node stores */
 		asm volatile("" ::: "memory");
 
-		/** < Critical section begin */
-		nodes[node_id].a ++;
-		nodes[node_id].b ++;
+		/** < Update node.a and node.b after some expensive computation */
+		for(i = 0; i < WRITER_COMPUTE; i ++) {
+			nodes[node_id].a = CityHash32((char *) &nodes[node_id].a, 4);
+		}
+
+		nodes[node_id].b = nodes[node_id].a + 1;
 		
 		/** < node stores --> version store #2 */
 		asm volatile("" ::: "memory");
