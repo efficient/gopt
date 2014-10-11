@@ -8,10 +8,10 @@
 #include "city.h"
 #include "util.h"
 
-#define NUM_THREADS 2
-#define WRITER_COMPUTE 300		/** < # of CityHash steps by the writer */
+#define NUM_THREADS 8
+#define WRITER_COMPUTE 10		/** < # of CityHash steps by the writer */
 
-#define NUM_LOCKS 1024
+#define NUM_LOCKS 16
 #define NUM_LOCKS_ (NUM_LOCKS - 1)
 
 #define NUM_NODES (1024 * 1024)
@@ -73,7 +73,7 @@ int main()
 	/** < Launch several reader threads and a writer thread */
 	for(i = 0; i < NUM_THREADS; i++) {
 		tid[i] = i;
-		if(i == 0) {
+		if(i == -1) {
 			red_printf("Launching writer thread with tid = %d\n", tid[i]);
 			pthread_create(&thread[i], NULL, writer, &tid[i]);
 		} else {
@@ -94,7 +94,7 @@ void *reader( void *ptr)
 	struct timespec start, end;
 	int tid = *((int *) ptr);
 	uint64_t seed = 0xdeadbeef + tid;
-	int sum = 0;
+	int sum = 0, i;
 
 	/** < The node and lock to use in an iteration */
 	int node_id, lock_id;
@@ -132,7 +132,10 @@ void *reader( void *ptr)
 			red_printf("Invariant violated\n");
 		}
 #endif
-		sum += nodes[node_id].a + nodes[node_id].b;
+		for(i = 0; i < WRITER_COMPUTE; i ++) {
+			sum += CityHash32((char *) &nodes[node_id].a, 4);
+			sum += CityHash32((char *) &nodes[node_id].b, 4);
+		}
 		
 		/** < Critical section end */
 
