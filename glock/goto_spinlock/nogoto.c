@@ -96,7 +96,10 @@ void *reader( void *ptr)
 			clock_gettime(CLOCK_REALTIME, &start);
 		}
 
-		node_id = fastrand(&seed) & NUM_NODES_;
+		for(i = 0; i < COMPUTE; i ++) {
+			node_id = fastrand(&seed) & NUM_NODES_;
+		}
+
 		lock_id = node_id & NUM_LOCKS_;
 
 		pthread_spin_lock(&locks[lock_id].lock);

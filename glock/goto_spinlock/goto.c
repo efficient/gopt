@@ -97,7 +97,9 @@ void *reader( void *ptr)
 		}
 
 		for(I = 0; I < BATCH_SIZE; I ++) {
-			node_id[I] = fastrand(&seed) & NUM_NODES_;
+			for(i = 0; i < COMPUTE; i ++) {
+				node_id[I] = fastrand(&seed) & NUM_NODES_;
+			}
 			lock_id[I] = node_id[I] & NUM_LOCKS_;
 			__builtin_prefetch(&locks[lock_id[I]], 0, 0);
 		}
