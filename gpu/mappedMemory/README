@@ -1,0 +1,12 @@
+Directory structure:
+===================
+	
+	All these tests use polling on mapped memory to involve the GPU.
+	
+	time/: Compute the time taken to involve the GPU in some minimal
+	computation.
+
+	compute/: Compute the rate of CityHash32 computation on the GPU.
+
+	randMem/: Compute the rate of random memory accesses on the GPU.
+	

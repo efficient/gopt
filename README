@@ -1,48 +1,27 @@
 Directory structure:
 ===================
+
 	antlr:
 	======
 		ANTLR code to transform code using goto optimization.
 
-		antlr/actual:
-		============
-			Sample applications for benchmarking the transformation.
+	antlr/actual:
+	============
+		Sample applications for benchmarking the transformation.
+	antlr/results/microbenchmarks:
+
 
 	l2fwd:
-	=====
-		DPDK code for packet-processing benchmarks.
+	======
+		DPDK code for full-system benchmarks.
 
-	gpu:
-	====
-		Microbenchmarks for GPU performance.
+	data_dump:
+	==========
+		Contains data files for:
+			1. Unique IPv4 and IPv6 prefixes from RouteViews.
+			2. Processed IPv6 prefixes: suitable for trie insertion.
+			3. Domain names distributed according to the distribution
+			in Liu's NDN papers.
+			
 
-		gpu/bandwidth:
-		=============
-			Measure transfer bandwidth b/w CPU and GPU.
-
-		gpu/compute:
-		============
-			Compare compute performance of CPU and GPU. Contains a knob to 
-			include/exclude memcpy time.
-
-		gpu/mappedMemory:
-		================
-			Experiments to measure GPU performance when mapped-memory polling
-			is used for CPU/GPU transfers. Contains experiments to measure
-			the minimum time, the time when some compute is done on the GPU,
-			and the time when some global memory accesses are done.
-
-		gpu/randMem:
-		===========
-			Compare random memory performance of CPU and GPU. Contains a knob 
-			to include/exclude memcpy time.
-
-		gpu/memcpyTime:
-		==============
-			Prints breakdown of CPU-GPU-CPU communication into memcpy time,
-			kernel launch time, and synchronization time. Contains two
-			experiments using async and sync CUDA functions.
-
-		gpu/seqMem:
-		===========
-			Prelim experiment to measure sequential memory bandwidth of a GPU.
+	

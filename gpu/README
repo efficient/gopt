@@ -1,0 +1,32 @@
+Directory structure:
+===================
+	
+	bandwidth:
+	==========
+		Prints the CPU-GPU data transfer bandwidth using pinned and non-pinned
+		memory. Prints wrong values sometimes - run multiple times to get an
+		idea of the PCIe bandwidth.
+
+	compute:
+	========
+		Compares the rate of hash-computation on CPU and GPU. A compile-time
+		option can include or exclude the time taken to transfer the data
+		to the GPU.
+
+	randMem:
+	========
+		Compares the rate of random memory accesses on CPU and GPU. A compile-time
+		option can include or exclude the time taken to transfer the data
+		to the GPU.
+
+	memcpyTime:
+	===========
+		Benchmarks to measure the time required to involve a GPU in computation
+		using synchronous and asynchronous CUDA functions. Prints the breakdown
+		of the time into h2d memcpy, kernel launch, and d2h memcpy.
+
+	mappedMemory:
+	=============
+		Benchmarks to measure GPU involvement time, random memory access rate,
+		and hash-computation rate when the data is transferred to and from the
+		GPU using polling on mapped memory.
