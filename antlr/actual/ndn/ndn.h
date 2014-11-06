@@ -26,8 +26,8 @@ in fastpp/data_dump. This file has 11 million URLs and is around
 
 /**< Log entry format for an inserted prefix:
   *  byte 0: length of the prefix
-  *  byte 1: destination port for this prefix
-  *  byte 2: == 1 iff this prefix is a terminal prefix 
+  *  byte 1: == 1 iff this prefix is a terminal prefix 
+  *  byte 2: destination port for this prefix
   *  byte 3 onwards: the actual prefix */
 #define NDN_LOG_CAP (300 * 1024 * 1024)
 

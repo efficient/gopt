@@ -7,7 +7,9 @@
 #include "fpp.h"
 #include "ndn.h"
 
-#define URL_FILE "/home/akalia/fastpp/data_dump/ndn_distributed_sample"
+// #define URL_FILE "/home/akalia/fastpp/data_dump/ndn_distributed_sample"
+#define URL_FILE "data/ndn_distributed_sample_small"
+
 void process_batch(struct ndn_linear_url *url_lo) 
 {
 	int batch_index = 0;
@@ -28,6 +30,10 @@ int main(int argc, char **argv)
 	red_printf("main: Initializing NDN hash table\n");
 	ndn_init(URL_FILE, 0xf, &ht);
 	red_printf("\tmain: Setting up NDN index done!\n");
+
+	red_printf("main: Checking if all URLs were inserted\n");
+	ndn_check(URL_FILE, &ht);
+	red_printf("\tmain: Check succeeded\n");
 
 	red_printf("main: Getting URL array\n");
 	int nb_urls = ndn_get_num_urls(URL_FILE);

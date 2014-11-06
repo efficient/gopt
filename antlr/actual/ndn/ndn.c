@@ -18,9 +18,16 @@ char *ndn_get_prefix(const char *url, int len)
 	return prefix;
 }
 
-/**< Check if a prefix exists in the NDN hash table. 
-  *  Returns 1 on success, and 0 on failure. */
-int ndn_contains(const char *url, int len, struct ndn_ht *ht)
+/**< Check if a prefix exists in the NDN hash table. If the existing prefix
+  *  is non-terminal, and this prefix is terminal, then update the existing
+  *  prefix's log entry (set is_terminal = 1 and a valid dst port).
+  *
+  *  To use this function just to test is a prefix is present (without any
+  *  updates to the log, call with is_terminal = 0.
+  *
+  *  Returns 1 if the prefix was found, and 0 otherwise. */
+int ndn_contains(const char *url, int len,
+	int is_terminal, int dst_port_id, struct ndn_ht *ht)
 {
 	/**< A prefix ends with a '/', so it contains at least 2 characters */
 	assert(len >= 2);
@@ -45,19 +52,28 @@ int ndn_contains(const char *url, int len, struct ndn_ht *ht)
 			slot = ht_index[bkt_2].slot;
 		}
 
-		/**< Now, "slot" points to an ndn_bucket */
+		/**< Now, "slot" points to an ndn_bucket. Find a valid slot with 
+		  *  a matching tag. */
 		for(i = 0; i < 8; i ++) {
 			int slot_offset = NDN_SLOT_TO_OFFSET(slot[i]);
 	
 			if(slot_offset != 0) {
 				uint16_t slot_tag = NDN_SLOT_TO_TAG(slot[i]);
-	
+
 				if(slot_tag == tag) {
 					uint8_t *log_ptr = &ht_log[slot_offset];
 					uint8_t prefix_len = log_ptr[0];
-	
+
 					if(prefix_len == (uint8_t) len && 
 						memcmp(url, &log_ptr[3], prefix_len) == 0) {
+
+						/**< Should we upgrade this prefix to "terminal"? */
+						if(log_ptr[1] == 0 && is_terminal == 1) {
+							/**< Need to update the log entry */
+							log_ptr[1] = 1;
+							log_ptr[2] = dst_port_id;
+						}
+
 						return 1;
 					}
 				}
@@ -80,7 +96,7 @@ int ndn_ht_insert(const char *url, int len,
 	assert(dst_port_id < NDN_MAX_ETHPORTS);
 	assert(len <= NDN_MAX_URL_LENGTH);
 
-	if(ndn_contains(url, len, ht)) {
+	if(ndn_contains(url, len, is_terminal, dst_port_id, ht)) {
 		return 0;
 	}
 
@@ -121,8 +137,8 @@ int ndn_ht_insert(const char *url, int len,
 
 				/**< Actually write the prefix and metadata to the log */
 				ht_log[insert_offset] = len;
-				ht_log[insert_offset + 1] = dst_port_id;
-				ht_log[insert_offset + 2] = is_terminal;
+				ht_log[insert_offset + 1] = is_terminal;
+				ht_log[insert_offset + 2] = dst_port_id;
 				memcpy(&ht_log[insert_offset + 3], url, len);
 
 				return 0;
@@ -175,16 +191,14 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_ht *ht)
 
 		assert(url[NDN_MAX_URL_LENGTH - 1] == 0);
 
-		/**< The destination port for all components of this URL */
+		/**< The destination port for this URL */
 		int dst_port_id = port_arr[rand() % num_active_ports];
 
 		int i;
 		for(i = 0; i < NDN_MAX_URL_LENGTH; i ++) {
-			/**< Insert into the hash table when you detect a new prefix
-              *  or end-of-URL. If it's end-of-URL, mark this as a 
-			  *  terminal prefix. */
 			if(url[i] == '/') {
-				if(ndn_ht_insert(url, i + 1, 0, dst_port_id, ht) != 0) {
+				/**< Non-terminal prefixes have an invalid dst port */
+				if(ndn_ht_insert(url, i + 1, 0, -1, ht) != 0) {
 					nb_fail ++;
 				}
 			} else if(url[i] == 0) {
@@ -232,15 +246,17 @@ void ndn_check(const char *urls_file, struct ndn_ht *ht)
 
 		int i;
 		for(i = 0; i < NDN_MAX_URL_LENGTH; i ++) {
+			/**< While calling ndn_contains(), use is_terminal = 0 to avoid
+			  *  overwriting any log entry */
 			if(url[i] == '/') {
-				if(ndn_contains(url, i + 1, ht) == 0) {
-					printf("Prefix %s not found\n", ndn_get_prefix(url, i + 1));
+				if(ndn_contains(url, i + 1, 0, -1, ht) == 0) {
+					printf("Prefix %s absent.\n", ndn_get_prefix(url, i + 1));
 					assert(0);
 				}
 			} else if(url[i] == 0) {
 				url[i] = '/';
-				if(ndn_contains(url, i + 1, ht) == 0) {
-					printf("Prefix %s not found\n", ndn_get_prefix(url, i + 1));
+				if(ndn_contains(url, i + 1, 0, -1, ht) == 0) {
+					printf("Prefix %s absent.\n", ndn_get_prefix(url, i + 1));
 					assert(0);
 				}
 				break;

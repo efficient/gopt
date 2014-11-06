@@ -1,0 +1,53 @@
+Assumption
+===========
+
+Incoming packets can only match terminal prefixes. For example, if we
+have *only* two inserted URLs:
+
+	com/google/maps/ --> Port #1
+	com/google/drive/ --> Port #2
+
+and a incoming packet has destination URL /com/google/, our outbound port
+is undefined. The algorithm *does* need to have a defined outbound port 
+if the URL com/google/ was also present.
+
+
+
+Inserting a URL into the NDN hash table:
+========================================
+
+The URL is inserted by breaking it down into prefixes at component boundaries.
+For example, the URL com/google/maps leads to the insertion of three prefixes:
+
+	com/ -> non terminal
+	com/google/ -> non terminal
+	com/google/maps/ -> terminal
+
+
+	Requirements for insertion:
+	===========================
+
+	1. Non-terminal prefixes should *not* have an outbound port.
+	2. Terminal prefixes should have an outbound port.
+
+	
+	Overwriting existing prefixes:
+	==============================
+
+	As the existing prefix has an entry in the log (ht_log), it needs to be 
+	updated.
+
+	1. Overwriting a non-terminal prefix with a terminal prefix: the port
+	field and the "is_terminal" field in the log entry need to be changed.
+
+	2. Overwriting a terminal prefix with a non-terminal prefix: no changes
+	need to be made.
+
+
+
+Semantics of "terminal" prefixes:
+=================================
+
+A terminal prefix does not mean that the LPM should stop here. It only means
+that the LPM *could* stop here if the URL that we're looking up does not
+have more components.
