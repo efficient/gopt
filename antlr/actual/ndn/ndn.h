@@ -44,6 +44,12 @@ struct ndn_ht
 	ULL log_head;	/**< log_head >= 1 means that this slot is valid */
 };
 
+/**< For storing URLs linearly */
+struct ndn_linear_url
+{
+	char url[NDN_MAX_URL_LENGTH];
+};
+
 /**< These macros should be safe for use with the ANTLR code */
 #define NDN_SLOT_TO_OFFSET(s) (s & ((1L << 48) - 1))	/**< Lower 48 bytes */
 #define NDN_SLOT_TO_TAG(s) (s >> 48)	/**< Higher 16 bytes */
@@ -58,3 +64,9 @@ int ndn_ht_insert(const char *url, int len,
 
 /**< Check if all the URLs in "urls_file" are inserted in the hash table */
 void ndn_check(const char *urls_file, struct ndn_ht *ht);
+
+/**< Return the number of URLs in a file */
+int ndn_get_num_urls(const char *urls_file);
+
+/**< Put all the URLs in a linear array with fixed sized slots */
+struct ndn_linear_url *ndn_get_url_array(const char *urls_file);

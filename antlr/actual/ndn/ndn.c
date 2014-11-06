@@ -256,3 +256,56 @@ void ndn_check(const char *urls_file, struct ndn_ht *ht)
 	}
 }
 
+/**< Return the number of URLs in a file */
+int ndn_get_num_urls(const char *urls_file)
+{
+	int nb_urls = 0;
+	FILE *url_fp = fopen(urls_file, "r");
+	assert(url_fp != NULL);
+
+	char url[NDN_MAX_URL_LENGTH] = {0};
+
+	while(1) {
+		/**< Read a new URL from the file and check if its valid */
+		fscanf(url_fp, "%s", url);
+		if(url[0] == 0) {
+			break;
+		}
+
+		/**< As we're only counting URLs, no need to zero out all bytes */
+		url[0] = 0;
+		nb_urls ++;
+	}
+
+	return nb_urls;
+}
+
+
+/**< Put all the URLs in a linear array with fixed sized slots */
+struct ndn_linear_url *ndn_get_url_array(const char *urls_file)
+{
+	int i;
+	int nb_urls = ndn_get_num_urls(urls_file);
+	struct ndn_linear_url *url_arr = 
+		malloc(nb_urls * sizeof(struct ndn_linear_url));
+	memset(url_arr, 0, nb_urls * sizeof(struct ndn_linear_url));
+
+	char url[NDN_MAX_URL_LENGTH] = {0};
+	FILE *url_fp = fopen(urls_file, "r");
+	assert(url_fp != NULL);
+
+	for(i = 0; i < nb_urls; i ++) {
+		fscanf(url_fp, "%s", url);
+		if(url[0] == 0) {
+			break;
+		}
+		assert(url[NDN_MAX_URL_LENGTH - 1] == 0);
+
+		int url_len = strlen(url);
+
+		memcpy((char *) &url_arr[i], url, url_len);
+		memset(url, 0, NDN_MAX_URL_LENGTH);
+	}
+
+	return url_arr;
+}

@@ -1,2 +1,2 @@
-rm coll
-make coll
+rm nogoto
+make all
