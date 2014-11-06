@@ -263,7 +263,7 @@ void ndn_check(const char *urls_file, struct ndn_ht *ht)
 			}
 		}
 		
-		memset(url, 0, NDN_MAX_URL_LENGTH * sizeof(char));
+		memset(url, 0, NDN_MAX_URL_LENGTH);
 		nb_urls ++;
 
 		if((nb_urls & K_512_) == 0) {
@@ -324,4 +324,44 @@ struct ndn_linear_url *ndn_get_url_array(const char *urls_file)
 	}
 
 	return url_arr;
+}
+
+/**< Print some useful stats for the URLs in this file */
+void ndn_print_url_stats(const char *urls_file)
+{
+	int i;
+
+	/**< Maximum number of components = 5 */
+	int components_stats[NDN_MAX_URL_LENGTH + 1] = {0};
+	char url[NDN_MAX_URL_LENGTH] = {0};
+
+	FILE *url_fp = fopen(urls_file, "r");
+	assert(url_fp != NULL);
+
+	while(1) {
+		fscanf(url_fp, "%s", url);
+		if(url[0] == 0) {
+			break;
+		}
+		assert(url[NDN_MAX_URL_LENGTH - 1] == 0);
+
+		int url_len = strlen(url);
+		int num_slash = 0;
+		for(i = 0; i < url_len; i ++) {
+			if(url[i] == '/') {
+				num_slash ++;
+			}
+		}
+
+		/**< Number of components = number of '/' characters + 1*/
+		assert(num_slash + 1 <= NDN_MAX_COMPONENTS);
+		components_stats[num_slash + 1] ++;
+	
+		memset(url, 0, NDN_MAX_URL_LENGTH);
+	}
+
+	red_printf("URL stats:\n");
+	for(i = 0; i <= NDN_MAX_COMPONENTS; i ++) {
+		printf("%d URLs have %d components\n", components_stats[i], i);
+	}
 }

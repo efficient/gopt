@@ -8,6 +8,9 @@
 #define NDN_MAX_URL_LENGTH 150
 #define NDN_LOG_HEADROOM (NDN_MAX_URL_LENGTH * 3)
 
+/**< The maximum number of components is 5 */
+#define NDN_MAX_COMPONENTS 5
+
 /**< Don't want to include rte headers for RTE_MAX_ETHPORTS */
 #define NDN_MAX_ETHPORTS 16
 #define NDN_ISSET(a, i) (a & (1 << i))
@@ -70,3 +73,6 @@ int ndn_get_num_urls(const char *urls_file);
 
 /**< Put all the URLs in a linear array with fixed sized slots */
 struct ndn_linear_url *ndn_get_url_array(const char *urls_file);
+
+/**< Print some useful stats for the URLs in this file */
+void ndn_print_url_stats(const char *urls_file);
