@@ -56,26 +56,22 @@ int ndn_contains(const char *url, int len,
 		  *  a matching tag. */
 		for(i = 0; i < 8; i ++) {
 			int slot_offset = NDN_SLOT_TO_OFFSET(slot[i]);
+			uint16_t slot_tag = NDN_SLOT_TO_TAG(slot[i]);
+			uint8_t *log_ptr = &ht_log[slot_offset];
 	
-			if(slot_offset != 0) {
-				uint16_t slot_tag = NDN_SLOT_TO_TAG(slot[i]);
+			if(slot_offset != 0 && slot_tag == tag) {
+				uint8_t prefix_len = log_ptr[0];
 
-				if(slot_tag == tag) {
-					uint8_t *log_ptr = &ht_log[slot_offset];
-					uint8_t prefix_len = log_ptr[0];
+				if(prefix_len == (uint8_t) len && 
+					memcmp(url, &log_ptr[3], len) == 0) {
 
-					if(prefix_len == (uint8_t) len && 
-						memcmp(url, &log_ptr[3], prefix_len) == 0) {
-
-						/**< Should we upgrade this prefix to "terminal"? */
-						if(log_ptr[1] == 0 && is_terminal == 1) {
-							/**< Need to update the log entry */
-							log_ptr[1] = 1;
-							log_ptr[2] = dst_port_id;
-						}
-
-						return 1;
+					/**< Should we upgrade this prefix to "terminal"? */
+					if(log_ptr[1] == 0 && is_terminal == 1) {
+						log_ptr[1] = 1;
+						log_ptr[2] = dst_port_id;
 					}
+
+					return 1;
 				}
 			}
 		}
@@ -345,17 +341,9 @@ void ndn_print_url_stats(const char *urls_file)
 		}
 		assert(url[NDN_MAX_URL_LENGTH - 1] == 0);
 
-		int url_len = strlen(url);
-		int num_slash = 0;
-		for(i = 0; i < url_len; i ++) {
-			if(url[i] == '/') {
-				num_slash ++;
-			}
-		}
-
-		/**< Number of components = number of '/' characters + 1*/
-		assert(num_slash + 1 <= NDN_MAX_COMPONENTS);
-		components_stats[num_slash + 1] ++;
+		int num_components = ndn_num_components(url);
+		assert(num_components <= NDN_MAX_COMPONENTS);
+		components_stats[num_components] ++;
 	
 		memset(url, 0, NDN_MAX_URL_LENGTH);
 	}
@@ -364,4 +352,20 @@ void ndn_print_url_stats(const char *urls_file)
 	for(i = 0; i <= NDN_MAX_COMPONENTS; i ++) {
 		printf("%d URLs have %d components\n", components_stats[i], i);
 	}
+}
+
+/**< Count the number of components in this URL */
+inline int ndn_num_components(const char *url)
+{
+	int i, num_slash = 0;
+	for(i = 0; i < NDN_MAX_URL_LENGTH; i ++) {
+		if(i == '/') {
+			num_slash ++;
+		}
+		if(i == 0) {
+			break;
+		}
+	}
+
+	return num_slash + 1;
 }

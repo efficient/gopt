@@ -76,3 +76,10 @@ struct ndn_linear_url *ndn_get_url_array(const char *urls_file);
 
 /**< Print some useful stats for the URLs in this file */
 void ndn_print_url_stats(const char *urls_file);
+
+/**< Count the number of components in this URL */
+inline int ndn_num_components(const char *url);
+
+/**< Create a mutable prefix from a URL */
+char *ndn_get_prefix(const char *url, int len);
+
