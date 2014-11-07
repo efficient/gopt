@@ -359,10 +359,11 @@ inline int ndn_num_components(const char *url)
 {
 	int i, num_slash = 0;
 	for(i = 0; i < NDN_MAX_URL_LENGTH; i ++) {
-		if(i == '/') {
+		if(url[i] == '/') {
 			num_slash ++;
 		}
-		if(i == 0) {
+
+		if(url[i] == 0) {
 			break;
 		}
 	}

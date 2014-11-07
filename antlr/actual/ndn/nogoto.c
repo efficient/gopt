@@ -9,7 +9,7 @@
 #include "ndn.h"
 
 #define URL_FILE "/home/akalia/fastpp/data_dump/ndn_distributed_sample"
-// #define URL_FILE "data/ndn_distributed_sample_small"
+//#define URL_FILE "data/ndn_distributed_sample_small"
 //#define URL_FILE "data/test"
 
 int batch_index = 0;
