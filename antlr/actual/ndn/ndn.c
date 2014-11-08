@@ -34,7 +34,7 @@ int ndn_contains(const char *url, int len,
 
 	int i;
 	int bkt_num, bkt_1, bkt_2;
-	uint16_t tag = (uint16_t) url[0] + (((uint16_t) url[1]) << 8);
+	uint16_t tag = (uint16_t) url[len - 2];	/**< url[len - 1] is '/' */
 
 	struct ndn_bucket *ht_index = ht->ht_index;
 	ULL *slot;
@@ -98,7 +98,7 @@ int ndn_ht_insert(const char *url, int len,
 
 	int i;
 	int bkt_num, bkt_1, bkt_2;
-	uint16_t tag = (uint16_t) url[0] + (((uint16_t) url[1]) << 8);
+	uint16_t tag = (uint16_t) url[len - 2];	/**< url[len - 1] is '/' */
 
 	struct ndn_bucket *ht_index = ht->ht_index;
 	ULL *slot;
@@ -142,6 +142,7 @@ int ndn_ht_insert(const char *url, int len,
 		}
 	}
 
+	printf("\tUnable to insert URL: %s\n", url);
 	return -1;
 }
 

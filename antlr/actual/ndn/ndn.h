@@ -1,5 +1,10 @@
 #include "util.h"
 
+#define URL_FILE "/mnt/ssd/akalia/tsinghua/fib_10M/fib_1010"
+// #define URL_FILE "/home/akalia/fastpp/data_dump/ndn_distributed_sample"
+// #define URL_FILE "data/ndn_distributed_sample_small"
+// #define URL_FILE "data/test"
+
 /**< SHM keys for the hash-table index and log */
 #define NDN_HT_INDEX_KEY 1
 #define NDN_HT_LOG_KEY 2

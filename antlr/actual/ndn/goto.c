@@ -8,10 +8,6 @@
 #include "fpp.h"
 #include "ndn.h"
 
-#define URL_FILE "/home/akalia/fastpp/data_dump/ndn_distributed_sample"
-//#define URL_FILE "data/ndn_distributed_sample_small"
-//#define URL_FILE "data/test"
-
 int batch_index = 0;
 int nb_succ = 0;
 
@@ -46,19 +42,20 @@ void process_batch(struct ndn_linear_url *url_lo, struct ndn_ht *ht)
 fpp_start:
 
 		url[I] = url_lo[I].url;
+		url_len[I] = strlen(url[I]);
+
+		/**< The last character (not '/') is a good tag */
+		tag[I] = url[I][url_len[I] - 1];
+		url[I][url_len[I]] = '/';		/**< This character was 0 */
 
 			/**< URL char iterator and slot iterator */
 		
-		tag[I] = (uint16_t) url[I][0] + (((uint16_t) url[I][1]) << 8);
-
 		ht_index[I] = ht->ht_index;
 		
 		ht_log[I] = ht->ht_log;
 
 		match_found[I] = 0;
 
-		url_len[I] = strlen(url[I]);
-		url[I][url_len[I]] = '/';		/**< This character was 0 */
 
 		for(c_i[I] = url_len[I]; c_i[I] >= 0; c_i[I] --) {
 			if(url[I][c_i[I]] != '/') {
