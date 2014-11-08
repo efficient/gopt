@@ -14,7 +14,7 @@
 #define NDN_LOG_HEADROOM (NDN_MAX_URL_LENGTH * 3)
 
 /**< The maximum number of components is 5 */
-#define NDN_MAX_COMPONENTS 5
+#define NDN_MAX_COMPONENTS 10
 
 /**< Don't want to include rte headers for RTE_MAX_ETHPORTS */
 #define NDN_MAX_ETHPORTS 16

@@ -51,3 +51,27 @@ Semantics of "terminal" prefixes:
 A terminal prefix does not mean that the LPM should stop here. It only means
 that the LPM *could* stop here if the URL that we're looking up does not
 have more components.
+
+
+10M FIB stats (Tsinghua FIB)
+============================
+
+This is the 10-million entry FIB from the NDN papers by Prof. Bin Liu and 
+students.
+
+	974 URLs have 1 components
+	7086509 URLs have 2 components
+	1888029 URLs have 3 components
+	259022 URLs have 4 components
+	16980 URLs have 5 components
+	1268 URLs have 6 components
+	288 URLs have 7 components
+	12 URLs have 8 components
+	2 URLs have 9 components
+
+20% of the URLs have 3 components.
+
+The "Fast Name Lookup for Named Data Networking" (IWQoS) paper claims that 
+15.4% of their URLs have 3 components. That is for the smaller FIB with 3 
+million entries.
+
