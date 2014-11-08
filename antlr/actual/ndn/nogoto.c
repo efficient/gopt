@@ -108,7 +108,7 @@ int main(int argc, char **argv)
 
 	red_printf("main: Starting NDN lookups\n");
 	/** < Init PAPI_TOT_INS and PAPI_TOT_CYC counters */
-	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {
 		printf("PAPI error: retval: %d\n", retval);
 		exit(1);
 	}
@@ -116,17 +116,17 @@ int main(int argc, char **argv)
 	for(i = 0; i < nb_urls; i += BATCH_SIZE) {
 		process_batch(&url_arr[i], &ht);
 	}
-	
+
 	/**< All URLs should get a match */
 	assert(nb_urls == nb_succ);
 
-	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {
 		printf("PAPI error: retval: %d\n", retval);
 		exit(1);
 	}
 
 	red_printf("Time = %.4f s, rate = %.2f\n"
-		"Instructions = %lld, IPC = %f\n", 
+		"Instructions = %lld, IPC = %f\n",
 		real_time, nb_urls / real_time,
 		ins, ipc);
 
