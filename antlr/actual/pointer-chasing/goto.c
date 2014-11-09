@@ -44,7 +44,7 @@ fpp_start:
             FPP_PSS(&ht_log[jumper[I]], fpp_label_1);
 fpp_label_1:
 
-            jumper[I] = ht_log[jumper[I]];
+            jumper[I] = (ht_log[jumper[I]] + i[I]) & LOG_CAP_;
         }
         
         sum += jumper[I];

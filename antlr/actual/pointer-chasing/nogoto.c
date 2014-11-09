@@ -30,7 +30,7 @@ int process_pkts_in_batch(int *pkt_lo)
 			
 		for(i = 0; i < DEPTH; i++) {
 			FPP_EXPENSIVE(&ht_log[jumper]);
-			jumper = ht_log[jumper];
+			jumper = (ht_log[jumper] + i) & LOG_CAP_;
 		}
 
 		sum += jumper;

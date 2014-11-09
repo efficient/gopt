@@ -33,7 +33,7 @@ int process_pkts_in_batch(int *pkt_lo)
 	int i;
 	for(i = 0; i < DEPTH; i++) {
 		for(batch_index = 0; batch_index < BATCH_SIZE; batch_index ++) {
-			jumper[batch_index] = ht_log[jumper[batch_index]];
+			jumper[batch_index] = (ht_log[jumper[batch_index]] + i) & LOG_CAP_;
 			if(i != DEPTH - 1) {
 				__builtin_prefetch(&ht_log[jumper[batch_index]], 0, 0);
 			}
