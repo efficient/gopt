@@ -1,4 +1,4 @@
 all:
-	g++ -o aho aho.cpp
+	gcc -g -o aho aho.c ds_queue.c
 clean:
 	rm aho
