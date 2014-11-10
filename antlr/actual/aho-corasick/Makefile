@@ -1,4 +1,4 @@
 all:
-	gcc -g -o aho aho.c ds_queue.c
+	gcc -g -o main aho.c ds_queue.c main.c
 clean:
-	rm aho
+	rm main

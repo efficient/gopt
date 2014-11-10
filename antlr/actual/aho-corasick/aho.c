@@ -3,157 +3,96 @@
 #include<string.h>
 #include<assert.h>
 
-#include "ds_queue.h"
+#include "aho.h"
 
-/**< Maximum number of states, at least as large as the sum of all keypattern's length. */
-#define MAX (505 * 505)
-
-/**< Alphabet size, 26 for lower case English letters. */
-#define ALPHA_SIZE 27
-#define FAIL -1
-
-int g[MAX][ALPHA_SIZE];
-int f[MAX];
-struct ds_queue output[MAX];
-int new_state;
-
-void enter(char *pattern, int index)
+void aho_init(struct aho_state **dfa)
 {
+	int i;
+	*dfa = malloc(AHO_MAX_STATES * sizeof(struct aho_state));
+	for(i = 0; i < AHO_MAX_STATES; i ++) {
+		struct aho_state *cur_state = &((*dfa)[i]);
+		memset(cur_state->G, AHO_FAIL, AHO_ALPHA_SIZE * sizeof(int));
+		cur_state->F = AHO_FAIL;
+		ds_queue_init(&cur_state->output);
+	}
+}
+
+void aho_add_pattern(struct aho_state *dfa, char *pattern, int index)
+{
+	static int aho_new_state = 0;
+
 	int length = strlen(pattern);
 	int j, state = 0;
+
 	for(j = 0; j < length; j ++) {
-		int c = pattern[j] - 'a';
-		if(g[state][c] == FAIL) {
+		if(dfa[state].G[pattern[j]] == AHO_FAIL) {
 			break;
 		}
-		state = g[state][c];
+		state = dfa[state].G[pattern[j]];
 	}
 
 	/**< Characters j to (length - 1) need new states */
 	for(; j < length; j ++) {
-		int c = pattern[j] - 'a';
-		new_state ++;
-		g[state][c] = new_state;
-		state = new_state;
+		aho_new_state ++;
+		assert(aho_new_state < AHO_MAX_STATES);
+
+		dfa[state].G[pattern[j]] = aho_new_state;
+		state = aho_new_state;
 	}
 
 	/**< Add this pattern as the output for the last state */
-	assert(state >= 0 && state < MAX);
-	ds_queue_add(&output[state], index);
+	ds_queue_add(&(dfa[state].output), index);
 }
 
-int main(int argc, char *argv[])
+void aho_build_ff(struct aho_state *dfa)
 {
-	int n, i;
-	char c;
-	char *text, *pattern;
-	int *count;
-
-	scanf("%d", &n);
-	scanf("%ms", &text);
-	new_state = 0;
-
-	/**< Initialize the goto and failure functions */
-	memset(g, FAIL, MAX * ALPHA_SIZE * sizeof(int));
-	memset(f, FAIL, MAX * sizeof(int));
-
-	/**< Initialize the pattern-occurence count */
-	count = malloc(n * sizeof(int));
-	memset(count, 0, n * sizeof(int));
-
-	/**< Initialize output queues for each state */
-	for(i = 0; i < MAX; i++) {
-		ds_queue_init(&output[i]);
-	}
-
-	/**< Read patterns and build the Trie */
-	for(i = 0; i < n; i++) {
-		scanf("%ms", &pattern);
-		count[i] = 0;
-		enter(pattern, i);
-	}
+	int i;
+	struct ds_queue state_queue;
+	ds_queue_init(&state_queue);
 
 	/**< Invalid transitions from the root state need to loop back */
-	for(c = 'a'; c <= 'z'; c++) {
-		int a = c - 'a';
-		if(g[0][a] == FAIL) {
-			g[0][a] = 0;
+	for(i = 0; i < AHO_ALPHA_SIZE; i ++) {
+		if(dfa[0].G[i] == AHO_FAIL) {
+			dfa[0].G[i] = 0;
 		}
 	}
 
-	/**< Build failure function: add root node's children to the queue */
-	struct ds_queue Q;
-	ds_queue_init(&Q);
-	for(c = 'a'; c <= 'z'; c++) {
-		int a = c - 'a';
-		int s = g[0][a];
-		if(s != 0) {
-			ds_queue_add(&Q, s);
-			f[s] = 0;
+	/**< Initialize the failure function of the root's children */
+	for(i = 0; i < AHO_ALPHA_SIZE; i ++) {
+		int next_state = dfa[0].G[i];
+		if(next_state != 0) {
+			ds_queue_add(&state_queue, next_state);
+			dfa[next_state].F = 0;
 		}
 	}
 
-	while(!ds_queue_is_empty(&Q)) {
-		int r = ds_queue_remove(&Q);
+	/**< Create the failure function recursively */
+	while(!ds_queue_is_empty(&state_queue)) {
+		int cur_state = ds_queue_remove(&state_queue);
 
-		/**< Look at all the valid state transitions from r */
-		for(c = 'a'; c <= 'z'; c++) {
-			int a = c - 'a';
-			int s = g[r][a];
+		/**< Look at all the valid state transitions from cur_state */
+		for(i = 0; i < AHO_ALPHA_SIZE; i ++) {
+			int child_state = dfa[cur_state].G[i];
 
-			if(s != FAIL) {
-				ds_queue_add(&Q, s);
-				int state = f[r];
-				while(g[state][a] == FAIL) {
-					state = f[state];
+			if(child_state != AHO_FAIL) {
+				ds_queue_add(&state_queue, child_state);
+
+				int best_state = dfa[cur_state].F;
+				while(dfa[best_state].G[i] == AHO_FAIL) {
+					best_state = dfa[best_state].F;
 				}
 
-				f[s] = g[state][a];
+				int child_fail_state = dfa[best_state].G[i];
+				dfa[child_state].F = child_fail_state;
 
-				/**< Add all patterns from output[f[s]] to output[s] */
-				struct ds_qnode *t = output[f[s]].head;
+				/**< Add all patterns from child_state.F to child_state */
+				struct ds_qnode *t = dfa[child_fail_state].output.head;
 				while(t != NULL) {
-					ds_queue_add(&output[s], t->data);
+					ds_queue_add(&dfa[child_state].output, t->data);
 					t = t->next;
 				}
 			}
-		}
-	}
-
-	/**< Count occurrences of patterns inside text */
-	int state = 0;
-	int length = strlen(text);
-	for(i = 0; i < length; i++) {
-		int a = text[i] - 'a';
-		while(g[state][a] == FAIL) {
-			state = f[state];
-		}
-		state = g[state][a];
-
-		/**< Increase the count for all patterns matched at this state */
-		struct ds_qnode *t = output[state].head;
-		while(t != NULL) {
-			assert(t->data < 2005);
-			count[t->data] ++;
-			t = t->next;
-		}
-	}
-
-	for(i = 0; i < n; i++) {
-		printf("%d: ", count[i]);
-		int expected;
-		scanf("%d\n", &expected);
-		if(count[i] == expected) {
-			printf("Passed\n");
-		} else {
-			printf("Failed\n");
-			exit(-1);
-		}
-	}
-
-	free(pattern);
-	free(text);
-	free(count);
-
-	return 0;
+		}	/**< End loop over children states */
+	}	/**< Finish traversal */
 }
+
