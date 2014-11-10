@@ -5,6 +5,7 @@
 
 #include "aho.h"
 
+/**< Initialize the state transition table and state outputs */
 void aho_init(struct aho_state **dfa)
 {
 	int i;
@@ -17,6 +18,7 @@ void aho_init(struct aho_state **dfa)
 	}
 }
 
+/**< Add a pattern to the DFA */
 void aho_add_pattern(struct aho_state *dfa, char *pattern, int index)
 {
 	static int aho_new_state = 0;
@@ -44,6 +46,7 @@ void aho_add_pattern(struct aho_state *dfa, char *pattern, int index)
 	ds_queue_add(&(dfa[state].output), index);
 }
 
+/**< Build the Aho-Coraick failure function */
 void aho_build_ff(struct aho_state *dfa)
 {
 	int i;
