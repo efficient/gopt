@@ -5,43 +5,39 @@
 
 #include "ds_queue.h"
 
-/**< Maximum number of states, at least as large as the sum of all key word's length. */
+/**< Maximum number of states, at least as large as the sum of all keypattern's length. */
 #define MAX (505 * 505)
 
 /**< Alphabet size, 26 for lower case English letters. */
 #define ALPHA_SIZE 27
 #define FAIL -1
 
-/**< Maximum length of the text */
-#define MAX_LENGTH 1000010
-
 int g[MAX][ALPHA_SIZE];
 int f[MAX];
 struct ds_queue output[MAX];
-char text[MAX_LENGTH];
 int new_state;
 
-void enter(char *word, int index)
+void enter(char *pattern, int index)
 {
-	int length = strlen(word);
+	int length = strlen(pattern);
 	int j, state = 0;
-	for(j = 0; j < length; j++) {
-		int c = word[j] - 'a';
+	for(j = 0; j < length; j ++) {
+		int c = pattern[j] - 'a';
 		if(g[state][c] == FAIL) {
 			break;
 		}
 		state = g[state][c];
 	}
 
-	/**< Characters j to length - 1 need new states */
-	for(; j < length; j++) {
-		int c = word[j] - 'a';
-		new_state++;
+	/**< Characters j to (length - 1) need new states */
+	for(; j < length; j ++) {
+		int c = pattern[j] - 'a';
+		new_state ++;
 		g[state][c] = new_state;
 		state = new_state;
 	}
 
-	/**< Add this word as the output for the last state */
+	/**< Add this pattern as the output for the last state */
 	assert(state >= 0 && state < MAX);
 	ds_queue_add(&output[state], index);
 }
@@ -50,15 +46,20 @@ int main(int argc, char *argv[])
 {
 	int n, i;
 	char c;
-	char word[505];
-	int count[2005];
+	char *text, *pattern;
+	int *count;
 
 	scanf("%d", &n);
-	scanf("%s", text);
-
+	scanf("%ms", &text);
 	new_state = 0;
-	memset(g, FAIL, sizeof g);
-	memset(f, FAIL, sizeof f);
+
+	/**< Initialize the goto and failure functions */
+	memset(g, FAIL, MAX * ALPHA_SIZE * sizeof(int));
+	memset(f, FAIL, MAX * sizeof(int));
+
+	/**< Initialize the pattern-occurence count */
+	count = malloc(n * sizeof(int));
+	memset(count, 0, n * sizeof(int));
 
 	/**< Initialize output queues for each state */
 	for(i = 0; i < MAX; i++) {
@@ -67,9 +68,9 @@ int main(int argc, char *argv[])
 
 	/**< Read patterns and build the Trie */
 	for(i = 0; i < n; i++) {
-		scanf("%s", word);
+		scanf("%ms", &pattern);
 		count[i] = 0;
-		enter(word, i);
+		enter(pattern, i);
 	}
 
 	/**< Invalid transitions from the root state need to loop back */
@@ -106,6 +107,7 @@ int main(int argc, char *argv[])
 				while(g[state][a] == FAIL) {
 					state = f[state];
 				}
+
 				f[s] = g[state][a];
 
 				/**< Add all patterns from output[f[s]] to output[s] */
@@ -148,6 +150,10 @@ int main(int argc, char *argv[])
 			exit(-1);
 		}
 	}
+
+	free(pattern);
+	free(text);
+	free(count);
 
 	return 0;
 }
