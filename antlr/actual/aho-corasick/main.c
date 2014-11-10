@@ -4,6 +4,7 @@
 #include<assert.h>
 
 #include "aho.h"
+#include "util.h"
 
 int main(int argc, char *argv[])
 {
@@ -22,6 +23,7 @@ int main(int argc, char *argv[])
 	memset(count, 0, n * sizeof(int));
 
 	/**< Read patterns and build the Trie */
+	red_printf("Building AC goto function\n");
 	for(i = 0; i < n; i++) {
 		scanf("%ms", &pattern);
 		count[i] = 0;
@@ -29,9 +31,11 @@ int main(int argc, char *argv[])
 	}
 
 	/**< Create the failure function */
+	red_printf("Building AC failure function\n");
 	aho_build_ff(dfa);
 
 	/**< Count occurrences of patterns inside text */
+	red_printf("Starting lookup\n");
 	int state = 0;
 	int length = strlen(text);
 	for(i = 0; i < length; i++) {
@@ -50,16 +54,16 @@ int main(int argc, char *argv[])
 	}
 
 	for(i = 0; i < n; i++) {
-		printf("%d: ", count[i]);
 		int expected;
 		scanf("%d\n", &expected);
-		if(count[i] == expected) {
-			printf("Passed\n");
-		} else {
-			printf("Failed\n");
+		if(count[i] != expected) {
+			red_printf("Failed. count[%d] = %d, expected = %d\n",
+				i, count[i], expected);
 			exit(-1);
 		}
 	}
+
+	red_printf("Passed!\n");
 
 	free(pattern);
 	free(text);
