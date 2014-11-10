@@ -1,4 +1,4 @@
-#define DS_QUEUE_DBG 1
+#define DS_QUEUE_DBG 0
 
 #define ds_queue_printf(...) \
 	do { \
@@ -23,3 +23,4 @@ int ds_queue_remove(struct ds_queue *q);
 int ds_queue_size(struct ds_queue *q);
 void ds_queue_free(struct ds_queue *q);
 int ds_queue_is_empty(struct ds_queue *q);
+void ds_queue_print(struct ds_queue *q);

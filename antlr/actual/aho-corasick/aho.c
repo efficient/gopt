@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 	int n, i;
 	char c;
 	char word[505];
-	int count[505];
+	int count[2005];
 
 	scanf("%d", &n);
 	scanf("%s", text);
@@ -131,13 +131,22 @@ int main(int argc, char *argv[])
 		/**< Increase the count for all patterns matched at this state */
 		struct ds_qnode *t = output[state].head;
 		while(t != NULL) {
+			assert(t->data < 2005);
 			count[t->data] ++;
 			t = t->next;
 		}
 	}
 
 	for(i = 0; i < n; i++) {
-		printf("%d\n", count[i]);
+		printf("%d: ", count[i]);
+		int expected;
+		scanf("%d\n", &expected);
+		if(count[i] == expected) {
+			printf("Passed\n");
+		} else {
+			printf("Failed\n");
+			exit(-1);
+		}
 	}
 
 	return 0;
