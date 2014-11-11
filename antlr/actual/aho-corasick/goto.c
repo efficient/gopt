@@ -76,13 +76,15 @@ fpp_start:
 		inp[I] = test_pkts[I].content[j[I]];
 		while(dfa[state[I]].G[inp[I]] == AHO_FAIL) {
 			state[I] = dfa[state[I]].F;
-			FPP_PSS(&dfa[state[I]], fpp_label_1);
+			FPP_PSS(&(dfa[state[I]].G[inp[I]]), fpp_label_1);
 fpp_label_1:
 			;
 		}
 
 		state[I] = dfa[state[I]].G[inp[I]];
-		FPP_PSS(&dfa[state[I]], fpp_label_2);
+		if(j[I] + 1 != PKT_SIZE - 1) {
+			FPP_PSS(&(dfa[state[I]].G[test_pkts[I].content[j[I] + 1]]), fpp_label_2);
+		}
 fpp_label_2:
 		;
 	}
