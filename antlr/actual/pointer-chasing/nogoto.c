@@ -88,4 +88,7 @@ int main(int argc, char **argv)
 		"Total instructions: %lld, Total cycles = %lld, IPC: %f\n", 
 		real_time, NUM_PKTS / real_time,
 		ins, (long long ) (ins / ipc), ipc);
+
+	red_printf("Memory access rate = %.2f M/s\n", 
+		(NUM_PKTS * DEPTH) / (real_time * 1000000));
 }
