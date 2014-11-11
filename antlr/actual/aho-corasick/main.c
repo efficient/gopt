@@ -8,41 +8,21 @@
 #include "aho.h"
 #include "util.h"
 
+#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort_content_strings"
+
 int main(int argc, char *argv[])
 {
 	int num_patterns, i;
-	struct aho_pattern *patterns;
-	char *first_newline = NULL;
 	int *count;
-	size_t buf_size;
 
 	struct aho_state *dfa;
 	aho_init(&dfa);
-	
-	/**< Get the number of patterns and do a sanity check */
-	scanf("%d", &num_patterns);
-	assert(num_patterns >=0 && num_patterns <= AHO_MAX_PATTERNS);
-	red_printf("num_patterns = %d\n", num_patterns);
 
-	/**< Get the newline after num_patterns (otherwise getline() reads it) */
-	getline(&first_newline, &buf_size, stdin);
+	struct aho_pattern *patterns = aho_get_patterns(PATTERN_FILE, 
+		&num_patterns);
 
-	/**< Initialize pattern pointers: input to getline() should ne NULL */
-	patterns = (struct aho_pattern *) malloc(num_patterns * 
-		sizeof(struct aho_pattern));
-	assert(patterns != NULL);
-	memset(patterns, 0, num_patterns * sizeof(struct aho_pattern));
-
-	/**< Read patterns and build the Trie */
 	red_printf("Building AC goto function: \n");
 	for(i = 0; i < num_patterns; i ++) {
-		int num_chars = getline(&patterns[i].content, 
-			(size_t *) &buf_size, stdin);
-
-		patterns[i].len = num_chars - 1;
-		/**< Zero out the newline at the end of getline()'s output*/
-		patterns[i].content[num_chars - 1] = 0;
-
 		aho_add_pattern(dfa, patterns[i].content, i);
 	}
 
@@ -65,7 +45,6 @@ int main(int argc, char *argv[])
 	}
 
 	for(i = 0; i < num_patterns; i ++) {
-
 		int state = 0;
 		int pattern_len = patterns[i].len, j;
 
@@ -79,7 +58,6 @@ int main(int argc, char *argv[])
 		}
 
 		final_state_sum += state;
-
 	}
 
 	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    

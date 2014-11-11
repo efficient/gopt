@@ -19,4 +19,4 @@ struct aho_pattern {
 void aho_init(struct aho_state **dfa);
 void aho_add_pattern(struct aho_state *dfa, char *pattern, int index);
 void aho_build_ff(struct aho_state *dfa);
-
+struct aho_pattern* aho_get_patterns(const char *filename, int *num_patterns);

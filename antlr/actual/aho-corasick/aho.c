@@ -104,3 +104,45 @@ void aho_build_ff(struct aho_state *dfa)
 	}	/**< Finish traversal */
 }
 
+/**< Get the patterns from pattern_file + put the number of patterns
+  *  in num_patterns */
+struct aho_pattern 
+*aho_get_patterns(const char *pattern_file, int *num_patterns)
+{
+	assert(pattern_file != NULL && num_patterns != NULL);
+
+	int i;
+	struct aho_pattern *patterns;
+	size_t buf_size;
+	char *first_newline = NULL;
+
+	FILE *pattern_fp = fopen(pattern_file, "r");
+	assert(pattern_fp != NULL);
+
+	/**< Get the number of patterns and do a sanity check */
+	fscanf(pattern_fp, "%d", num_patterns);
+	assert(*num_patterns >= 0 && *num_patterns <= AHO_MAX_PATTERNS);
+	printf("\taho: num_patterns = %d\n", *num_patterns);
+
+	/**< Get the newline after num_patterns (otherwise getline() reads it) */
+	getline(&first_newline, &buf_size, pattern_fp);
+
+	/**< Initialize pattern pointers: input to getline() should ne NULL */
+	patterns = (struct aho_pattern *) malloc(*num_patterns * 
+		sizeof(struct aho_pattern));
+	assert(patterns != NULL);
+	memset(patterns, 0, *num_patterns * sizeof(struct aho_pattern));
+
+	/**< Read the actual patterns from */
+	for(i = 0; i < *num_patterns; i ++) {
+		int num_chars = getline(&patterns[i].content, 
+			(size_t *) &buf_size, pattern_fp);
+
+		patterns[i].len = num_chars - 1;
+
+		/**< Zero out the newline at the end of getline()'s output*/
+		patterns[i].content[num_chars - 1] = 0;
+	}
+
+	return patterns;
+}
