@@ -55,24 +55,50 @@ int batch_index = 0;
 
 void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
 {
-	foreach(batch_index, BATCH_SIZE) {
-		int j;
-		int state = 0;
+	int j[BATCH_SIZE];
+	int state[BATCH_SIZE];
+	int inp[BATCH_SIZE];
 
-		for(j = 0; j < PKT_SIZE; j ++) {
-			int inp = test_pkts[batch_index].content[j];
-			while(dfa[state].G[inp] == AHO_FAIL) {
-				state = dfa[state].F;
-			}
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
 
-			state = dfa[state].G[inp];
-			FPP_EXPENSIVE(&dfa[state]);
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = && fpp_start;
+	}
+
+fpp_start:
+
+	state[I] = 0;
+
+	for(j[I] = 0; j[I] < PKT_SIZE; j[I] ++) {
+		inp[I] = test_pkts[I].content[j[I]];
+		while(dfa[state[I]].G[inp[I]] == AHO_FAIL) {
+			state[I] = dfa[state[I]].F;
+			FPP_PSS(&dfa[state[I]], fpp_label_1);
+fpp_label_1:
+			;
 		}
 
-		final_state_sum += state;
+		state[I] = dfa[state[I]].G[inp[I]];
+		FPP_PSS(&dfa[state[I]], fpp_label_2);
+fpp_label_2:
+		;
 	}
-}
 
+	final_state_sum += state[I];
+
+fpp_end:
+	batch_rips[I] = &&fpp_end;
+	iMask = FPP_SET(iMask, I);
+	if(iMask == (1 << BATCH_SIZE) - 1) {
+		return;
+	}
+	I = (I + 1) & BATCH_SIZE_;
+	goto *batch_rips[I];
+
+}
 
 int main(int argc, char *argv[])
 {
