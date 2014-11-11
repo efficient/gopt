@@ -3,6 +3,7 @@
 #include<string.h>
 #include<assert.h>
 #include<unistd.h>
+#include<papi.h>
 
 #include "aho.h"
 #include "util.h"
@@ -49,9 +50,19 @@ int main(int argc, char *argv[])
 	red_printf("Building AC failure function\n");
 	aho_build_ff(dfa);
 
-	/**< Count occurrences of patterns inside text */
 	red_printf("Starting lookups\n");
-	int state = 0, final_state_sum = 0;
+	int final_state_sum = 0;
+
+	/** < Variables for PAPI */
+	float real_time, proc_time, ipc;
+	long long ins;
+	int retval;
+
+	/** < Init PAPI_TOT_INS and PAPI_TOT_CYC counters */
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+		printf("PAPI error: retval: %d\n", retval);
+		exit(1);
+	}
 
 	for(i = 0; i < num_patterns; i ++) {
 
@@ -71,7 +82,13 @@ int main(int argc, char *argv[])
 
 	}
 
-	red_printf("Final state sum = %d\n", final_state_sum);
+	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {    
+		printf("PAPI error: retval: %d\n", retval);
+		exit(1);
+	}
+
+	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f, sum = %d\n",
+		real_time, ins, ipc, final_state_sum);
 
 	for(i = 0; i < num_patterns; i ++) {
 		free(patterns[i].content);
