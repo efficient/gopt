@@ -1,6 +1,7 @@
 #include "ds_queue.h"
 
-#define AHO_MAX_STATES (505 * 505)
+#define AHO_MAX_STATES (1 * 1024 * 1024)
+#define AHO_MAX_PATTERNS (4 * 1024 * 1024)
 #define AHO_ALPHA_SIZE 256
 #define AHO_FAIL -1
 

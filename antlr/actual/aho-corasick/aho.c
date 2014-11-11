@@ -38,6 +38,11 @@ void aho_add_pattern(struct aho_state *dfa, char *pattern, int index)
 		aho_new_state ++;
 		assert(aho_new_state < AHO_MAX_STATES);
 
+		/**< Print when states consume around 30 MB */
+		if(aho_new_state % 100000 == 0) {
+			printf("\taho: number of states = %d\n", aho_new_state);
+		}
+
 		dfa[state].G[pattern[j]] = aho_new_state;
 		state = aho_new_state;
 	}
