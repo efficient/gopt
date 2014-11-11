@@ -1,4 +1,4 @@
 all:
-	gcc -O3 -o main aho.c ds_queue.c main.c util.c -lpapi -Wno-unused-result
+	gcc -O3 -o nogoto aho.c ds_queue.c nogoto.c util.c -lpapi -Wno-unused-result
 clean:
-	rm main
+	rm nogoto

@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<string.h>
 #include<assert.h>
+#include<unistd.h>
 
 #include "aho.h"
 
@@ -19,7 +20,7 @@ void aho_init(struct aho_state **dfa)
 }
 
 /**< Add a pattern to the DFA */
-void aho_add_pattern(struct aho_state *dfa, char *pattern, int index)
+void aho_add_pattern(struct aho_state *dfa, uint8_t *pattern, int index)
 {
 	static int aho_new_state = 0;
 
@@ -135,7 +136,7 @@ struct aho_pattern
 
 	/**< Read the actual patterns from */
 	for(i = 0; i < *num_patterns; i ++) {
-		int num_chars = getline(&patterns[i].content, 
+		int num_chars = getline((char **) &patterns[i].content, 
 			(size_t *) &buf_size, pattern_fp);
 
 		patterns[i].len = num_chars - 1;
