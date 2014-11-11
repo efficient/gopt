@@ -11,6 +11,11 @@ struct aho_state {
 	struct ds_queue output;	/**< Output patterns at this state */
 };
 
+struct aho_pattern {
+	int len;
+	char *content;
+};
+
 void aho_init(struct aho_state **dfa);
 void aho_add_pattern(struct aho_state *dfa, char *pattern, int index);
 void aho_build_ff(struct aho_state *dfa);

@@ -10,7 +10,8 @@
 int main(int argc, char *argv[])
 {
 	int num_patterns, i;
-	char **patterns, *first_newline = NULL;
+	struct aho_pattern *patterns;
+	char *first_newline = NULL;
 	int *count;
 	size_t buf_size;
 
@@ -20,27 +21,28 @@ int main(int argc, char *argv[])
 	/**< Get the number of patterns and do a sanity check */
 	scanf("%d", &num_patterns);
 	assert(num_patterns >=0 && num_patterns <= AHO_MAX_PATTERNS);
-	printf("num_patterns = %d\n", num_patterns);
+	red_printf("num_patterns = %d\n", num_patterns);
 
-	/**< Get the newline after num_patterns */
+	/**< Get the newline after num_patterns (otherwise getline() reads it) */
 	getline(&first_newline, &buf_size, stdin);
 
 	/**< Initialize pattern pointers: input to getline() should ne NULL */
-	patterns = (char **) malloc(num_patterns * sizeof(char *));
-	memset(patterns, 0, num_patterns * sizeof(char *));
+	patterns = (struct aho_pattern *) malloc(num_patterns * 
+		sizeof(struct aho_pattern));
 	assert(patterns != NULL);
+	memset(patterns, 0, num_patterns * sizeof(struct aho_pattern));
 
 	/**< Read patterns and build the Trie */
 	red_printf("Building AC goto function: \n");
 	for(i = 0; i < num_patterns; i ++) {
-		int num_chars = getline(&patterns[i], (size_t *) &buf_size, stdin);
+		int num_chars = getline(&patterns[i].content, 
+			(size_t *) &buf_size, stdin);
 
+		patterns[i].len = num_chars - 1;
 		/**< Zero out the newline at the end of getline()'s output*/
-		patterns[i][num_chars - 1] = 0;
+		patterns[i].content[num_chars - 1] = 0;
 
-		aho_add_pattern(dfa, patterns[i], i);
-		printf("Adding pattern %d: %s\n", i, patterns[i]);
-		usleep(20000);
+		aho_add_pattern(dfa, patterns[i].content, i);
 	}
 
 	/**< Create the failure function */
@@ -54,10 +56,10 @@ int main(int argc, char *argv[])
 	for(i = 0; i < num_patterns; i ++) {
 
 		int state = 0;
-		int pattern_len = strlen(patterns[i]), j;
+		int pattern_len = patterns[i].len, j;
 
 		for(j = 0; j < pattern_len; j ++) {
-			int inp = patterns[i][j];
+			int inp = patterns[i].content[j];
 			while(dfa[state].G[inp] == AHO_FAIL) {
 				state = dfa[state].F;
 			}
@@ -72,7 +74,7 @@ int main(int argc, char *argv[])
 	red_printf("Final state sum = %d\n", final_state_sum);
 
 	for(i = 0; i < num_patterns; i ++) {
-		free(patterns[i]);
+		free(patterns[i].content);
 	}
 
 	free(patterns);
