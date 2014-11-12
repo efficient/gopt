@@ -9,7 +9,7 @@
 #include "util.h"
 #include "fpp.h"
 
-#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort_content_strings"
+#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents"
 #define NUM_PKTS (32 * 1024)
 #define PKT_SIZE 1500
 
