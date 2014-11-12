@@ -96,6 +96,7 @@ int main(int argc, char *argv[])
 
 	red_printf("Building AC failure function\n");
 	aho_build_ff(dfa);
+	aho_analyse_dfa(dfa);
 
 	/**< Generate the workload packets */
 	red_printf("Generating packets\n");

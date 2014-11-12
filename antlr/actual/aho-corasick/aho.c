@@ -147,3 +147,36 @@ struct aho_pattern
 
 	return patterns;
 }
+
+void aho_analyse_dfa(struct aho_state *dfa)
+{
+	int i, j, tot_valid_states = 0, tot_transitions = 0;
+	int state_hist[AHO_ALPHA_SIZE + 1] = {0};
+
+	for(i = 0; i < AHO_MAX_STATES; i ++) {
+		int is_valid = 0;
+		int num_transitions = 0;
+		for(j = 0; j < AHO_ALPHA_SIZE; j ++) {
+			if(dfa[i].G[j] != AHO_FAIL) {
+				num_transitions ++;
+				is_valid = 1;
+			}
+
+			if(dfa[i].F != AHO_FAIL) {
+				is_valid = 1;
+			}
+		}
+
+		tot_transitions += num_transitions;
+		tot_valid_states += is_valid;
+
+		assert(num_transitions <= AHO_ALPHA_SIZE);
+		state_hist[num_transitions] ++;
+	}
+
+	printf("Total valid states = %d. Total transitions = %d\n",
+		tot_valid_states, tot_transitions);
+	for(j = 1; j < AHO_ALPHA_SIZE; j ++) {
+		printf("States with %d transitions = %d\n", j, state_hist[j]);
+	}
+}
