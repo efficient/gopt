@@ -6,6 +6,8 @@
 
 #include "aho.h"
 
+static int aho_new_state = 0;	/**< The last used state */
+
 /**< Initialize the state transition table and state outputs */
 void aho_init(struct aho_state **dfa)
 {
@@ -22,8 +24,6 @@ void aho_init(struct aho_state **dfa)
 /**< Add a pattern to the DFA */
 void aho_add_pattern(struct aho_state *dfa, uint8_t *pattern, int index)
 {
-	static int aho_new_state = 0;
-
 	int length = strlen(pattern);
 	int j, state = 0;
 
@@ -174,9 +174,14 @@ void aho_analyse_dfa(struct aho_state *dfa)
 		state_hist[num_transitions] ++;
 	}
 
-	printf("Total valid states = %d. Total transitions = %d\n",
+	printf("***********Aho-Corasick DFA stats **************\n");
+	printf("\taho_new_state = %d\n", aho_new_state);
+	printf("\taho: Total valid states = %d. Total transitions = %d\n",
 		tot_valid_states, tot_transitions);
-	for(j = 1; j < AHO_ALPHA_SIZE; j ++) {
-		printf("States with %d transitions = %d\n", j, state_hist[j]);
+
+	for(j = 1; j <= AHO_ALPHA_SIZE; j ++) {
+		if(state_hist[j] != 0) {
+			printf("\t\tStates with %d transitions = %d\n", j, state_hist[j]);
+		}
 	}
 }
