@@ -15,7 +15,7 @@ void aho_init(struct aho_state **dfa)
 	*dfa = malloc(AHO_MAX_STATES * sizeof(struct aho_state));
 	for(i = 0; i < AHO_MAX_STATES; i ++) {
 		struct aho_state *cur_state = &((*dfa)[i]);
-		memset(cur_state->G, AHO_FAIL, AHO_ALPHA_SIZE * sizeof(int));
+		memset(cur_state->G, AHO_FAIL, AHO_ALPHA_SIZE * sizeof(uint16_t));
 		cur_state->F = AHO_FAIL;
 		ds_queue_init(&cur_state->output);
 	}
@@ -37,7 +37,9 @@ void aho_add_pattern(struct aho_state *dfa, uint8_t *pattern, int index)
 	/**< Characters j to (length - 1) need new states */
 	for(; j < length; j ++) {
 		aho_new_state ++;
-		assert(aho_new_state < AHO_MAX_STATES);
+
+		/**< AHO_MAX_STATES - 1 is AHO_FAIL */
+		assert(aho_new_state <= AHO_MAX_STATES - 2);
 
 		/**< Print when states consume around 30 MB */
 		if(aho_new_state % 10000 == 0) {

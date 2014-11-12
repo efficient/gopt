@@ -1,16 +1,16 @@
 #include<stdint.h>
 #include "ds_queue.h"
 
-#define AHO_MAX_STATES (1 * 1024 * 1024)
+#define AHO_MAX_STATES 65536	/**< Fits in uint16_t */
 #define AHO_ALPHA_SIZE 256
 
 #define AHO_MAX_PATTERNS (4 * 1024 * 1024)
 
-#define AHO_FAIL -1
+#define AHO_FAIL 65535			/**< -1 for uint16_t */
 
 struct aho_state {
-	int G[AHO_ALPHA_SIZE];		/**< Goto function */
-	int F;						/**< Failure function */
+	uint16_t G[AHO_ALPHA_SIZE];		/**< Goto function */
+	uint16_t F;						/**< Failure function */
 	struct ds_queue output;	/**< Output patterns at this state */
 };
 
