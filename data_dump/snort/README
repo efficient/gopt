@@ -1,0 +1,3 @@
+snort_content_strings: all content strings extracted from Snort v2.9.7 rules.
+
+snort_valid_rules: all uncommented rules from Snort v2.9.7.
