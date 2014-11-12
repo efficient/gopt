@@ -105,10 +105,9 @@ void aho_build_ff(struct aho_state *dfa)
 	}	/**< Finish traversal */
 }
 
-/**< Get the patterns from pattern_file + put the number of patterns
-  *  in num_patterns */
+/**< Get variable length strings from a pattern file */
 struct aho_pattern 
-*aho_get_patterns(const char *pattern_file, int *num_patterns)
+*aho_get_strings(const char *pattern_file, int *num_patterns)
 {
 	assert(pattern_file != NULL && num_patterns != NULL);
 
@@ -143,6 +142,56 @@ struct aho_pattern
 
 		/**< Zero out the newline at the end of getline()'s output*/
 		patterns[i].content[num_chars - 1] = 0;
+	}
+
+	return patterns;
+}
+
+/**< Get Snort's content strings from a byte-file. File format:
+  *  <num_contents>
+  *  <num_bytes> byte_1 byte_2 ...
+  *  ...
+  */
+struct aho_pattern 
+*aho_get_patterns(const char *pattern_file, int *num_patterns)
+{
+	assert(pattern_file != NULL && num_patterns != NULL);
+
+	int i, j;
+	struct aho_pattern *patterns;
+	size_t buf_size;
+
+	FILE *pattern_fp = fopen(pattern_file, "r");
+	assert(pattern_fp != NULL);
+
+	/**< Get the number of patterns and do a sanity check */
+	fscanf(pattern_fp, "%d", num_patterns);
+	assert(*num_patterns >= 0 && *num_patterns <= AHO_MAX_PATTERNS);
+	printf("\taho: num_patterns = %d\n", *num_patterns);
+
+	/**< Initialize pattern pointers */
+	patterns = (struct aho_pattern *) malloc(*num_patterns * 
+		sizeof(struct aho_pattern));
+	assert(patterns != NULL);
+	memset(patterns, 0, *num_patterns * sizeof(struct aho_pattern));
+
+	/**< Get the actual content strings */
+	for(i = 0; i < *num_patterns; i ++) {
+		int num_bytes;
+		fscanf(pattern_fp, "%d", &num_bytes);
+		assert(num_bytes >= 0 && num_bytes <= 100000);
+
+		patterns[i].len = num_bytes;
+		patterns[i].content = malloc(num_bytes);
+		assert(patterns[i].content != NULL);
+
+		/**< Get one byte at a time */
+		for(j = 0; j < num_bytes; j ++) {
+			int cur_byte;
+			fscanf(pattern_fp, "%d\n", &cur_byte);
+			assert(cur_byte >= 0 && cur_byte <= 255);
+			patterns[i].content[j] = (uint8_t) cur_byte;
+		}
 	}
 
 	return patterns;

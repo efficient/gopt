@@ -9,7 +9,7 @@
 #include "util.h"
 #include "fpp.h"
 
-#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents"
+#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents_bytes"
 #define NUM_PKTS (32 * 1024)
 #define PKT_SIZE 1500
 
@@ -96,6 +96,7 @@ int main(int argc, char *argv[])
 
 	red_printf("Building AC failure function\n");
 	aho_build_ff(dfa);
+	aho_analyse_dfa(dfa);
 
 	/**< Generate the workload packets */
 	red_printf("Generating packets\n");
@@ -124,7 +125,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f, sum = %d.\n",
+	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f, sum = %d\n",
 		real_time, ins, ipc, final_state_sum);
 	double ns = real_time * 1000000000;
 	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
