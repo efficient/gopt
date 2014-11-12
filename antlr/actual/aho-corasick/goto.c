@@ -29,22 +29,24 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 	for(i = 0; i < NUM_PKTS; i ++) {
 		int index = 0;
 		while(index < PKT_SIZE) {
-			/**< Try to paste a pattern */
-			int tries = 0;
-			while(tries < 10) {
-				int pattern_i = rand() % num_patterns;
-
-				/**< Try to paste this pattern into the test packet */
-				if(index + patterns[pattern_i].len <= PKT_SIZE) {
-					memcpy((char *) &(test_pkts[i].content[index]), 
-						patterns[pattern_i].content, patterns[pattern_i].len);
-					index += patterns[pattern_i].len;
-					break;
-				} else {
-					tries ++;
-				}
-			}
+			test_pkts[i].content[index] = rand() % 256;
+			index ++;
 		}
+
+		/** Code for generating workload with concatenated content strings
+		int tries = 0;
+		while(tries < 10) {
+			int pattern_i = rand() % num_patterns;
+
+			if(index + patterns[pattern_i].len <= PKT_SIZE) {
+				memcpy((char *) &(test_pkts[i].content[index]), 
+					patterns[pattern_i].content, patterns[pattern_i].len);
+				index += patterns[pattern_i].len;
+				break;
+			} else {
+				tries ++;
+			}
+		} */
 	}
 
 	return test_pkts;
@@ -152,6 +154,8 @@ int main(int argc, char *argv[])
 
 	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f, sum = %d\n",
 		real_time, ins, ipc, final_state_sum);
+	double ns = real_time * 1000000000;
+	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
 
 	/**< Clean up */
 	for(i = 0; i < num_patterns; i ++) {
