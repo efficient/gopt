@@ -67,45 +67,41 @@ void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
 
 	int temp_index;
 	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = && fpp_start;
+		batch_rips[temp_index] = &&fpp_start;
 	}
 
 fpp_start:
 
-	state[I] = 0;
-
-	for(j[I] = 0; j[I] < PKT_SIZE; j[I] ++) {
-		inp[I] = test_pkts[I].content[j[I]];
-		while(dfa[state[I]].G[inp[I]] == AHO_FAIL) {
-			state[I] = dfa[state[I]].F;
-			FPP_PSS(&(dfa[state[I]].G[inp[I]]), fpp_label_1);
+        state[I] = 0;
+        
+        for(j[I] = 0; j[I] < PKT_SIZE; j[I] ++) {
+            inp[I] = test_pkts[I].content[j[I]];
+            state[I] = dfa[state[I]].G[inp[I]];
+            if(j[I] != PKT_SIZE - 1) {
+                FPP_PSS(&dfa[state[I]].G[test_pkts[batch_index].content[j[I] + 1]], fpp_label_1);
 fpp_label_1:
 			;
-		}
-
-		state[I] = dfa[state[I]].G[inp[I]];
-		if(j[I] + 1 != PKT_SIZE - 1) {
-			FPP_PSS(&(dfa[state[I]].G[test_pkts[I].content[j[I] + 1]]), fpp_label_2);
-		}
-fpp_label_2:
-		;
-	}
-
-	final_state_sum += state[I];
-
+            }
+        }
+        
+        final_state_sum += state[I];
+       
 fpp_end:
-	batch_rips[I] = &&fpp_end;
-	iMask = FPP_SET(iMask, I);
-	if(iMask == (1 << BATCH_SIZE) - 1) {
-		return;
-	}
-	I = (I + 1) & BATCH_SIZE_;
-	goto *batch_rips[I];
+    batch_rips[I] = &&fpp_end;
+    iMask = FPP_SET(iMask, I); 
+    if(iMask == (1 << BATCH_SIZE) - 1) {
+        return;
+    }
+    I = (I + 1) & BATCH_SIZE_;
+    goto *batch_rips[I];
 
 }
 
+
+
 int main(int argc, char *argv[])
 {
+	printf("%lu\n", sizeof(struct aho_state));
 	int num_patterns, i, j;
 	int *count;
 
@@ -124,7 +120,7 @@ int main(int argc, char *argv[])
 
 	red_printf("Building AC failure function\n");
 	aho_build_ff(dfa);
-	aho_analyse_dfa(dfa);
+	aho_preprocess_dfa(dfa);
 
 	/**< Generate the workload packets */
 	red_printf("Generating packets\n");

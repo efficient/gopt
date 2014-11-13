@@ -63,10 +63,6 @@ void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
 
 		for(j = 0; j < PKT_SIZE; j ++) {
 			int inp = test_pkts[batch_index].content[j];
-			while(dfa[state].G[inp] == AHO_FAIL) {
-				state = dfa[state].F;
-			}
-
 			state = dfa[state].G[inp];
 			FPP_EXPENSIVE(&dfa[state]);
 		}
@@ -78,6 +74,7 @@ void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
 
 int main(int argc, char *argv[])
 {
+	printf("%lu\n", sizeof(struct aho_state));
 	int num_patterns, i, j;
 	int *count;
 
@@ -96,7 +93,7 @@ int main(int argc, char *argv[])
 
 	red_printf("Building AC failure function\n");
 	aho_build_ff(dfa);
-	aho_analyse_dfa(dfa);
+	aho_preprocess_dfa(dfa);
 
 	/**< Generate the workload packets */
 	red_printf("Generating packets\n");

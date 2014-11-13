@@ -3,6 +3,8 @@
 #include<string.h>
 #include<assert.h>
 #include<unistd.h>
+#include<sys/ipc.h>
+#include<sys/shm.h>
 
 #include "aho.h"
 
@@ -12,7 +14,17 @@ static int aho_new_state = 0;	/**< The last used state */
 void aho_init(struct aho_state **dfa)
 {
 	int i;
-	*dfa = malloc(AHO_MAX_STATES * sizeof(struct aho_state));
+	int sid = shmget(AHO_SHM_KEY, AHO_MAX_STATES * sizeof(struct aho_state),
+		IPC_CREAT | 0666 | SHM_HUGETLB);
+
+	if(sid < 0) {
+		printf("\tCould not allocate DFA states for AC\n");
+		exit(-1);
+	}
+
+	*dfa = shmat(sid, 0, 0);
+	assert(*dfa != NULL);
+
 	for(i = 0; i < AHO_MAX_STATES; i ++) {
 		struct aho_state *cur_state = &((*dfa)[i]);
 		memset(cur_state->G, AHO_FAIL, AHO_ALPHA_SIZE * sizeof(uint16_t));
@@ -199,40 +211,22 @@ struct aho_pattern
 	return patterns;
 }
 
-void aho_analyse_dfa(struct aho_state *dfa)
+void aho_preprocess_dfa(struct aho_state *dfa)
 {
-	int i, j, tot_valid_states = 0, tot_transitions = 0;
-	int state_hist[AHO_ALPHA_SIZE + 1] = {0};
-
-	for(i = 0; i < AHO_MAX_STATES; i ++) {
-		int is_valid = 0;
-		int num_transitions = 0;
+	int i, j;
+	for(i = 0; i <= aho_new_state; i ++) {
 		for(j = 0; j < AHO_ALPHA_SIZE; j ++) {
 			if(dfa[i].G[j] != AHO_FAIL) {
-				num_transitions ++;
-				is_valid = 1;
+				continue;
 			}
 
-			if(dfa[i].F != AHO_FAIL) {
-				is_valid = 1;
+			int state_ij = i;
+			while(dfa[state_ij].G[j] == AHO_FAIL) {
+				state_ij = dfa[state_ij].F;
 			}
-		}
 
-		tot_transitions += num_transitions;
-		tot_valid_states += is_valid;
-
-		assert(num_transitions <= AHO_ALPHA_SIZE);
-		state_hist[num_transitions] ++;
-	}
-
-	printf("***********Aho-Corasick DFA stats **************\n");
-	printf("\taho_new_state = %d\n", aho_new_state);
-	printf("\taho: Total valid states = %d. Total transitions = %d\n",
-		tot_valid_states, tot_transitions);
-
-	for(j = 1; j <= AHO_ALPHA_SIZE; j ++) {
-		if(state_hist[j] != 0) {
-			printf("\t\tStates with %d transitions = %d\n", j, state_hist[j]);
+			state_ij = dfa[state_ij].G[j];
+			dfa[i].G[j] = state_ij;
 		}
 	}
 }
