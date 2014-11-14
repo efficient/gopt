@@ -3,13 +3,19 @@
 #include<string.h>
 #include<assert.h>
 #include<unistd.h>
-#include<papi.h>
+#include<time.h>
 
 #include "aho.h"
 #include "util.h"
 #include "fpp.h"
 
-#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents_bytes_sort"
+#define USE_PAPI 0
+
+#if USE_PAPI == 1
+#include<papi.h>
+#endif
+
+#define PATTERN_FILE "../../../data_dump/snort/snort_longest_contents_bytes_sort"
 #define NUM_PKTS (32 * 1024)
 #define PKT_SIZE 1500
 
@@ -111,6 +117,8 @@ int main(int argc, char *argv[])
 	red_printf("Starting lookups\n");
 	assert(NUM_PKTS % BATCH_SIZE == 0);
 
+#if USE_PAPI == 1
+
 	/** < Variables for PAPI */
 	float real_time, proc_time, ipc;
 	long long ins;
@@ -136,6 +144,24 @@ int main(int argc, char *argv[])
 		real_time, ins, ipc, final_state_sum, tot_match);
 	double ns = real_time * 1000000000;
 	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
+
+#else
+
+	struct timespec start, end;
+	clock_gettime(CLOCK_REALTIME, &start);
+
+	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
+		process_batch(dfa, &test_pkts[i]);
+	}
+	
+	clock_gettime(CLOCK_REALTIME, &end);
+
+	double ns = (end.tv_sec - start.tv_sec) * 1000000000 +
+		(double) (end.tv_nsec - start.tv_nsec);
+	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
+
+#endif
+	
 
 	/**< Clean up */
 	for(i = 0; i < num_patterns; i ++) {
