@@ -23,6 +23,8 @@ struct pkt {
 	uint8_t content[PKT_SIZE];
 };
 
+int doh[AHO_MAX_STATES];
+
 /**< Generate NUM_PKTS packets for testing. Each test packet is constructed
   *  by concatenating patterns that were inserted into the AC engine. */
 struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
@@ -38,7 +40,6 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 			test_pkts[i].content[index] = rand() % AHO_ALPHA_SIZE;
 			index ++;
 		}
-
 		/** Code for generating workload with concatenated content strings
 		int tries = 0;
 		while(tries < 10) {
@@ -55,11 +56,16 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 		} */
 	}
 
+	for(i = 0; i < AHO_MAX_STATES / 4; i ++) {
+		doh[i] = rand() % 100;
+	}
+
 	return test_pkts;
 }
 
 int final_state_sum = 0;
 int batch_index = 0;
+int tot_match = 0;
 
 void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
 {
@@ -78,19 +84,20 @@ void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
 
 fpp_start:
 
-        state[I] = 0;
-        
-        for(j[I] = 0; j[I] < PKT_SIZE; j[I] ++) {
-            inp[I] = test_pkts[I].content[j[I]];
-            state[I] = dfa[state[I]].G[inp[I]];
-            if(j[I] != PKT_SIZE - 1) {
-                FPP_PSS(&dfa[state[I]].G[test_pkts[batch_index].content[j[I] + 1]], fpp_label_1);
+	state[I] = 0;
+	
+	for(j[I] = 0; j[I] < PKT_SIZE; j[I] ++) {
+		inp[I] = test_pkts[I].content[j[I]];
+		if(doh[state[I]] == 1) {
+			tot_match ++;
+		}
+		
+		FPP_PSS(&dfa[state[I]].G[inp[I]], fpp_label_1);
 fpp_label_1:
-			;
-            }
-        }
-        
-        final_state_sum += state[I];
+		state[I] = dfa[state[I]].G[inp[I]];
+	}
+
+	final_state_sum += state[I];
        
 fpp_end:
     batch_rips[I] = &&fpp_end;
@@ -174,7 +181,8 @@ int main(int argc, char *argv[])
 
 	double ns = (end.tv_sec - start.tv_sec) * 1000000000 +
 		(double) (end.tv_nsec - start.tv_nsec);
-	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
+	red_printf("Rate = %.2f Gbps. sum = %d, tot_match = %d\n", 
+		((double) NUM_PKTS * PKT_SIZE * 8) / ns, final_state_sum, tot_match);
 
 #endif
 	

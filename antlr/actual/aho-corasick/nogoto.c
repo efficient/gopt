@@ -152,7 +152,8 @@ int main(int argc, char *argv[])
 
 	double ns = (end.tv_sec - start.tv_sec) * 1000000000 +
 		(double) (end.tv_nsec - start.tv_nsec);
-	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
+	red_printf("Rate = %.2f Gbps. sum = %d, tot_match = %d\n", 
+		((double) NUM_PKTS * PKT_SIZE * 8) / ns, final_state_sum, tot_match);
 
 #endif
 	
