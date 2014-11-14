@@ -27,7 +27,7 @@ void aho_init(struct aho_state **dfa)
 
 	for(i = 0; i < AHO_MAX_STATES; i ++) {
 		struct aho_state *cur_state = &((*dfa)[i]);
-		memset(cur_state->G, AHO_FAIL, AHO_ALPHA_SIZE * sizeof(int));
+		memset(cur_state->G, AHO_FAIL, AHO_ALPHA_SIZE * sizeof(uint16_t));
 		cur_state->F = AHO_FAIL;
 		ds_queue_init(&cur_state->output);
 	}
@@ -220,6 +220,7 @@ struct aho_pattern
 
 void aho_preprocess_dfa(struct aho_state *dfa)
 {
+	printf("\taho:Total states = %d\n", aho_new_state);
 	int i, j;
 	for(i = 0; i <= aho_new_state; i ++) {
 		for(j = 0; j < AHO_ALPHA_SIZE; j ++) {

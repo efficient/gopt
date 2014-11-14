@@ -9,7 +9,7 @@
 #include "util.h"
 #include "fpp.h"
 
-#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents_bytes"
+#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents_bytes_sort"
 #define NUM_PKTS (32 * 1024)
 #define PKT_SIZE 1500
 
@@ -29,7 +29,7 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 	for(i = 0; i < NUM_PKTS; i ++) {
 		int index = 0;
 		while(index < PKT_SIZE) {
-			test_pkts[i].content[index] = rand() % 256;
+			test_pkts[i].content[index] = rand() % AHO_ALPHA_SIZE;
 			index ++;
 		}
 

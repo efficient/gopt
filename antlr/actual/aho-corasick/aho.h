@@ -3,18 +3,17 @@
 
 #define AHO_SHM_KEY 1
 
-#define AHO_MAX_STATES (1024 * 1024)
-#define AHO_FAIL -1
+#define AHO_MAX_STATES 65536
+#define AHO_FAIL 65535
 #define AHO_ALPHA_SIZE 256
 
 /**< Just some reasonable numbers */
 #define AHO_MAX_PATTERNS (32 * 1024)
 #define AHO_MAX_PATTERN_LEN (1024)
 
-
 struct aho_state {
-	int G[AHO_ALPHA_SIZE];		/**< Goto function */
-	int F;						/**< Failure function */
+	uint16_t G[AHO_ALPHA_SIZE];		/**< Goto function */
+	uint16_t F;						/**< Failure function */
 	struct ds_queue output;	/**< Output patterns at this state */
 	uint8_t pad[32];
 };

@@ -10,7 +10,6 @@
 #include "fpp.h"
 
 #define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents_bytes_sort"
-//#define PATTERN_FILE "test_contents"
 #define NUM_PKTS (32 * 1024)
 #define PKT_SIZE 1500
 
@@ -30,10 +29,9 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 	for(i = 0; i < NUM_PKTS; i ++) {
 		int index = 0;
 		while(index < PKT_SIZE) {
-			test_pkts[i].content[index] = rand() % 256;
+			test_pkts[i].content[index] = rand() % AHO_ALPHA_SIZE;
 			index ++;
 		}
-
 		/** Code for generating workload with concatenated content strings
 		int tries = 0;
 		while(tries < 10) {
@@ -66,7 +64,7 @@ void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
 		for(j = 0; j < PKT_SIZE; j ++) {
 			int inp = test_pkts[batch_index].content[j];
 			state = dfa[state].G[inp];
-			if(!ds_quee_is_empty(&dfa[state].output)) {
+			if(!ds_queue_is_empty(&dfa[state].output)) {
 				tot_match ++;
 			}
 			FPP_EXPENSIVE(&dfa[state]);

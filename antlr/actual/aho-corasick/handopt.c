@@ -9,13 +9,15 @@
 #include "util.h"
 #include "fpp.h"
 
-#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents_bytes"
+#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents_bytes_sort"
 #define NUM_PKTS (32 * 1024)
 #define PKT_SIZE 1500
 
 struct pkt {
 	uint8_t content[PKT_SIZE];
 };
+
+int doh[AHO_MAX_STATES];
 
 /**< Generate NUM_PKTS packets for testing. Each test packet is constructed
   *  by concatenating patterns that were inserted into the AC engine. */
@@ -29,10 +31,9 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 	for(i = 0; i < NUM_PKTS; i ++) {
 		int index = 0;
 		while(index < PKT_SIZE) {
-			test_pkts[i].content[index] = rand() % 256;
+			test_pkts[i].content[index] = rand() % AHO_ALPHA_SIZE;
 			index ++;
 		}
-
 		/** Code for generating workload with concatenated content strings
 		int tries = 0;
 		while(tries < 10) {
@@ -49,6 +50,10 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 		} */
 	}
 
+	for(i = 0; i < AHO_MAX_STATES / 4; i ++) {
+		doh[i] = rand() % 100;
+	}
+
 	return test_pkts;
 }
 
@@ -63,7 +68,7 @@ void process_batch(const struct aho_state *dfa, const struct pkt *test_pkts)
 	for(j = 0; j < PKT_SIZE; j ++) {
 		for(batch_index = 0; batch_index < BATCH_SIZE; batch_index ++) {
 			int inp = test_pkts[batch_index].content[j];
-			if((dfa[state[batch_index]].G[inp] & 63) == 1) {
+			if(doh[state[batch_index]] == 1) {
 				tot_match ++;
 			}
 			state[batch_index] = dfa[state[batch_index]].G[inp];
