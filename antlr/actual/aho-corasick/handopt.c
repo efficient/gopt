@@ -23,7 +23,7 @@ struct pkt {
 	uint8_t content[PKT_SIZE];
 };
 
-int doh[AHO_MAX_STATES];
+uint8_t doh[AHO_MAX_STATES];
 
 /**< Generate NUM_PKTS packets for testing. Each test packet is constructed
   *  by concatenating patterns that were inserted into the AC engine. */
@@ -56,7 +56,7 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 		} */
 	}
 
-	for(i = 0; i < AHO_MAX_STATES / 4; i ++) {
+	for(i = 0; i < AHO_MAX_STATES; i ++) {
 		doh[i] = rand() % 100;
 	}
 
@@ -75,7 +75,7 @@ void process_batch(const struct aho_state *dfa, const struct pkt *test_pkts)
 		for(batch_index = 0; batch_index < BATCH_SIZE; batch_index ++) {
 			int inp = test_pkts[batch_index].content[j];
 			if(doh[state[batch_index]] == 1) {
-				tot_match ++;
+				tot_match += (uint32_t) dfa[state[batch_index]].output.head;
 			}
 			state[batch_index] = dfa[state[batch_index]].G[inp];
 		}

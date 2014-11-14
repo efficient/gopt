@@ -23,7 +23,7 @@ struct pkt {
 	uint8_t content[PKT_SIZE];
 };
 
-int doh[AHO_MAX_STATES];
+uint8_t doh[AHO_MAX_STATES];
 
 /**< Generate NUM_PKTS packets for testing. Each test packet is constructed
   *  by concatenating patterns that were inserted into the AC engine. */
@@ -56,7 +56,7 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 		} */
 	}
 
-	for(i = 0; i < AHO_MAX_STATES / 4; i ++) {
+	for(i = 0; i < AHO_MAX_STATES; i ++) {
 		doh[i] = rand() % 100;
 	}
 
@@ -89,7 +89,7 @@ fpp_start:
 	for(j[I] = 0; j[I] < PKT_SIZE; j[I] ++) {
 		inp[I] = test_pkts[I].content[j[I]];
 		if(doh[state[I]] == 1) {
-			tot_match ++;
+			tot_match += (uint32_t) dfa[state[I]].output.head;
 		}
 		
 		FPP_PSS(&dfa[state[I]].G[inp[I]], fpp_label_1);
