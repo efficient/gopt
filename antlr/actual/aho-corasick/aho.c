@@ -218,11 +218,18 @@ struct aho_pattern
 	return patterns;
 }
 
-void aho_preprocess_dfa(struct aho_state *dfa)
+void aho_preprocess_dfa(struct aho_state *dfa, uint8_t *terminal_states)
 {
 	printf("\taho:Total states = %d\n", aho_new_state);
+	assert(dfa != NULL && terminal_states != NULL);
 	int i, j;
 	for(i = 0; i <= aho_new_state; i ++) {
+
+		assert(terminal_states[i] == 0);
+		if(!ds_queue_is_empty(&dfa[i].output)) {
+			terminal_states[i] = 1;
+		}
+
 		for(j = 0; j < AHO_ALPHA_SIZE; j ++) {
 			if(dfa[i].G[j] != AHO_FAIL) {
 				continue;
@@ -236,5 +243,6 @@ void aho_preprocess_dfa(struct aho_state *dfa)
 			state_ij = dfa[state_ij].G[j];
 			dfa[i].G[j] = state_ij;
 		}
+
 	}
 }

@@ -23,8 +23,6 @@ struct pkt {
 	uint8_t content[PKT_SIZE];
 };
 
-uint8_t doh[AHO_MAX_STATES];
-
 /**< Generate NUM_PKTS packets for testing. Each test packet is constructed
   *  by concatenating patterns that were inserted into the AC engine. */
 struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
@@ -56,33 +54,31 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 		} */
 	}
 
-	for(i = 0; i < AHO_MAX_STATES; i ++) {
-		doh[i] = rand() % 100;
-	}
-
 	return test_pkts;
 }
 
-int final_state_sum = 0;
 int batch_index = 0;
 int tot_match = 0;
 
-void process_batch(const struct aho_state *dfa, const struct pkt *test_pkts)
+void process_batch(const struct aho_state *dfa,
+	const uint8_t *terminal_states, const struct pkt *test_pkts)
 {
 	int j = 0, state[BATCH_SIZE] = {0};
 
 	for(j = 0; j < PKT_SIZE; j ++) {
 		for(batch_index = 0; batch_index < BATCH_SIZE; batch_index ++) {
 			int inp = test_pkts[batch_index].content[j];
-			if(doh[state[batch_index]] == 1) {
-				tot_match += (uint32_t) dfa[state[batch_index]].output.head;
+
+			if(terminal_states[state[batch_index]] == 1) {
+				struct ds_qnode *t = dfa[state[batch_index]].output.head;
+				while(t != NULL) {
+					tot_match += t->data;
+					t = t->next;
+				}
 			}
+
 			state[batch_index] = dfa[state[batch_index]].G[inp];
 		}
-	}
-
-	for(j = 0; j < BATCH_SIZE; j ++) {
-		final_state_sum += state[j];
 	}
 }
 
@@ -94,6 +90,7 @@ int main(int argc, char *argv[])
 	int *count;
 
 	struct aho_state *dfa;
+	uint8_t terminal_states[AHO_MAX_STATES] = {0};
 	aho_init(&dfa);
 
 	/**< Get the patterns */
@@ -108,7 +105,7 @@ int main(int argc, char *argv[])
 
 	red_printf("Building AC failure function\n");
 	aho_build_ff(dfa);
-	aho_preprocess_dfa(dfa);
+	aho_preprocess_dfa(dfa, terminal_states);
 
 	/**< Generate the workload packets */
 	red_printf("Generating packets\n");
@@ -139,9 +136,8 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f "
-		"sum = %d, tot_match = %d\n",
-		real_time, ins, ipc, final_state_sum, tot_match);
+	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f, tot_match = %d\n",
+		real_time, ins, ipc, tot_match);
 	double ns = real_time * 1000000000;
 	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
 
@@ -151,15 +147,15 @@ int main(int argc, char *argv[])
 	clock_gettime(CLOCK_REALTIME, &start);
 
 	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
-		process_batch(dfa, &test_pkts[i]);
+		process_batch(dfa, terminal_states, &test_pkts[i]);
 	}
 	
 	clock_gettime(CLOCK_REALTIME, &end);
 
 	double ns = (end.tv_sec - start.tv_sec) * 1000000000 +
 		(double) (end.tv_nsec - start.tv_nsec);
-	red_printf("Rate = %.2f Gbps. sum = %d, tot_match = %d\n", 
-		((double) NUM_PKTS * PKT_SIZE * 8) / ns, final_state_sum, tot_match);
+	red_printf("Rate = %.2f Gbps. tot_match = %d\n", 
+		((double) NUM_PKTS * PKT_SIZE * 8) / ns, tot_match);
 
 #endif
 	

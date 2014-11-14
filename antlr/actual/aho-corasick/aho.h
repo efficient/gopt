@@ -28,4 +28,4 @@ void aho_add_pattern(struct aho_state *dfa, struct aho_pattern *pattern, int ind
 void aho_build_ff(struct aho_state *dfa);
 struct aho_pattern* aho_get_strings(const char *filename, int *num_patterns);
 struct aho_pattern* aho_get_patterns(const char *filename, int *num_patterns);
-void aho_analyse_dfa(struct aho_state *dfa);
+void aho_preprocess_dfa(struct aho_state *dfa, uint8_t *terminal_states);

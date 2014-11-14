@@ -57,11 +57,11 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 	return test_pkts;
 }
 
-int final_state_sum = 0;
 int batch_index = 0;
 int tot_match = 0;
 
-void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
+void process_batch(const struct aho_state *dfa,
+	const uint8_t *terminal_states, const struct pkt *test_pkts)
 {
 	foreach(batch_index, BATCH_SIZE) {
 		int j;
@@ -69,14 +69,16 @@ void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
 
 		for(j = 0; j < PKT_SIZE; j ++) {
 			int inp = test_pkts[batch_index].content[j];
-			state = dfa[state].G[inp];
 			if(!ds_queue_is_empty(&dfa[state].output)) {
-				tot_match ++;
+				struct ds_qnode *t = dfa[state].output.head;
+				while(t != NULL) {
+					tot_match += t->data;
+					t = t->next;
+				}
 			}
-			FPP_EXPENSIVE(&dfa[state]);
-		}
 
-		final_state_sum += state;
+			state = dfa[state].G[inp];
+		}
 	}
 }
 
@@ -88,6 +90,7 @@ int main(int argc, char *argv[])
 	int *count;
 
 	struct aho_state *dfa;
+	uint8_t terminal_states[AHO_MAX_STATES] = {0};
 	aho_init(&dfa);
 
 	/**< Get the patterns */
@@ -102,7 +105,7 @@ int main(int argc, char *argv[])
 
 	red_printf("Building AC failure function\n");
 	aho_build_ff(dfa);
-	aho_preprocess_dfa(dfa);
+	aho_preprocess_dfa(dfa, terminal_states);
 
 	/**< Generate the workload packets */
 	red_printf("Generating packets\n");
@@ -133,9 +136,8 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f "
-		"sum = %d, tot_match = %d\n",
-		real_time, ins, ipc, final_state_sum, tot_match);
+	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f, tot_match = %d\n",
+		real_time, ins, ipc, tot_match);
 	double ns = real_time * 1000000000;
 	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
 
@@ -145,15 +147,15 @@ int main(int argc, char *argv[])
 	clock_gettime(CLOCK_REALTIME, &start);
 
 	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
-		process_batch(dfa, &test_pkts[i]);
+		process_batch(dfa, terminal_states, &test_pkts[i]);
 	}
 	
 	clock_gettime(CLOCK_REALTIME, &end);
 
 	double ns = (end.tv_sec - start.tv_sec) * 1000000000 +
 		(double) (end.tv_nsec - start.tv_nsec);
-	red_printf("Rate = %.2f Gbps. sum = %d, tot_match = %d\n", 
-		((double) NUM_PKTS * PKT_SIZE * 8) / ns, final_state_sum, tot_match);
+	red_printf("Rate = %.2f Gbps. tot_match = %d\n", 
+		((double) NUM_PKTS * PKT_SIZE * 8) / ns, tot_match);
 
 #endif
 	
