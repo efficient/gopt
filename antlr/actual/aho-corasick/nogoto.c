@@ -9,7 +9,8 @@
 #include "util.h"
 #include "fpp.h"
 
-#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents_bytes"
+#define PATTERN_FILE "/home/akalia/fastpp/data_dump/snort/snort_longest_contents_bytes_sort"
+//#define PATTERN_FILE "test_contents"
 #define NUM_PKTS (32 * 1024)
 #define PKT_SIZE 1500
 
@@ -54,6 +55,7 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 
 int final_state_sum = 0;
 int batch_index = 0;
+int tot_match = 0;
 
 void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
 {
@@ -64,6 +66,9 @@ void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
 		for(j = 0; j < PKT_SIZE; j ++) {
 			int inp = test_pkts[batch_index].content[j];
 			state = dfa[state].G[inp];
+			if(!ds_quee_is_empty(&dfa[state].output)) {
+				tot_match ++;
+			}
 			FPP_EXPENSIVE(&dfa[state]);
 		}
 
@@ -88,7 +93,7 @@ int main(int argc, char *argv[])
 	/**< Build the DFA */
 	red_printf("Building AC goto function: \n");
 	for(i = 0; i < num_patterns; i ++) {
-		aho_add_pattern(dfa, patterns[i].content, i);
+		aho_add_pattern(dfa, &patterns[i], i);
 	}
 
 	red_printf("Building AC failure function\n");
@@ -122,8 +127,9 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f, sum = %d\n",
-		real_time, ins, ipc, final_state_sum);
+	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f "
+		"sum = %d, tot_match = %d\n",
+		real_time, ins, ipc, final_state_sum, tot_match);
 	double ns = real_time * 1000000000;
 	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
 

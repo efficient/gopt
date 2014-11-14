@@ -10,7 +10,7 @@
 
 static int aho_new_state = 0;	/**< The last used state */
 
-/**< Initialize the state transition table and state outputs */
+/**< Initialize the state transition table and o/p queues */
 void aho_init(struct aho_state **dfa)
 {
 	int i;
@@ -27,23 +27,25 @@ void aho_init(struct aho_state **dfa)
 
 	for(i = 0; i < AHO_MAX_STATES; i ++) {
 		struct aho_state *cur_state = &((*dfa)[i]);
-		memset(cur_state->G, AHO_FAIL, AHO_ALPHA_SIZE * sizeof(uint16_t));
+		memset(cur_state->G, AHO_FAIL, AHO_ALPHA_SIZE * sizeof(int));
 		cur_state->F = AHO_FAIL;
 		ds_queue_init(&cur_state->output);
 	}
 }
 
 /**< Add a pattern to the DFA */
-void aho_add_pattern(struct aho_state *dfa, uint8_t *pattern, int index)
+void
+aho_add_pattern(struct aho_state *dfa, struct aho_pattern *pattern, int index)
 {
-	int length = strlen(pattern);
+	int length = pattern->len;
+	assert(length >= 0 && length <= 100000);
 	int j, state = 0;
 
 	for(j = 0; j < length; j ++) {
-		if(dfa[state].G[pattern[j]] == AHO_FAIL) {
+		if(dfa[state].G[pattern->content[j]] == AHO_FAIL) {
 			break;
 		}
-		state = dfa[state].G[pattern[j]];
+		state = dfa[state].G[pattern->content[j]];
 	}
 
 	/**< Characters j to (length - 1) need new states */
@@ -58,11 +60,15 @@ void aho_add_pattern(struct aho_state *dfa, uint8_t *pattern, int index)
 			printf("\taho: number of states = %d\n", aho_new_state);
 		}
 
-		dfa[state].G[pattern[j]] = aho_new_state;
+		dfa[state].G[pattern->content[j]] = aho_new_state;
 		state = aho_new_state;
 	}
 
 	/**< Add this pattern as the output for the last state */
+	if(state == 0) {
+		printf("Error for index = %d\n", index);
+		exit(-1);
+	}
 	ds_queue_add(&(dfa[state].output), index);
 }
 
@@ -153,8 +159,9 @@ struct aho_pattern
 			(size_t *) &buf_size, pattern_fp);
 
 		patterns[i].len = num_chars - 1;
+		assert(patterns[i].len <= AHO_MAX_PATTERN_LEN);
 
-		/**< Zero out the newline at the end of getline()'s output*/
+		/**< Zero out the newline at the end */
 		patterns[i].content[num_chars - 1] = 0;
 	}
 
@@ -193,7 +200,7 @@ struct aho_pattern
 	for(i = 0; i < *num_patterns; i ++) {
 		int num_bytes;
 		fscanf(pattern_fp, "%d", &num_bytes);
-		assert(num_bytes >= 0 && num_bytes <= 100000);
+		assert(num_bytes >= 0 && num_bytes <= AHO_MAX_PATTERN_LEN);
 
 		patterns[i].len = num_bytes;
 		patterns[i].content = malloc(num_bytes);

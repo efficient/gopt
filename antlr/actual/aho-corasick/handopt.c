@@ -54,14 +54,18 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 
 int final_state_sum = 0;
 int batch_index = 0;
+int tot_match = 0;
 
-void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
+void process_batch(const struct aho_state *dfa, const struct pkt *test_pkts)
 {
 	int j = 0, state[BATCH_SIZE] = {0};
 
 	for(j = 0; j < PKT_SIZE; j ++) {
 		for(batch_index = 0; batch_index < BATCH_SIZE; batch_index ++) {
 			int inp = test_pkts[batch_index].content[j];
+			if((dfa[state[batch_index]].G[inp] & 63) == 1) {
+				tot_match ++;
+			}
 			state[batch_index] = dfa[state[batch_index]].G[inp];
 		}
 	}
@@ -88,7 +92,7 @@ int main(int argc, char *argv[])
 	/**< Build the DFA */
 	red_printf("Building AC goto function: \n");
 	for(i = 0; i < num_patterns; i ++) {
-		aho_add_pattern(dfa, patterns[i].content, i);
+		aho_add_pattern(dfa, &patterns[i], i);
 	}
 
 	red_printf("Building AC failure function\n");
@@ -122,8 +126,9 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f, sum = %d\n",
-		real_time, ins, ipc, final_state_sum);
+	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f "
+		"sum = %d, tot_match = %d\n",
+		real_time, ins, ipc, final_state_sum, tot_match);
 	double ns = real_time * 1000000000;
 	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
 

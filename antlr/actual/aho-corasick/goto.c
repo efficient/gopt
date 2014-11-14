@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
 	/**< Build the DFA */
 	red_printf("Building AC goto function: \n");
 	for(i = 0; i < num_patterns; i ++) {
-		aho_add_pattern(dfa, patterns[i].content, i);
+		aho_add_pattern(dfa, &patterns[i], i);
 	}
 
 	red_printf("Building AC failure function\n");

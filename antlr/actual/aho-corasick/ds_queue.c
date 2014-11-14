@@ -59,7 +59,7 @@ int ds_queue_remove(struct ds_queue *q)
 	return data;
 }
 
-int ds_queue_is_empty(struct ds_queue *q)
+inline int ds_queue_is_empty(const struct ds_queue *q)
 {
 	if(q->count == 0) {
 		return 1;
