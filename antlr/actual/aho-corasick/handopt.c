@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 	clock_gettime(CLOCK_REALTIME, &start);
 
 	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
-		memset(success, 0, sizeof(int));
+		memset(success, 0, BATCH_SIZE * sizeof(int));
 		process_batch(dfa, terminal_states, &test_pkts[i], success);
 
 		for(j = 0; j < BATCH_SIZE; j ++) {
