@@ -9,15 +9,9 @@
 #include "util.h"
 #include "fpp.h"
 
-#define USE_PAPI 0
-
-#if USE_PAPI == 1
-#include<papi.h>
-#endif
-
 #define PATTERN_FILE "../../../data_dump/snort/snort_longest_contents_bytes_sort"
 #define NUM_PKTS (32 * 1024)
-#define PKT_SIZE 1500
+#define PKT_SIZE 1518
 
 struct pkt {
 	uint8_t content[PKT_SIZE];
@@ -109,35 +103,6 @@ int main(int argc, char *argv[])
 	red_printf("Starting lookups\n");
 	assert(NUM_PKTS % BATCH_SIZE == 0);
 
-#if USE_PAPI == 1
-
-	/** < Variables for PAPI */
-	float real_time, proc_time, ipc;
-	long long ins;
-	int retval;
-
-	/** < Init PAPI_TOT_INS and PAPI_TOT_CYC counters */
-	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {
-		printf("PAPI error: retval: %d\n", retval);
-		exit(1);
-	}
-
-	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
-		process_batch(dfa, &test_pkts[i]);
-	}
-
-	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {
-		printf("PAPI error: retval: %d\n", retval);
-		exit(1);
-	}
-
-	red_printf("Time = %.4f s, Instructions = %lld, IPC = %f, tot_match = %d\n",
-		real_time, ins, ipc, tot_match);
-	double ns = real_time * 1000000000;
-	red_printf("Rate = %.2f Gbps.\n", ((double) NUM_PKTS * PKT_SIZE * 8) / ns);
-
-#else
-
 	struct timespec start, end;
 	clock_gettime(CLOCK_REALTIME, &start);
 
@@ -156,9 +121,6 @@ int main(int argc, char *argv[])
 		(double) (end.tv_nsec - start.tv_nsec);
 	red_printf("Rate = %.2f Gbps. tot_success = %d\n", 
 		((double) NUM_PKTS * PKT_SIZE * 8) / ns, tot_success);
-
-#endif
-	
 
 	/**< Clean up */
 	for(i = 0; i < num_patterns; i ++) {
