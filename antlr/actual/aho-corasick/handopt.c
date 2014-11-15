@@ -57,12 +57,10 @@ struct pkt *gen_packets(struct aho_pattern *patterns, int num_patterns)
 	return test_pkts;
 }
 
-int batch_index = 0;
-int tot_match = 0;
-
 void process_batch(const struct aho_state *dfa,
-	const uint8_t *terminal_states, const struct pkt *test_pkts)
+	const uint8_t *terminal_states, const struct pkt *test_pkts, int *success)
 {
+	int batch_index = 0;
 	int j = 0, state[BATCH_SIZE] = {0};
 
 	for(j = 0; j < PKT_SIZE; j ++) {
@@ -70,11 +68,7 @@ void process_batch(const struct aho_state *dfa,
 			int inp = test_pkts[batch_index].content[j];
 
 			if(terminal_states[state[batch_index]] == 1) {
-				struct ds_qnode *t = dfa[state[batch_index]].output.head;
-				while(t != NULL) {
-					tot_match += t->data;
-					t = t->next;
-				}
+				success[batch_index] += 1;
 			}
 
 			state[batch_index] = dfa[state[batch_index]].G[inp];
@@ -91,6 +85,7 @@ int main(int argc, char *argv[])
 
 	struct aho_state *dfa;
 	uint8_t terminal_states[AHO_MAX_STATES] = {0};
+	int success[BATCH_SIZE] = {0}, tot_success = 0;
 	aho_init(&dfa);
 
 	/**< Get the patterns */
@@ -147,15 +142,20 @@ int main(int argc, char *argv[])
 	clock_gettime(CLOCK_REALTIME, &start);
 
 	for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
-		process_batch(dfa, terminal_states, &test_pkts[i]);
+		memset(success, 0, sizeof(int));
+		process_batch(dfa, terminal_states, &test_pkts[i], success);
+
+		for(j = 0; j < BATCH_SIZE; j ++) {
+			tot_success += (success[j] == 0 ? 0 : 1);
+		}
 	}
 	
 	clock_gettime(CLOCK_REALTIME, &end);
 
 	double ns = (end.tv_sec - start.tv_sec) * 1000000000 +
 		(double) (end.tv_nsec - start.tv_nsec);
-	red_printf("Rate = %.2f Gbps. tot_match = %d\n", 
-		((double) NUM_PKTS * PKT_SIZE * 8) / ns, tot_match);
+	red_printf("Rate = %.2f Gbps. tot_success = %d\n", 
+		((double) NUM_PKTS * PKT_SIZE * 8) / ns, tot_success);
 
 #endif
 	
