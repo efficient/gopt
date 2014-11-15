@@ -6,11 +6,12 @@ function blue() {
 }
 
 blue ""
+blue "Running handopt"
+shm-rm.sh 1>/dev/null 2>/dev/null
+sudo taskset -c 0 ./handopt 1
+
+blue ""
 blue "Running nogoto"
 shm-rm.sh 1>/dev/null 2>/dev/null
 sudo taskset -c 0 ./nogoto
 
-blue ""
-blue "Running handopt"
-shm-rm.sh 1>/dev/null 2>/dev/null
-sudo taskset -c 0 ./handopt

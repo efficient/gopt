@@ -10,17 +10,24 @@
 /**< Just some reasonable numbers */
 #define AHO_MAX_PATTERNS (32 * 1024)
 #define AHO_MAX_PATTERN_LEN (1024)
+#define AHO_MAX_THREADS 16
 
 struct aho_state {
 	uint16_t G[AHO_ALPHA_SIZE];		/**< Goto function */
 	uint16_t F;						/**< Failure function */
-	struct ds_queue output;	/**< Output patterns at this state */
+	struct ds_queue output;			/**< Output patterns at this state */
 	uint8_t pad[32];
 };
 
 struct aho_pattern {
 	int len;
 	uint8_t *content;
+};
+
+struct aho_ctrl_blk {
+	int tid;						/**< Thread ID */
+	struct aho_state *dfa;			/**< The shared DFA */
+	uint8_t *terminal_states;		/**< Shared terminal states */
 };
 
 void aho_init(struct aho_state **dfa);
