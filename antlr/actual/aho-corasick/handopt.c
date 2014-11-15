@@ -59,11 +59,8 @@ void process_batch(const struct aho_state *dfa,
 
 	for(j = 0; j < PKT_SIZE; j ++) {
 		for(batch_index = 0; batch_index < BATCH_SIZE; batch_index ++) {
+			success[batch_index] += terminal_states[state[batch_index]];
 			int inp = test_pkts[batch_index].content[j];
-
-			if(terminal_states[state[batch_index]] == 1) {
-				success[batch_index] += 1;
-			}
 
 			state[batch_index] = dfa[state[batch_index]].G[inp];
 		}
