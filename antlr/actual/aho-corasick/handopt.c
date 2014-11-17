@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
 		pthread_create(&worker_threads[i], NULL, ids_func, &worker_cb[i]);
 
 		/**< Avoid libc lock contention during rand() calls in gen_packets */
-		sleep(2);
+		sleep(4);
 	}
 
 	for(i = 0; i < num_threads; i ++) {
