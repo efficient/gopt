@@ -47,7 +47,9 @@ void process_batch(const struct aho_state *dfa,
 
 	for(j = 0; j < PKT_SIZE; j ++) {
 		for(batch_index = 0; batch_index < BATCH_SIZE; batch_index ++) {
-			success[batch_index] += terminal_states[state[batch_index]];
+			if(dfa[state[batch_index]].output.count != 0) {
+				success[batch_index] ++;
+			}
 
 			int inp = test_pkts[batch_index].content[j];
 			state[batch_index] = dfa[state[batch_index]].G[inp];
@@ -108,7 +110,7 @@ int main(int argc, char *argv[])
 	int num_threads = atoi(argv[1]);
 	assert(num_threads >= 1 && num_threads <= AHO_MAX_THREADS);
 	
-	int num_patterns, i, j;
+	int num_patterns, i;
 
 	/**< Shared Aho-Corasick structures */
 	struct aho_state *dfa;

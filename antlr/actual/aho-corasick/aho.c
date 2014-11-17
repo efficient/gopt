@@ -180,7 +180,6 @@ struct aho_pattern
 
 	int i, j;
 	struct aho_pattern *patterns;
-	size_t buf_size;
 
 	FILE *pattern_fp = fopen(pattern_file, "r");
 	assert(pattern_fp != NULL);

@@ -86,8 +86,7 @@ void process_batch(const struct aho_state *dfa,
 int main(int argc, char *argv[])
 {
 	printf("%lu\n", sizeof(struct aho_state));
-	int num_patterns, i, j;
-	int *count;
+	int num_patterns, i;
 
 	struct aho_state *dfa;
 	uint8_t terminal_states[AHO_MAX_STATES] = {0};
