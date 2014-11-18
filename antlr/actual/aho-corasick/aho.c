@@ -11,57 +11,66 @@
 static int aho_new_state = 0;	/**< The last used state */
 
 /**< Initialize the state transition table and o/p queues */
-void aho_init(struct aho_state **dfa)
+void aho_init(struct aho_dfa *dfa, int id)
 {
-	int i;
-	int sid = shmget(AHO_SHM_KEY, AHO_MAX_STATES * sizeof(struct aho_state),
+	assert(dfa != NULL);
+
+	dfa->id = id;
+	dfa->num_used_states = 0;
+
+	int sid = shmget(AHO_SHM_KEY + id, 
+		AHO_MAX_STATES * sizeof(struct aho_state),
 		IPC_CREAT | 0666 | SHM_HUGETLB);
 
 	if(sid < 0) {
-		printf("\tCould not allocate DFA states for AC\n");
+		printf("\tCould not allocate states for DFA %d\n", id);
 		exit(-1);
 	}
 
-	*dfa = shmat(sid, 0, 0);
-	assert(*dfa != NULL);
+	dfa->root = shmat(sid, 0, 0);
+	assert(dfa->root != NULL);
 
+	int i;
 	for(i = 0; i < AHO_MAX_STATES; i ++) {
-		struct aho_state *cur_state = &((*dfa)[i]);
+		struct aho_state *cur_state = &dfa->root[i];
 		memset(cur_state->G, AHO_FAIL, AHO_ALPHA_SIZE * sizeof(uint16_t));
 		cur_state->F = AHO_FAIL;
 		ds_queue_init(&cur_state->output);
 	}
+
 }
 
 /**< Add a pattern to the DFA */
 void
-aho_add_pattern(struct aho_state *dfa, struct aho_pattern *pattern, int index)
+aho_add_pattern(struct aho_dfa *dfa, struct aho_pattern *pattern, int index)
 {
 	int length = pattern->len;
 	assert(length >= 0 && length <= 100000);
+
+	struct aho_state *st_arr = dfa->root;
 	int j, state = 0;
 
 	for(j = 0; j < length; j ++) {
-		if(dfa[state].G[pattern->content[j]] == AHO_FAIL) {
+		if(st_arr[state].G[pattern->content[j]] == AHO_FAIL) {
 			break;
 		}
-		state = dfa[state].G[pattern->content[j]];
+		state = st_arr[state].G[pattern->content[j]];
 	}
 
 	/**< Characters j to (length - 1) need new states */
 	for(; j < length; j ++) {
-		aho_new_state ++;
+		dfa->num_used_states ++;
 
 		/**< AHO_MAX_STATES - 1 is AHO_FAIL */
-		assert(aho_new_state <= AHO_MAX_STATES - 2);
+		assert(dfa->num_used_states <= AHO_MAX_STATES - 2);
 
 		/**< Print when states consume around 30 MB */
-		if(aho_new_state % 10000 == 0) {
-			printf("\taho: number of states = %d\n", aho_new_state);
+		if(dfa->num_used_states % 10000 == 0) {
+			printf("\taho: DFA %d states = %d\n", dfa->id, aho_new_state);
 		}
 
-		dfa[state].G[pattern->content[j]] = aho_new_state;
-		state = aho_new_state;
+		st_arr[state].G[pattern->content[j]] = dfa->num_used_states;
+		state = dfa->num_used_states;
 	}
 
 	/**< Add this pattern as the output for the last state */
@@ -69,29 +78,31 @@ aho_add_pattern(struct aho_state *dfa, struct aho_pattern *pattern, int index)
 		printf("Error for index = %d\n", index);
 		exit(-1);
 	}
-	ds_queue_add(&(dfa[state].output), index);
+	ds_queue_add(&st_arr[state].output, index);
 }
 
 /**< Build the Aho-Coraick failure function */
-void aho_build_ff(struct aho_state *dfa)
+void aho_build_ff(struct aho_dfa *dfa)
 {
 	int i;
 	struct ds_queue state_queue;
 	ds_queue_init(&state_queue);
 
+	struct aho_state *st_arr = dfa->root;
+
 	/**< Invalid transitions from the root state need to loop back */
 	for(i = 0; i < AHO_ALPHA_SIZE; i ++) {
-		if(dfa[0].G[i] == AHO_FAIL) {
-			dfa[0].G[i] = 0;
+		if(st_arr[0].G[i] == AHO_FAIL) {
+			st_arr[0].G[i] = 0;
 		}
 	}
 
 	/**< Initialize the failure function of the root's children */
 	for(i = 0; i < AHO_ALPHA_SIZE; i ++) {
-		int next_state = dfa[0].G[i];
+		int next_state = st_arr[0].G[i];
 		if(next_state != 0) {
 			ds_queue_add(&state_queue, next_state);
-			dfa[next_state].F = 0;
+			st_arr[next_state].F = 0;
 		}
 	}
 
@@ -101,23 +112,23 @@ void aho_build_ff(struct aho_state *dfa)
 
 		/**< Look at all the valid state transitions from cur_state */
 		for(i = 0; i < AHO_ALPHA_SIZE; i ++) {
-			int child_state = dfa[cur_state].G[i];
+			int child_state = st_arr[cur_state].G[i];
 
 			if(child_state != AHO_FAIL) {
 				ds_queue_add(&state_queue, child_state);
 
-				int best_state = dfa[cur_state].F;
-				while(dfa[best_state].G[i] == AHO_FAIL) {
-					best_state = dfa[best_state].F;
+				int best_state = st_arr[cur_state].F;
+				while(st_arr[best_state].G[i] == AHO_FAIL) {
+					best_state = st_arr[best_state].F;
 				}
 
-				int child_fail_state = dfa[best_state].G[i];
-				dfa[child_state].F = child_fail_state;
+				int child_fail_state = st_arr[best_state].G[i];
+				st_arr[child_state].F = child_fail_state;
 
 				/**< Add all patterns from child_state.F to child_state */
-				struct ds_qnode *t = dfa[child_fail_state].output.head;
+				struct ds_qnode *t = st_arr[child_fail_state].output.head;
 				while(t != NULL) {
-					ds_queue_add(&dfa[child_state].output, t->data);
+					ds_queue_add(&st_arr[child_state].output, t->data);
 					t = t->next;
 				}
 			}
@@ -217,31 +228,28 @@ struct aho_pattern
 	return patterns;
 }
 
-void aho_preprocess_dfa(struct aho_state *dfa, uint8_t *terminal_states)
+void aho_preprocess_dfa(struct aho_dfa *dfa)
 {
-	printf("\taho:Total states = %d\n", aho_new_state);
-	assert(dfa != NULL && terminal_states != NULL);
+	printf("\taho: Total states in DFA %d = %d\n", dfa->id, aho_new_state);
+	assert(dfa != NULL);
+
+	struct aho_state *st_arr = dfa->root;
+
 	int i, j;
 	for(i = 0; i <= aho_new_state; i ++) {
 
-		assert(terminal_states[i] == 0);
-		if(!ds_queue_is_empty(&dfa[i].output)) {
-			terminal_states[i] = 1;
-		}
-
 		for(j = 0; j < AHO_ALPHA_SIZE; j ++) {
-			if(dfa[i].G[j] != AHO_FAIL) {
+			if(st_arr[i].G[j] != AHO_FAIL) {
 				continue;
 			}
 
 			int state_ij = i;
-			while(dfa[state_ij].G[j] == AHO_FAIL) {
-				state_ij = dfa[state_ij].F;
+			while(st_arr[state_ij].G[j] == AHO_FAIL) {
+				state_ij = st_arr[state_ij].F;
 			}
 
-			state_ij = dfa[state_ij].G[j];
-			dfa[i].G[j] = state_ij;
+			state_ij = st_arr[state_ij].G[j];
+			st_arr[i].G[j] = state_ij;
 		}
-
 	}
 }

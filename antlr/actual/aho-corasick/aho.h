@@ -12,6 +12,14 @@
 #define AHO_MAX_PATTERN_LEN (1024)
 #define AHO_MAX_THREADS 16
 
+#define AHO_MAX_DFA 32
+
+struct aho_dfa {
+	int id;
+	int num_used_states;
+	struct aho_state *root;
+};
+
 struct aho_state {
 	uint16_t G[AHO_ALPHA_SIZE];		/**< Goto function */
 	uint16_t F;						/**< Failure function */
@@ -26,13 +34,12 @@ struct aho_pattern {
 
 struct aho_ctrl_blk {
 	int tid;						/**< Thread ID */
-	struct aho_state *dfa;			/**< The shared DFA */
-	uint8_t *terminal_states;		/**< Shared terminal states */
+	struct aho_dfa **dfa_arr;		/**< The shared DFAs */
 };
 
-void aho_init(struct aho_state **dfa);
-void aho_add_pattern(struct aho_state *dfa, struct aho_pattern *pattern, int index);
-void aho_build_ff(struct aho_state *dfa);
+void aho_init(struct aho_dfa *dfa, int id);
+void aho_add_pattern(struct aho_dfa *dfa, struct aho_pattern *pattern, int index);
+void aho_build_ff(struct aho_dfa *dfa);
 struct aho_pattern* aho_get_strings(const char *filename, int *num_patterns);
 struct aho_pattern* aho_get_patterns(const char *filename, int *num_patterns);
-void aho_preprocess_dfa(struct aho_state *dfa, uint8_t *terminal_states);
+void aho_preprocess_dfa(struct aho_dfa *dfa);

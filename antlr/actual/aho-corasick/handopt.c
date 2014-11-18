@@ -39,20 +39,20 @@ struct pkt *gen_packets(int seed)
 	return pkts;
 }
 
-void process_batch(const struct aho_state *dfa,
-	const uint8_t *terminal_states, const struct pkt *test_pkts, int *success)
+void process_batch(struct aho_state **state_arr,
+	struct pkt *test_pkts, int *success)
 {
 	int batch_index = 0;
 	int j = 0, state[BATCH_SIZE] = {0};
 
 	for(j = 0; j < PKT_SIZE; j ++) {
 		for(batch_index = 0; batch_index < BATCH_SIZE; batch_index ++) {
-			if(dfa[state[batch_index]].output.count != 0) {
+			if(state_arr[batch_index][state[batch_index]].output.count != 0) {
 				success[batch_index] ++;
 			}
 
 			int inp = test_pkts[batch_index].content[j];
-			state[batch_index] = dfa[state[batch_index]].G[inp];
+			state[batch_index] = state_arr[batch_index][state[batch_index]].G[inp];
 		}
 	}
 }
@@ -70,10 +70,10 @@ void *ids_func(void *ptr)
 	red_printf("Thread %d. Done generating packets..\n", id);
 	
 	int success[BATCH_SIZE] = {0}, tot_success = 0;
+	struct aho_state *state_arr[BATCH_SIZE];
 
 	/**< Shared structures */
-	struct aho_state *dfa = cb->dfa;
-	uint8_t *terminal_states = cb->terminal_states;
+	struct aho_dfa **dfa_arr = cb->dfa_arr;
 
 	while(1) {
 		struct timespec start, end;
@@ -81,7 +81,14 @@ void *ids_func(void *ptr)
 
 		for(i = 0; i < NUM_PKTS; i += BATCH_SIZE) {
 			memset(success, 0, BATCH_SIZE * sizeof(int));
-			process_batch(dfa, terminal_states, &test_pkts[i], success);
+
+			/**< Determine the DFAs to lookup */
+			for(j = 0; j < BATCH_SIZE; j ++) {
+				int dfa_index_j = rand() % AHO_MAX_STATES;
+				state_arr[j] = dfa_arr[dfa_index_j]->root;
+			}
+
+			process_batch(state_arr, &test_pkts[i], success);
 
 			for(j = 0; j < BATCH_SIZE; j ++) {
 				tot_success += (success[j] == 0 ? 0 : 1);
@@ -113,34 +120,39 @@ int main(int argc, char *argv[])
 	int num_patterns, i;
 
 	/**< Shared Aho-Corasick structures */
-	struct aho_state *dfa;
-	uint8_t terminal_states[AHO_MAX_STATES] = {0};
+	struct aho_dfa *dfa_arr[AHO_MAX_DFA];
 
 	/**< Thread structures */
 	pthread_t worker_threads[AHO_MAX_THREADS];
 	struct aho_ctrl_blk worker_cb[AHO_MAX_THREADS];
 
 	/**< Initialize the shared DFA */
-	aho_init(&dfa);
+	for(i = 0; i < AHO_MAX_DFA; i ++) {
+		printf("Initializing DFA %d\n", i);
+		aho_init(dfa_arr[i], i);
+	}
 
 	/**< Get the patterns */
 	struct aho_pattern *patterns = aho_get_patterns(PATTERN_FILE, 
 		&num_patterns);
 
 	/**< Build the DFA */
-	red_printf("Building AC goto function: \n");
-	for(i = 0; i < num_patterns; i ++) {
-		aho_add_pattern(dfa, &patterns[i], i);
+	for(i = 0; i < AHO_MAX_DFA; i ++) {
+		red_printf("Building AC goto function for DFA %d\n", i);
+		for(i = 0; i < num_patterns; i ++) {
+			aho_add_pattern(dfa_arr[i], &patterns[i], i);
+		}
+
+		red_printf("\tBuilding AC failure function\n");
+
+		aho_build_ff(dfa_arr[i]);
+		aho_preprocess_dfa(dfa_arr[i]);
 	}
 
-	red_printf("Building AC failure function\n");
-	aho_build_ff(dfa);
-	aho_preprocess_dfa(dfa, terminal_states);
 
 	for(i = 0; i < num_threads; i ++) {
 		worker_cb[i].tid = i;
-		worker_cb[i].dfa = dfa;
-		worker_cb[i].terminal_states = terminal_states;
+		worker_cb[i].dfa_arr = dfa_arr;
 		pthread_create(&worker_threads[i], NULL, ids_func, &worker_cb[i]);
 
 		/**< Avoid libc lock contention during rand() calls in gen_packets */
