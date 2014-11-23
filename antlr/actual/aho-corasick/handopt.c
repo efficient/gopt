@@ -10,6 +10,8 @@
 #include "util.h"
 #include "fpp.h"
 
+#define NUM_LEN_DIVISIONS 16
+
 struct dfa_batch_t {
 	int batch_size;			/**< Number of items in this batch */
 	int tot_bytes;			/**< Total length of packets in this batch */
@@ -40,14 +42,24 @@ void process_batch(const struct aho_dfa *dfa,
 	struct aho_state *st_arr = dfa->root;
 
 	/**< Find the longest packet in this batch */
+
+	/*
+	int max_len = 0, avg_len = 0, min_len = 10000000;
+	for(I = 0; I < BATCH_SIZE; I ++) {
+		max_len = pkts[I].len > max_len ? pkts[I].len : max_len;
+		min_len = pkts[I].len < min_len ? pkts[I].len : min_len;
+		avg_len += pkts[I].len;
+	}
+
+	avg_len /= BATCH_SIZE;
+	printf("\tmax = %d, min = %d, avg = %d\n", max_len, min_len, avg_len);
+	*/
+
 	int max_len = 0;
 	for(I = 0; I < BATCH_SIZE; I ++) {
 		//printf("%d ", pkts[I].len);
 		max_len = pkts[I].len > max_len ? pkts[I].len : max_len;
 	}
-
-	//printf("\n");
-	//printf("\tmax_len = %d\n", max_len);
 
 	for(j = 0; j < max_len; j ++) {
 		for(I = 0; I < BATCH_SIZE; I ++) {
@@ -77,10 +89,11 @@ void *ids_func(void *ptr)
 
 	red_printf("Starting thread %d", id);
 
-	struct dfa_batch_t dfa_batch[AHO_MAX_DFA];
-	memset(dfa_batch, 0, AHO_MAX_DFA * sizeof(struct dfa_batch_t));
+	struct dfa_batch_t dfa_batch[AHO_MAX_DFA][NUM_LEN_DIVISIONS];
+	memset(dfa_batch, 
+		0, AHO_MAX_DFA * NUM_LEN_DIVISIONS * sizeof(struct dfa_batch_t));
 
-	int tot_success = 0, tot_bytes;
+	int tot_proc = 0, tot_success = 0, tot_bytes;
 
 	while(1) {
 		struct timespec start, end;
@@ -88,32 +101,34 @@ void *ids_func(void *ptr)
 
 		for(i = 0; i < num_pkts; i ++) {
 			int dfa_id = pkts[i].dfa_id;
-
-			if(dfa_batch[dfa_id].batch_size == BATCH_SIZE) {
-	//			printf("Processing batch for dfa %d, tot_success = %d\n", dfa_id, tot_success);
-				process_batch(&dfa_arr[dfa_id], dfa_batch[dfa_id].pkts, dfa_batch[dfa_id].success);
-
-				for(j = 0; j < BATCH_SIZE; j ++) {
-					tot_success += (dfa_batch[dfa_id].success[j] == 0 ? 0 : 1);
-				}
-				memset(dfa_batch[dfa_id].success, 0, BATCH_SIZE * sizeof(int));
-
-				tot_bytes += dfa_batch[dfa_id].tot_bytes;
-
-				dfa_batch[dfa_id].batch_size = 0;
-				dfa_batch[dfa_id].tot_bytes = 0;
-
-			} else {
-	//			printf("Packet for dfa %d, batch_index = %d\n", dfa_id,
-	//				dfa_batch[dfa_id].batch_size);
-			
-				int batch_index = dfa_batch[dfa_id].batch_size;
-				dfa_batch[dfa_id].pkts[batch_index] = pkts[i];		/**< Shallow copy */
-				dfa_batch[dfa_id].tot_bytes += pkts[i].len;
+			int len_div = pkts[i].len / 100;
+			if(len_div > NUM_LEN_DIVISIONS - 1) {
+				len_div = NUM_LEN_DIVISIONS - 1;
 			}
 
-			dfa_batch[dfa_id].batch_size ++;
-	//		usleep(100000);
+			if(dfa_batch[dfa_id][len_div].batch_size == BATCH_SIZE) {
+				process_batch(&dfa_arr[dfa_id], 
+					dfa_batch[dfa_id][len_div].pkts, dfa_batch[dfa_id][len_div].success);
+
+				tot_proc += BATCH_SIZE;
+
+				for(j = 0; j < BATCH_SIZE; j ++) {
+					tot_success += (dfa_batch[dfa_id][len_div].success[j] == 0 ? 0 : 1);
+				}
+				memset(dfa_batch[dfa_id][len_div].success, 0, BATCH_SIZE * sizeof(int));
+
+				tot_bytes += dfa_batch[dfa_id][len_div].tot_bytes;
+
+				dfa_batch[dfa_id][len_div].batch_size = 0;
+				dfa_batch[dfa_id][len_div].tot_bytes = 0;
+
+			} else {
+				int batch_index = dfa_batch[dfa_id][len_div].batch_size;
+				dfa_batch[dfa_id][len_div].pkts[batch_index] = pkts[i];		/**< Shallow copy */
+				dfa_batch[dfa_id][len_div].tot_bytes += pkts[i].len;
+			}
+
+			dfa_batch[dfa_id][len_div].batch_size ++;
 		}
 
 		clock_gettime(CLOCK_REALTIME, &end);
@@ -122,9 +137,11 @@ void *ids_func(void *ptr)
 			(double) (end.tv_nsec - start.tv_nsec);
 		red_printf("ID %d: Rate = %.2f Gbps. tot_success = %d\n", id,
 			((double) tot_bytes * 8) / ns, tot_success);
+		red_printf("num_pkts = %d, tot_proc = %d\n", num_pkts, tot_proc);
 
 		tot_success = 0;
 		tot_bytes = 0;
+		tot_proc = 0;
 	}
 }
 
