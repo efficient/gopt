@@ -16,9 +16,10 @@
   *  snort 2.9.7, conf: config detection: search-method ac-q */
 #define AHO_MAX_DFA 450
 #define AHO_PATTERN_FILE "/mnt/ssd/akalia/snort/snort_dfa_patterns"
-#define AHO_PACKET_FILE "/mnt/ssd/akalia/snort/snort_packets"
 
+#define AHO_PACKET_FILE "/mnt/ssd/akalia/snort/snort_packets"
 #define AHO_MAX_PKTS (32 * 1024)	/**< Reading 2M packets takes a long time */
+#define AHO_MAX_PKT_LEN (1460)
 
 struct aho_dfa {
 	int id;

@@ -42,10 +42,12 @@ void process_batch(const struct aho_dfa *dfa,
 	/**< Find the longest packet in this batch */
 	int max_len = 0;
 	for(I = 0; I < BATCH_SIZE; I ++) {
+		//printf("%d ", pkts[I].len);
 		max_len = pkts[I].len > max_len ? pkts[I].len : max_len;
 	}
 
-	printf("\tmax_len = %d\n", max_len);
+	//printf("\n");
+	//printf("\tmax_len = %d\n", max_len);
 
 	for(j = 0; j < max_len; j ++) {
 		for(I = 0; I < BATCH_SIZE; I ++) {
@@ -88,7 +90,7 @@ void *ids_func(void *ptr)
 			int dfa_id = pkts[i].dfa_id;
 
 			if(dfa_batch[dfa_id].batch_size == BATCH_SIZE) {
-				printf("Processing batch for dfa %d, tot_success = %d\n", dfa_id, tot_success);
+	//			printf("Processing batch for dfa %d, tot_success = %d\n", dfa_id, tot_success);
 				process_batch(&dfa_arr[dfa_id], dfa_batch[dfa_id].pkts, dfa_batch[dfa_id].success);
 
 				for(j = 0; j < BATCH_SIZE; j ++) {
@@ -102,8 +104,8 @@ void *ids_func(void *ptr)
 				dfa_batch[dfa_id].tot_bytes = 0;
 
 			} else {
-				printf("Packet for dfa %d, batch_index = %d\n", dfa_id,
-					dfa_batch[dfa_id].batch_size);
+	//			printf("Packet for dfa %d, batch_index = %d\n", dfa_id,
+	//				dfa_batch[dfa_id].batch_size);
 			
 				int batch_index = dfa_batch[dfa_id].batch_size;
 				dfa_batch[dfa_id].pkts[batch_index] = pkts[i];		/**< Shallow copy */
@@ -111,7 +113,7 @@ void *ids_func(void *ptr)
 			}
 
 			dfa_batch[dfa_id].batch_size ++;
-			usleep(100000);
+	//		usleep(100000);
 		}
 
 		clock_gettime(CLOCK_REALTIME, &end);

@@ -299,6 +299,10 @@ struct aho_pkt *aho_get_pkts(const char *pkt_file, int *num_pkts)
 			pkts[i].content[j] = (uint8_t) cur_byte;
 		}
 
+		if(pkts[i].len > AHO_MAX_PKT_LEN) {
+			pkts[i].len = AHO_MAX_PKT_LEN;
+		}
+
 		dfa_load[dfa_id] ++;
 		if(i % 10000 == 0) {
 			printf("\t\taho: Read %d packets\n", i);
