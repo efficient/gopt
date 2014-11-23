@@ -178,8 +178,8 @@ struct aho_pattern
 }
 
 /**< Get Snort's content strings from a byte-file. File format:
-  *  <num_contents>
-  *  <num_bytes> byte_1 byte_2 ...
+  *  <num_patterns>
+  *  <dfa id> <num_bytes> byte_1 byte_2 ...
   *  ...
   */
 struct aho_pattern 
@@ -243,6 +243,76 @@ struct aho_pattern
 	}
 
 	return patterns;
+}
+
+/**< Get packets from a file. File format:
+  *  <dfa id> <num_bytes> byte_1 byte_2 ...
+  *  ...
+  */
+struct aho_pkt *aho_get_pkts(const char *pkt_file, int *num_pkts)
+{
+	assert(pkt_file != NULL && num_pkts != NULL);
+
+	int i, j;
+	struct aho_pkt *pkts;
+
+	int dfa_load[AHO_MAX_DFA] = {0};
+
+	FILE *pkt_fp = fopen(pkt_file, "r");
+	assert(pkt_fp != NULL);
+
+	/**< Get the number of pkts and do a sanity check */
+	fscanf(pkt_fp, "%d", num_pkts);
+	if(*num_pkts > AHO_MAX_PKTS) {
+		*num_pkts = AHO_MAX_PKTS;
+	}
+	printf("\taho: num_pkts = %d\n", *num_pkts);
+
+	/**< Initialize pkt pointers */
+	pkts = (struct aho_pkt *) malloc(*num_pkts * 
+		sizeof(struct aho_pkt));
+	assert(pkts != NULL);
+	memset(pkts, 0, *num_pkts * sizeof(struct aho_pkt));
+
+	/**< Get the actual packets */
+	for(i = 0; i < *num_pkts; i ++) {
+		int dfa_id;
+		int len;
+
+		/**< Get the DFA ID of this packet */
+		fscanf(pkt_fp, "%d", &dfa_id);
+		assert(dfa_id >= 0 && dfa_id < AHO_MAX_DFA);
+		pkts[i].dfa_id = dfa_id;
+
+		/**< Get the length of this packet */
+		fscanf(pkt_fp, "%d", &len);
+		pkts[i].len = len;		
+
+		pkts[i].content = malloc(len);
+		assert(pkts[i].content != NULL);
+
+		/**< Get one byte at a time */
+		for(j = 0; j < len; j ++) {
+			int cur_byte;
+			fscanf(pkt_fp, "%d", &cur_byte);
+			assert(cur_byte >= 0 && cur_byte <= 255);
+			pkts[i].content[j] = (uint8_t) cur_byte;
+		}
+
+		dfa_load[dfa_id] ++;
+		if(i % 10000 == 0) {
+			printf("\t\taho: Read %d packets\n", i);
+		}
+	}
+
+	printf("\taho: Printing DFAs with > 1000 packets\n");
+	for(i = 0; i < AHO_MAX_DFA; i ++) {
+		if(dfa_load[i] > 1000) {
+			printf("\t\taho: DFA %d has %d packets\n", i, dfa_load[i]);
+		}
+	}
+
+	return pkts;
 }
 
 void aho_preprocess_dfa(struct aho_dfa *dfa)

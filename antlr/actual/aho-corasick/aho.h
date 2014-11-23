@@ -18,6 +18,8 @@
 #define AHO_PATTERN_FILE "/mnt/ssd/akalia/snort/snort_dfa_patterns"
 #define AHO_PACKET_FILE "/mnt/ssd/akalia/snort/snort_packets"
 
+#define AHO_MAX_PKTS (32 * 1024)	/**< Reading 2M packets takes a long time */
+
 struct aho_dfa {
 	int id;
 	int num_used_states;
@@ -40,11 +42,25 @@ struct aho_pattern {
 struct aho_ctrl_blk {
 	int tid;						/**< Thread ID */
 	struct aho_dfa *dfa_arr;		/**< The shared DFAs */
+
+	int num_pkts;					/**< Number of packets */
+	struct aho_pkt *pkts;			/**< Packets to match in the DFAs */
+};
+
+struct aho_pkt {
+	int dfa_id;				/**< DFA to use for matching this packet */
+	int len;				/**< Length of this packet */
+	uint8_t *content;
 };
 
 void aho_init(struct aho_dfa *dfa, int id);
+
 void aho_add_pattern(struct aho_dfa *dfa, struct aho_pattern *pattern, int index);
+
 void aho_build_ff(struct aho_dfa *dfa);
-struct aho_pattern* aho_get_strings(const char *filename, int *num_patterns);
-struct aho_pattern* aho_get_patterns(const char *filename, int *num_patterns);
 void aho_preprocess_dfa(struct aho_dfa *dfa);
+
+struct aho_pattern* aho_get_strings(const char *filename, int *num_patterns);
+struct aho_pattern* aho_get_patterns(const char *pat_file, int *num_patterns);
+
+struct aho_pkt *aho_get_pkts(const char *pkt_file, int *num_pkts);
