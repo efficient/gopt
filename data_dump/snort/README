@@ -1,0 +1,8 @@
+snort_valid_rules: uncommented rules from Snort 2.9.7's community rules.
+
+snort_dfa_patterns: patterns inserted by Snort 2.9.7 with detection = ac-q, and no max-length
+
+snort_packers: packets matched by Snort against its DFAs for the DARPA dataset
+
+packet_sz_dist: distribution of packet sizes matched by Snort for the DARPA dataset
+
