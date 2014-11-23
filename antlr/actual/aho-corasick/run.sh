@@ -5,13 +5,11 @@ function blue() {
 	echo "${es}$1${ee}"
 }
 
-blue ""
+blue "Removing hugepages for shm 0 to 450"
+for i in `seq 0 450`; do
+	sudo ipcrm -M $i 1>/dev/null 2>/dev/null
+done
+
 blue "Running handopt"
 shm-rm.sh 1>/dev/null 2>/dev/null
 sudo taskset -c 0 ./handopt 1
-
-blue ""
-blue "Running nogoto"
-shm-rm.sh 1>/dev/null 2>/dev/null
-sudo taskset -c 0 ./nogoto
-

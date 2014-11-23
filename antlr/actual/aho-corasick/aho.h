@@ -3,7 +3,7 @@
 
 #define AHO_SHM_KEY 1
 
-#define AHO_MAX_STATES 65536
+#define AHO_MAX_STATES 32768	/**< Per-DFA max states */
 #define AHO_FAIL 65535
 #define AHO_ALPHA_SIZE 256
 
@@ -12,7 +12,11 @@
 #define AHO_MAX_PATTERN_LEN (1024)
 #define AHO_MAX_THREADS 16
 
-#define AHO_MAX_DFA 32
+/**< DFAs created with the following configuration:
+  *  snort 2.9.7, conf: config detection: search-method ac-q */
+#define AHO_MAX_DFA 450
+#define AHO_PATTERN_FILE "/mnt/ssd/akalia/snort/snort_dfa_patterns"
+#define AHO_PACKET_FILE "/mnt/ssd/akalia/snort/snort_packets"
 
 struct aho_dfa {
 	int id;
@@ -28,13 +32,14 @@ struct aho_state {
 };
 
 struct aho_pattern {
-	int len;
-	uint8_t *content;
+	int dfa_id;				/**< DFA to insert this pattern into */
+	int len;				/**< Length of this pattern */
+	uint8_t *content;		/**< Contents of this pattern */
 };
 
 struct aho_ctrl_blk {
 	int tid;						/**< Thread ID */
-	struct aho_dfa **dfa_arr;		/**< The shared DFAs */
+	struct aho_dfa *dfa_arr;		/**< The shared DFAs */
 };
 
 void aho_init(struct aho_dfa *dfa, int id);

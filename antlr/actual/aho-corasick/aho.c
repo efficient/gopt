@@ -8,8 +8,6 @@
 
 #include "aho.h"
 
-static int aho_new_state = 0;	/**< The last used state */
-
 /**< Initialize the state transition table and o/p queues */
 void aho_init(struct aho_dfa *dfa, int id)
 {
@@ -66,7 +64,7 @@ aho_add_pattern(struct aho_dfa *dfa, struct aho_pattern *pattern, int index)
 
 		/**< Print when states consume around 30 MB */
 		if(dfa->num_used_states % 10000 == 0) {
-			printf("\taho: DFA %d states = %d\n", dfa->id, aho_new_state);
+			printf("\taho: DFA %d states = %d\n", dfa->id, dfa->num_used_states);
 		}
 
 		st_arr[state].G[pattern->content[j]] = dfa->num_used_states;
@@ -192,6 +190,8 @@ struct aho_pattern
 	int i, j;
 	struct aho_pattern *patterns;
 
+	int dfa_load[AHO_MAX_DFA] = {0};
+
 	FILE *pattern_fp = fopen(pattern_file, "r");
 	assert(pattern_fp != NULL);
 
@@ -208,20 +208,37 @@ struct aho_pattern
 
 	/**< Get the actual content strings */
 	for(i = 0; i < *num_patterns; i ++) {
-		int num_bytes;
-		fscanf(pattern_fp, "%d", &num_bytes);
-		assert(num_bytes >= 0 && num_bytes <= AHO_MAX_PATTERN_LEN);
+		int dfa_id;
+		int len;
 
-		patterns[i].len = num_bytes;
-		patterns[i].content = malloc(num_bytes);
+		/**< Get the DFA ID of this pattern */
+		fscanf(pattern_fp, "%d", &dfa_id);
+		assert(dfa_id >= 0 && dfa_id < AHO_MAX_DFA);
+		patterns[i].dfa_id = dfa_id;
+
+		/**< Get the length of this pattern */
+		fscanf(pattern_fp, "%d", &len);
+		assert(len >= 0 && len < AHO_MAX_PATTERN_LEN);
+		patterns[i].len = len;		
+
+		patterns[i].content = malloc(len);
 		assert(patterns[i].content != NULL);
 
 		/**< Get one byte at a time */
-		for(j = 0; j < num_bytes; j ++) {
+		for(j = 0; j < len; j ++) {
 			int cur_byte;
-			fscanf(pattern_fp, "%d\n", &cur_byte);
+			fscanf(pattern_fp, "%d", &cur_byte);
 			assert(cur_byte >= 0 && cur_byte <= 255);
 			patterns[i].content[j] = (uint8_t) cur_byte;
+		}
+
+		dfa_load[dfa_id] ++;
+	}
+
+	printf("\taho: Printing DFAs with > 130 patterns\n");
+	for(i = 0; i < AHO_MAX_DFA; i ++) {
+		if(dfa_load[i] > 130) {
+			printf("\t\taho: DFA %d has %d patterns\n", i, dfa_load[i]);
 		}
 	}
 
@@ -230,13 +247,14 @@ struct aho_pattern
 
 void aho_preprocess_dfa(struct aho_dfa *dfa)
 {
-	printf("\taho: Total states in DFA %d = %d\n", dfa->id, aho_new_state);
+	printf("\taho: Preprocessing DFA %d. num_states = %d\n", 
+		dfa->id, dfa->num_used_states);
 	assert(dfa != NULL);
 
 	struct aho_state *st_arr = dfa->root;
 
 	int i, j;
-	for(i = 0; i <= aho_new_state; i ++) {
+	for(i = 0; i <= dfa->num_used_states; i ++) {
 
 		for(j = 0; j < AHO_ALPHA_SIZE; j ++) {
 			if(st_arr[i].G[j] != AHO_FAIL) {
