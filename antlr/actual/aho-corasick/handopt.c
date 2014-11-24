@@ -10,14 +10,28 @@
 #include "util.h"
 #include "fpp.h"
 
-#define NUM_LEN_DIVISIONS 16
+#define DFA_BATCH_SIZE 1024
 
 struct dfa_batch_t {
 	int batch_size;			/**< Number of items in this batch */
 	int tot_bytes;			/**< Total length of packets in this batch */
-	int success[BATCH_SIZE];
-	struct aho_pkt pkts[BATCH_SIZE];
+	int success[DFA_BATCH_SIZE];		/**< After sorting */
+	struct aho_pkt pkts[DFA_BATCH_SIZE];
 };
+
+int compare(const void *p1, const void *p2)
+{
+	const struct aho_pkt *pkt_1 = p1;
+	const struct aho_pkt *pkt_2 = p2;
+
+	if(pkt_1->len < pkt_2->len) {
+		return -1;
+	} else if(pkt_1->len > pkt_2->len) {
+		return 1;
+	}
+
+	return 0;
+}
 
 /*int process_single(struct aho_state *state_arr, struct pkt *test_pkt)
 {
@@ -61,6 +75,9 @@ void process_batch(const struct aho_dfa *dfa,
 		max_len = pkts[I].len > max_len ? pkts[I].len : max_len;
 	}
 
+	//printf("\n");
+	//usleep(10000);
+
 	for(j = 0; j < max_len; j ++) {
 		for(I = 0; I < BATCH_SIZE; I ++) {
 			if(st_arr[state[I]].output.count != 0) {
@@ -85,13 +102,12 @@ void *ids_func(void *ptr)
 	int id = cb->tid;
 	struct aho_dfa *dfa_arr = cb->dfa_arr;
 	struct aho_pkt *pkts = cb->pkts;
-	int num_pkts = cb->num_pkts - (cb->num_pkts % BATCH_SIZE);
+	int num_pkts = cb->num_pkts;
 
 	red_printf("Starting thread %d", id);
 
-	struct dfa_batch_t dfa_batch[AHO_MAX_DFA][NUM_LEN_DIVISIONS];
-	memset(dfa_batch, 
-		0, AHO_MAX_DFA * NUM_LEN_DIVISIONS * sizeof(struct dfa_batch_t));
+	struct dfa_batch_t *dfa_batch = malloc(AHO_MAX_DFA * sizeof(struct dfa_batch_t));
+	memset(dfa_batch, 0, AHO_MAX_DFA * sizeof(struct dfa_batch_t));
 
 	int tot_proc = 0, tot_success = 0, tot_bytes;
 
@@ -101,34 +117,38 @@ void *ids_func(void *ptr)
 
 		for(i = 0; i < num_pkts; i ++) {
 			int dfa_id = pkts[i].dfa_id;
-			int len_div = pkts[i].len / 100;
-			if(len_div > NUM_LEN_DIVISIONS - 1) {
-				len_div = NUM_LEN_DIVISIONS - 1;
-			}
 
-			if(dfa_batch[dfa_id][len_div].batch_size == BATCH_SIZE) {
-				process_batch(&dfa_arr[dfa_id], 
-					dfa_batch[dfa_id][len_div].pkts, dfa_batch[dfa_id][len_div].success);
+			if(dfa_batch[dfa_id].batch_size == DFA_BATCH_SIZE) {
 
-				tot_proc += BATCH_SIZE;
+				qsort(dfa_batch[dfa_id].pkts,
+					DFA_BATCH_SIZE, sizeof(struct aho_pkt), compare);
 
-				for(j = 0; j < BATCH_SIZE; j ++) {
-					tot_success += (dfa_batch[dfa_id][len_div].success[j] == 0 ? 0 : 1);
+				for(j = 0; j < DFA_BATCH_SIZE; j += BATCH_SIZE) {
+					process_batch(&dfa_arr[dfa_id], 
+						&dfa_batch[dfa_id].pkts[j], &dfa_batch[dfa_id].success[j]);
 				}
-				memset(dfa_batch[dfa_id][len_div].success, 0, BATCH_SIZE * sizeof(int));
 
-				tot_bytes += dfa_batch[dfa_id][len_div].tot_bytes;
+				tot_proc += DFA_BATCH_SIZE;
 
-				dfa_batch[dfa_id][len_div].batch_size = 0;
-				dfa_batch[dfa_id][len_div].tot_bytes = 0;
+				for(j = 0; j < DFA_BATCH_SIZE; j ++) {
+					tot_success += (dfa_batch[dfa_id].success[j] == 0 ? 0 : 1);
+				}
+
+				memset(dfa_batch[dfa_id].success, 0, DFA_BATCH_SIZE * sizeof(int));
+
+				tot_bytes += dfa_batch[dfa_id].tot_bytes;
+
+				dfa_batch[dfa_id].batch_size = 0;
+				dfa_batch[dfa_id].tot_bytes = 0;
 
 			} else {
-				int batch_index = dfa_batch[dfa_id][len_div].batch_size;
-				dfa_batch[dfa_id][len_div].pkts[batch_index] = pkts[i];		/**< Shallow copy */
-				dfa_batch[dfa_id][len_div].tot_bytes += pkts[i].len;
+				int batch_index = dfa_batch[dfa_id].batch_size;
+				dfa_batch[dfa_id].pkts[batch_index] = pkts[i];		/**< Shallow copy */
+				dfa_batch[dfa_id].tot_bytes += pkts[i].len;
 			}
 
-			dfa_batch[dfa_id][len_div].batch_size ++;
+			/**< Add the new packet to this DFA batch */
+			dfa_batch[dfa_id].batch_size ++;
 		}
 
 		clock_gettime(CLOCK_REALTIME, &end);
@@ -148,6 +168,8 @@ void *ids_func(void *ptr)
 int main(int argc, char *argv[])
 {
 	assert(argc == 2);
+	assert(DFA_BATCH_SIZE % BATCH_SIZE == 0);
+
 	int num_threads = atoi(argv[1]);
 	assert(num_threads >= 1 && num_threads <= AHO_MAX_THREADS);
 
