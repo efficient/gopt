@@ -10,7 +10,7 @@
 #include "util.h"
 #include "fpp.h"
 
-#define DFA_BATCH_SIZE 1024
+#define DFA_BATCH_SIZE 2048
 
 struct dfa_batch_t {
 	int batch_size;			/**< Number of items in this batch */
