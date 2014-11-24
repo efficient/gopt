@@ -108,13 +108,17 @@ void *ids_func(void *ptr)
 	struct aho_pkt *pkts = cb->pkts;
 	int num_pkts = cb->num_pkts;
 
+	struct dfa_batch_t *dfa_batch;	/**< The per-DFA packet batches */
 	red_printf("Starting thread %d", id);
 
-	struct dfa_batch_t *dfa_batch = malloc(AHO_MAX_DFA * sizeof(struct dfa_batch_t));
+	dfa_batch = malloc(AHO_MAX_DFA * sizeof(struct dfa_batch_t));
 	memset(dfa_batch, 0, AHO_MAX_DFA * sizeof(struct dfa_batch_t));
 
-	int tot_proc = 0, tot_success = 0, tot_bytes;
-	int tot_same = 0, tot_diff = 0;
+	int tot_proc = 0;		/**< How many packets did we actually match ? */
+	int tot_success = 0;	/**< Packets that matched a DFA state */ 
+	int tot_bytes;			/**< Total bytes matched */
+	int tot_same = 0;		/**< Calls to the faster match function */
+	int tot_diff = 0;		/**< Calls to the slower match function */
 
 	while(1) {
 		struct timespec start, end;
@@ -123,12 +127,15 @@ void *ids_func(void *ptr)
 		for(i = 0; i < num_pkts; i ++) {
 			int dfa_id = pkts[i].dfa_id;
 
+			/**< Does this DFA have a full batch? */
 			if(dfa_batch[dfa_id].batch_size == DFA_BATCH_SIZE) {
 
 				qsort(dfa_batch[dfa_id].pkts,
 					DFA_BATCH_SIZE, sizeof(struct aho_pkt), compare);
 
 				for(j = 0; j < DFA_BATCH_SIZE; j += BATCH_SIZE) {
+
+					/**< Do all packets in this mini-batch have equal len? */
 					int is_same = 1, exp_len = dfa_batch[dfa_id].pkts[j].len;
 
 					for(k = j; k < j + BATCH_SIZE; k ++) {
@@ -143,32 +150,30 @@ void *ids_func(void *ptr)
 						process_batch(&dfa_arr[dfa_id], 
 							&dfa_batch[dfa_id].pkts[j], &dfa_batch[dfa_id].success[j]);
 					} else {
+						/**< Execute a much faster function if same */
 						tot_same ++;
 						process_batch_special(&dfa_arr[dfa_id], 
 							&dfa_batch[dfa_id].pkts[j], &dfa_batch[dfa_id].success[j], is_same);
 					}
 				}
 
+				/**< Collect per-thread stats */
 				tot_proc += DFA_BATCH_SIZE;
+				tot_bytes += dfa_batch[dfa_id].tot_bytes;
 
 				for(j = 0; j < DFA_BATCH_SIZE; j ++) {
 					tot_success += (dfa_batch[dfa_id].success[j] == 0 ? 0 : 1);
 				}
-
-				memset(dfa_batch[dfa_id].success, 0, DFA_BATCH_SIZE * sizeof(int));
-
-				tot_bytes += dfa_batch[dfa_id].tot_bytes;
-
+				/**< Reset this DFA batch */
 				dfa_batch[dfa_id].batch_size = 0;
 				dfa_batch[dfa_id].tot_bytes = 0;
-
-			} else {
-				int batch_index = dfa_batch[dfa_id].batch_size;
-				dfa_batch[dfa_id].pkts[batch_index] = pkts[i];		/**< Shallow copy */
-				dfa_batch[dfa_id].tot_bytes += pkts[i].len;
+				memset(dfa_batch[dfa_id].success, 0, DFA_BATCH_SIZE * sizeof(int));
 			}
 
 			/**< Add the new packet to this DFA batch */
+			int batch_index = dfa_batch[dfa_id].batch_size;
+			dfa_batch[dfa_id].pkts[batch_index] = pkts[i];		/**< Shallow copy */
+			dfa_batch[dfa_id].tot_bytes += pkts[i].len;
 			dfa_batch[dfa_id].batch_size ++;
 		}
 
