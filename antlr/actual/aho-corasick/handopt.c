@@ -55,20 +55,6 @@ void process_batch(const struct aho_dfa *dfa,
 	int j = 0, I = 0, state[BATCH_SIZE] = {0};
 	struct aho_state *st_arr = dfa->root;
 
-	/**< Find the longest packet in this batch */
-
-	/*
-	int max_len = 0, avg_len = 0, min_len = 10000000;
-	for(I = 0; I < BATCH_SIZE; I ++) {
-		max_len = pkts[I].len > max_len ? pkts[I].len : max_len;
-		min_len = pkts[I].len < min_len ? pkts[I].len : min_len;
-		avg_len += pkts[I].len;
-	}
-
-	avg_len /= BATCH_SIZE;
-	printf("\tmax = %d, min = %d, avg = %d\n", max_len, min_len, avg_len);
-	*/
-
 	int max_len = 0;
 	for(I = 0; I < BATCH_SIZE; I ++) {
 		//printf("%d ", pkts[I].len);
@@ -94,9 +80,27 @@ void process_batch(const struct aho_dfa *dfa,
 	}
 }
 
+void process_batch_special(const struct aho_dfa *dfa,
+	const struct aho_pkt *pkts, int *success, int len)
+{
+	int j = 0, I = 0, state[BATCH_SIZE] = {0};
+	struct aho_state *st_arr = dfa->root;
+
+	for(j = 0; j < len; j ++) {
+		for(I = 0; I < BATCH_SIZE; I ++) {
+			if(st_arr[state[I]].output.count != 0) {
+				success[I] ++;
+			}
+
+			int inp = pkts[I].content[j];
+			state[I] = st_arr[state[I]].G[inp];
+		}
+	}
+}
+
 void *ids_func(void *ptr)
 {
-	int i, j;
+	int i, j, k;
 
 	struct aho_ctrl_blk *cb = (struct aho_ctrl_blk *) ptr;
 	int id = cb->tid;
@@ -110,6 +114,7 @@ void *ids_func(void *ptr)
 	memset(dfa_batch, 0, AHO_MAX_DFA * sizeof(struct dfa_batch_t));
 
 	int tot_proc = 0, tot_success = 0, tot_bytes;
+	int tot_same = 0, tot_diff = 0;
 
 	while(1) {
 		struct timespec start, end;
@@ -124,8 +129,24 @@ void *ids_func(void *ptr)
 					DFA_BATCH_SIZE, sizeof(struct aho_pkt), compare);
 
 				for(j = 0; j < DFA_BATCH_SIZE; j += BATCH_SIZE) {
-					process_batch(&dfa_arr[dfa_id], 
-						&dfa_batch[dfa_id].pkts[j], &dfa_batch[dfa_id].success[j]);
+					int is_same = 1, exp_len = dfa_batch[dfa_id].pkts[j].len;
+
+					for(k = j; k < j + BATCH_SIZE; k ++) {
+						if(dfa_batch[dfa_id].pkts[k].len != exp_len) {
+							is_same = 0;
+							break;
+						}
+					}
+
+					if(is_same == 0) {
+						tot_diff ++;
+						process_batch(&dfa_arr[dfa_id], 
+							&dfa_batch[dfa_id].pkts[j], &dfa_batch[dfa_id].success[j]);
+					} else {
+						tot_same ++;
+						process_batch_special(&dfa_arr[dfa_id], 
+							&dfa_batch[dfa_id].pkts[j], &dfa_batch[dfa_id].success[j], is_same);
+					}
 				}
 
 				tot_proc += DFA_BATCH_SIZE;
@@ -157,11 +178,15 @@ void *ids_func(void *ptr)
 			(double) (end.tv_nsec - start.tv_nsec);
 		red_printf("ID %d: Rate = %.2f Gbps. tot_success = %d\n", id,
 			((double) tot_bytes * 8) / ns, tot_success);
-		red_printf("num_pkts = %d, tot_proc = %d\n", num_pkts, tot_proc);
+		red_printf("num_pkts = %d, tot_proc = %d "
+			"tot_same = %d, tot_diff = %d\n",
+			num_pkts, tot_proc, tot_same, tot_diff);
 
 		tot_success = 0;
 		tot_bytes = 0;
 		tot_proc = 0;
+		tot_same = 0;
+		tot_diff = 0;
 	}
 }
 
