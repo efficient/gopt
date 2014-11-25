@@ -67,7 +67,8 @@ void process_batch(const struct aho_dfa *dfa,
 	for(j = 0; j < max_len; j ++) {
 		for(I = 0; I < BATCH_SIZE; I ++) {
 			if(st_arr[state[I]].output.count != 0) {
-				success[I] ++;
+				success[I] = st_arr[state[I]].output.head->data;
+				//success[I] ++;
 			}
 
 			if(j >= pkts[I].len) {
@@ -89,7 +90,8 @@ void process_batch_special(const struct aho_dfa *dfa,
 	for(j = 0; j < len; j ++) {
 		for(I = 0; I < BATCH_SIZE; I ++) {
 			if(st_arr[state[I]].output.count != 0) {
-				success[I] ++;
+				success[I] = st_arr[state[I]].output.head->data;
+				//success[I] ++;
 			}
 
 			int inp = pkts[I].content[j];
