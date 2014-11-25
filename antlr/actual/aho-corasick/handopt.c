@@ -150,12 +150,15 @@ void *ids_func(void *ptr)
 					if(is_same == 0) {
 						tot_diff ++;
 						process_batch(&dfa_arr[dfa_id], 
-							&dfa_batch[dfa_id].pkts[j], &dfa_batch[dfa_id].success[j]);
+							&dfa_batch[dfa_id].pkts[j],
+							&dfa_batch[dfa_id].success[j]);
 					} else {
 						/**< Execute a much faster function if same */
 						tot_same ++;
 						process_batch_special(&dfa_arr[dfa_id], 
-							&dfa_batch[dfa_id].pkts[j], &dfa_batch[dfa_id].success[j], is_same);
+							&dfa_batch[dfa_id].pkts[j],
+							&dfa_batch[dfa_id].success[j],
+							exp_len);
 					}
 				}
 
