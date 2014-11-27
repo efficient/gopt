@@ -33,22 +33,6 @@ int compare(const void *p1, const void *p2)
 	return 0;
 }
 
-/*int process_single(struct aho_state *state_arr, struct pkt *test_pkt)
-{
-	int j = 0, state = 0;
-
-	for(j = 0; j < PKT_SIZE; j ++) {
-		if(state_arr[state].output.count != 0) {
-			return 1;
-		}
-
-		int inp = test_pkt->content[j];
-		state = state_arr->G[inp];
-	}
-
-	return 0;
-}*/
-
 void process_batch(const struct aho_dfa *dfa,
 	const struct aho_pkt *pkts, int *success)
 {
@@ -57,12 +41,8 @@ void process_batch(const struct aho_dfa *dfa,
 
 	int max_len = 0;
 	for(I = 0; I < BATCH_SIZE; I ++) {
-		//printf("%d ", pkts[I].len);
 		max_len = pkts[I].len > max_len ? pkts[I].len : max_len;
 	}
-
-	//printf("\n");
-	//usleep(10000);
 
 	for(j = 0; j < max_len; j ++) {
 		for(I = 0; I < BATCH_SIZE; I ++) {
