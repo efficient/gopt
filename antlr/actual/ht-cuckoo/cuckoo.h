@@ -17,15 +17,17 @@
 //#define NUM_BKT_ (NUM_BKT - 1)
 
 /** < 512 MB: RAM */
-#define NUM_BKT (4 * 1024 * 1024)
+#define NUM_BKT (32 * 1024 * 1024)
 #define NUM_BKT_ (NUM_BKT - 1)
 
 /** < Number of keys inserted into the hash table */
-#define NUM_KEYS (1 * NUM_BKT)
+#define NUM_KEYS (16 * 1024 * 1024)
 #define NUM_KEYS_ (NUM_KEYS - 1)
 
 /** < Key for shmget */
 #define CUCKOO_KEY 1
+
+#define CUCKOO_MAX_THREADS 16
 
 struct cuckoo_slot
 {
@@ -39,6 +41,6 @@ struct cuckoo_bkt
 };
 
 int hash(int u);
-void cuckoo_init(int **keys, struct cuckoo_bkt** ht_index, int shm_id);
+void cuckoo_init(int **keys, struct cuckoo_bkt** ht_index);
 void red_printf(const char *format, ...);
 

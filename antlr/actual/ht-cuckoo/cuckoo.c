@@ -5,7 +5,7 @@ int hash(int u)
 	return CityHash32((char *) &u, 4);
 }
 
-void cuckoo_init(int **keys, struct cuckoo_bkt **ht_index, int shm_key)
+void cuckoo_init(int **keys, struct cuckoo_bkt **ht_index)
 {
 	int i, slot_i;
 
@@ -15,7 +15,7 @@ void cuckoo_init(int **keys, struct cuckoo_bkt **ht_index, int shm_key)
 	printf("\tInitializing cuckoo index of size = %lu bytes\n", 
 		NUM_BKT * sizeof(struct cuckoo_bkt));
 
-	int sid = shmget(CUCKOO_KEY + shm_key, NUM_BKT * sizeof(struct cuckoo_bkt),
+	int sid = shmget(CUCKOO_KEY, NUM_BKT * sizeof(struct cuckoo_bkt),
 		IPC_CREAT | 0666 | SHM_HUGETLB);
 
 	if(sid < 0) {

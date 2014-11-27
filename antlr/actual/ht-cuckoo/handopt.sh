@@ -8,8 +8,6 @@ function blue() {
 blue ""
 blue "Running handopt"
 shm-rm.sh 1>/dev/null 2>/dev/null
-num_threads=1
 
-for i in `seq 1 $num_threads`; do
-	sudo numactl --physcpubind=0,1,2,3 --membind=0 ./handopt $i &
-done
+num_threads=8
+sudo numactl --physcpubind=0-7 --membind=0 ./handopt $num_threads
