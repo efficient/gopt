@@ -18,4 +18,4 @@ shm-rm.sh 1>/dev/null 2>/dev/null
 num_threads=16
 
 # Use all hyperthreads on this socket
-sudo numactl --cpunodebind=0 --membind=0 ./handopt $num_threads
+sudo numactl --cpunodebind=0 --membind=0 ./goto $num_threads

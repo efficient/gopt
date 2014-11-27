@@ -1,0 +1,45 @@
+Config:
+=======
+
+#define NUM_BKT (32 * 1024 * 1024)
+#define NUM_KEYS (16 * 1024 * 1024)
+
+All experiments use one socket.
+
+Apt c6220:
+==========
+
+	Single thread comparison:
+	========================
+		Handopt single thread: 33 M/s
+		Goto single threaded: 29.4 M/s
+		Nogoto single thread: 10.5 M/s
+
+			Handopt speedup factor = 3.14x
+			Goto speedup factor = 2.8x
+			Goto slowdown percentage = (33 - 29.4) / 33 = 10.9%
+
+	Allowing nogoto to run on hyperthreads:
+	=======================================
+		Handopt 8 threads on 8 physical cores: 25.6 M/s per-thread
+		Goto 8 threads on 8 physical cores: 23.8 M/s per-thread
+		Nogoto 16 threads on 8 physical cores: 6.4 M/s per-thread
+
+			Handopt speedup factor = (25.6 / 6.4) / 2 = 2x
+			Goto speedup factor = (23.8 / 6.4) / 2 = 1.85x
+			Goto slowdown percentage = (25.6 - 23.8) / 25.6 = 7%
+
+	Allowing both handopt and nogoto to run on hyperthreads:
+	========================================================
+		Handopt 16 threads on 8 physical cores: 17 M/s per-thread
+		Goto 16 threads on 8 phsical cores: 15.5 M/s per-thread
+		Nogoto 16 threads on 8 physical cores: 6.4 M/s per-thread
+
+			Handopt speedup factor = (17 / 6.4) = 2.65
+			Goto speedup factor = (15.5 / 6.4) = 2.42
+			Goto slowdown percentage = (17 - 15.5) / 17 = 8.8%
+		
+	Conclusion:
+	===========
+		Both prefethed and non-prefetched cuckoo benefit from HT.
+		non-prefetched seems to benefit a bit more.
