@@ -43,3 +43,19 @@ Apt c6220:
 	===========
 		Both prefethed and non-prefetched cuckoo benefit from HT.
 		non-prefetched seems to benefit a bit more.
+
+
+
+Apt r320:
+========
+
+	Allowing nogoto to run on hyperthreads:
+	=======================================
+		Handopt 8 threads on 8 physical cores: 24.7 M/s per-thread
+		Goto 8 threads on 8 physical cores: 22 M/s per-thread
+		Nogoto 16 threads on 8 physical cores: 5.6 M/s per-thread
+
+			Handopt speedup factor = (24.7 / 5.6) / 2 = 2.2x
+			Goto speedup factor = (22 / 5.6) / 2 = 1.96x
+			Goto slowdown percentage = (24.7 - 22) / 24.7 = 10.9%
+
