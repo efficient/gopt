@@ -102,16 +102,17 @@ void process_batch_special(const struct aho_dfa *dfa,
 
 void *ids_func(void *ptr)
 {
-	int i, j, k;
+	int i, j, k, num_pkts;
 
 	struct aho_ctrl_blk *cb = (struct aho_ctrl_blk *) ptr;
 	int id = cb->tid;
 	struct aho_dfa *dfa_arr = cb->dfa_arr;
-	struct aho_pkt *pkts = cb->pkts;
-	int num_pkts = cb->num_pkts;
+
+	/**< Packets contain writeable fields: use per-thread packet arrays */
+	red_printf("Thread %d reading packets from file\n", id);
+	struct aho_pkt *pkts = aho_get_pkts(AHO_PACKET_FILE, &num_pkts);
 
 	struct dfa_batch_t *dfa_batch;	/**< The per-DFA packet batches */
-	red_printf("Starting thread %d", id);
 
 	dfa_batch = malloc(AHO_MAX_DFA * sizeof(struct dfa_batch_t));
 	memset(dfa_batch, 0, AHO_MAX_DFA * sizeof(struct dfa_batch_t));
@@ -208,10 +209,9 @@ int main(int argc, char *argv[])
 	int num_threads = atoi(argv[1]);
 	assert(num_threads >= 1 && num_threads <= AHO_MAX_THREADS);
 
-	int num_patterns, num_pkts, i;
+	int num_patterns, i;
 
 	struct aho_pattern *patterns;
-	struct aho_pkt *pkts;
 	struct aho_dfa dfa_arr[AHO_MAX_DFA];
 
 	/**< Thread structures */
@@ -219,7 +219,6 @@ int main(int argc, char *argv[])
 	struct aho_ctrl_blk worker_cb[AHO_MAX_THREADS];
 
 	red_printf("State size = %lu\n", sizeof(struct aho_state));
-
 
 	/**< Initialize the shared DFAs */
 	for(i = 0; i < AHO_MAX_DFA; i ++) {
@@ -242,14 +241,9 @@ int main(int argc, char *argv[])
 		aho_preprocess_dfa(&dfa_arr[i]);
 	}
 
-	red_printf("Reading packets from file\n");
-	pkts = aho_get_pkts(AHO_PACKET_FILE, &num_pkts);
-	
 	for(i = 0; i < num_threads; i ++) {
 		worker_cb[i].tid = i;
 		worker_cb[i].dfa_arr = dfa_arr;
-		worker_cb[i].pkts = pkts;
-		worker_cb[i].num_pkts = num_pkts;
 
 		pthread_create(&worker_threads[i], NULL, ids_func, &worker_cb[i]);
 
