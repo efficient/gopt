@@ -72,10 +72,7 @@ aho_add_pattern(struct aho_dfa *dfa, struct aho_pattern *pattern, int index)
 	}
 
 	/**< Add this pattern as the output for the last state */
-	if(state == 0) {
-		printf("Error for index = %d\n", index);
-		exit(-1);
-	}
+	assert(state != 0);
 	ds_queue_add(&st_arr[state].output, index);
 }
 
@@ -329,6 +326,16 @@ void aho_preprocess_dfa(struct aho_dfa *dfa)
 
 	int i, j;
 	for(i = 0; i <= dfa->num_used_states; i ++) {
+
+		/**< Copy the matching states from the queue to an array
+		  *  We only have space for 16 matching patterns */
+		assert(st_arr[i].output.count < 16);
+		struct ds_qnode *t = st_arr[i].output.head;
+		for(j = 0; j < st_arr[i].output.count; j ++) {
+			assert(t != NULL);
+			st_arr[i].out_arr[j] = t->data;
+			t = t->next;
+		}
 
 		for(j = 0; j < AHO_ALPHA_SIZE; j ++) {
 			if(st_arr[i].G[j] != AHO_FAIL) {

@@ -31,7 +31,7 @@ struct aho_state {
 	uint16_t G[AHO_ALPHA_SIZE];		/**< Goto function */
 	uint16_t F;						/**< Failure function */
 	struct ds_queue output;			/**< Output patterns at this state */
-	uint8_t pad[32];
+	uint16_t out_arr[16];			/**< Up to 16 output patterns */
 };
 
 struct aho_pattern {

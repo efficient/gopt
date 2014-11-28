@@ -1,10 +1,16 @@
+Description:
+============
+
+	Experiments to check when HyperThreading helps hash-table lookups.
+
+
 Config:
 =======
 
-#define NUM_BKT (32 * 1024 * 1024)
-#define NUM_KEYS (16 * 1024 * 1024)
+	#define NUM_BKT (32 * 1024 * 1024)
+	#define NUM_KEYS (16 * 1024 * 1024)
 
-All experiments use one socket.
+	All experiments use one socket.
 
 Apt c6220:
 ==========

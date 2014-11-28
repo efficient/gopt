@@ -12,6 +12,13 @@
 
 #define DEBUG 1
 
+#define MAX_MATCH 1024	/**< Maximum number of patterns a packet can match */
+
+struct pat_match_t {
+	int num_match;
+	uint16_t pat_id[MAX_MATCH];
+};
+
 /**< Plain old API-call batching */
 void process_batch(const struct aho_dfa *dfa_arr,
 	const struct aho_pkt *pkts, int *match_st)
@@ -27,7 +34,7 @@ void process_batch(const struct aho_dfa *dfa_arr,
 
 		for(j = 0; j < len; j ++) {
 			if(st_arr[state].output.count != 0) {
-				match_st[I] = st_arr[state].output.head->data;
+				match_st[I] += st_arr[state].output.count;
 			}
 
 			int inp = pkts[I].content[j];
@@ -50,7 +57,7 @@ void *ids_func(void *ptr)
 	int tot_success = 0;	/**< Packets that matched a DFA state */ 
 	int tot_bytes = 0;		/**< Total bytes matched through DFAs */
 
-	int match_st[BATCH_SIZE] = {-1};
+	int match_st[BATCH_SIZE] = {0};
 
 	while(1) {
 		struct timespec start, end;
@@ -65,12 +72,14 @@ void *ids_func(void *ptr)
 				tot_bytes += pkts[i + j].len;
 
 				#if DEBUG == 1
-				printf("Pkt %d: match = %d\n",
-					pkts[i + j].pkt_id, match_st[j]);
+				if(match_st[j] != 0) {
+					printf("match_st = %d\n", match_st[j]);
+					assert(match_st[j] <= 1024);
+				}
 				#endif
 
 				/**< Re-initialize for next iteration */
-				match_st[j] = -1;
+				match_st[j] = 0;
 			}
 		}
 
