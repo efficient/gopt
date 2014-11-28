@@ -43,9 +43,13 @@ struct aho_pattern {
 struct aho_ctrl_blk {
 	int tid;						/**< Thread ID */
 	struct aho_dfa *dfa_arr;		/**< The shared DFAs */
+
+	int num_pkts;					/**< Number of packets */
+	struct aho_pkt *pkts;			/**< Packets to match in the DFAs */
 };
 
 struct aho_pkt {
+	int pkd_id;				/**< An integer identifier for this packet */
 	int dfa_id;				/**< DFA to use for matching this packet */
 	int len;				/**< Length of this packet */
 	uint8_t *content;

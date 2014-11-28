@@ -12,4 +12,4 @@ done
 
 blue "Running handopt"
 shm-rm.sh 1>/dev/null 2>/dev/null
-sudo numactl --cpunodebind=0 --membind=0 ./handopt 4
+sudo numactl --cpunodebind=0 --membind=0 ./handopt 8
