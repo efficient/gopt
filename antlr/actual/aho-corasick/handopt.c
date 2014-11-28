@@ -11,11 +11,12 @@
 #include "fpp.h"
 
 #define DFA_BATCH_SIZE 2048
+#define DEBUG 1
 
 struct dfa_batch_t {
 	int batch_size;			/**< Number of items in this batch */
 	int tot_bytes;			/**< Total length of packets in this batch */
-	int success[DFA_BATCH_SIZE];		/**< After sorting */
+	int match_st[DFA_BATCH_SIZE];		/**< After sorting */
 	struct aho_pkt pkts[DFA_BATCH_SIZE];
 };
 
@@ -34,7 +35,7 @@ int compare(const void *p1, const void *p2)
 }
 
 void process_batch(const struct aho_dfa *dfa,
-	const struct aho_pkt *pkts, int *success)
+	const struct aho_pkt *pkts, int *match_st)
 {
 	int j = 0, I = 0, state[BATCH_SIZE] = {0};
 	struct aho_state *st_arr = dfa->root;
@@ -47,8 +48,7 @@ void process_batch(const struct aho_dfa *dfa,
 	for(j = 0; j < max_len; j ++) {
 		for(I = 0; I < BATCH_SIZE; I ++) {
 			if(st_arr[state[I]].output.count != 0) {
-				success[I] = st_arr[state[I]].output.head->data;
-				//success[I] ++;
+				match_st[I] = st_arr[state[I]].output.head->data;
 			}
 
 			if(j >= pkts[I].len) {
@@ -62,7 +62,7 @@ void process_batch(const struct aho_dfa *dfa,
 }
 
 void process_batch_special(const struct aho_dfa *dfa,
-	const struct aho_pkt *pkts, int *success, int len)
+	const struct aho_pkt *pkts, int *match_st, int len)
 {
 	int j = 0, I = 0, state[BATCH_SIZE] = {0};
 	struct aho_state *st_arr = dfa->root;
@@ -70,8 +70,7 @@ void process_batch_special(const struct aho_dfa *dfa,
 	for(j = 0; j < len; j ++) {
 		for(I = 0; I < BATCH_SIZE; I ++) {
 			if(st_arr[state[I]].output.count != 0) {
-				success[I] = st_arr[state[I]].output.head->data;
-				//success[I] ++;
+				match_st[I] = st_arr[state[I]].output.head->data;
 			}
 
 			int inp = pkts[I].content[j];
@@ -90,15 +89,22 @@ void *ids_func(void *ptr)
 	struct aho_pkt *pkts = cb->pkts;
 	int num_pkts = cb->num_pkts;
 
-	struct dfa_batch_t *dfa_batch;	/**< The per-DFA packet batches */
 	red_printf("Starting thread %d", id);
 
+	/**< Initialize all DFA batches */
+	struct dfa_batch_t *dfa_batch;
 	dfa_batch = malloc(AHO_MAX_DFA * sizeof(struct dfa_batch_t));
 	memset(dfa_batch, 0, AHO_MAX_DFA * sizeof(struct dfa_batch_t));
+	for(i = 0; i < AHO_MAX_DFA; i ++) {
+		for(j = 0; j < DFA_BATCH_SIZE; j ++) {
+			dfa_batch[i].match_st[j] = -1;
+		}
+	}
 
 	int tot_proc = 0;		/**< How many packets did we actually match ? */
 	int tot_success = 0;	/**< Packets that matched a DFA state */ 
-	int tot_bytes;			/**< Total bytes matched */
+	int tot_bytes = 0;		/**< Total bytes matched through DFAs */
+
 	int tot_same = 0;		/**< Calls to the faster match function */
 	int tot_diff = 0;		/**< Calls to the slower match function */
 
@@ -131,13 +137,13 @@ void *ids_func(void *ptr)
 						tot_diff ++;
 						process_batch(&dfa_arr[dfa_id], 
 							&dfa_batch[dfa_id].pkts[j],
-							&dfa_batch[dfa_id].success[j]);
+							&dfa_batch[dfa_id].match_st[j]);
 					} else {
 						/**< Execute a much faster function if same */
 						tot_same ++;
 						process_batch_special(&dfa_arr[dfa_id], 
 							&dfa_batch[dfa_id].pkts[j],
-							&dfa_batch[dfa_id].success[j],
+							&dfa_batch[dfa_id].match_st[j],
 							exp_len);
 					}
 				}
@@ -147,12 +153,19 @@ void *ids_func(void *ptr)
 				tot_bytes += dfa_batch[dfa_id].tot_bytes;
 
 				for(j = 0; j < DFA_BATCH_SIZE; j ++) {
-					tot_success += (dfa_batch[dfa_id].success[j] == 0 ? 0 : 1);
+					tot_success += (dfa_batch[dfa_id].match_st[j] == -1 ? 0 : 1);
+
+					#if DEBUG == 1
+					printf("Pkt %d: match = %d\n", dfa_batch[dfa_id].pkts[j].pkt_id,
+						dfa_batch[dfa_id].match_st[j]);
+					#endif
+					
 				}
+
 				/**< Reset this DFA batch */
 				dfa_batch[dfa_id].batch_size = 0;
 				dfa_batch[dfa_id].tot_bytes = 0;
-				memset(dfa_batch[dfa_id].success, 0, DFA_BATCH_SIZE * sizeof(int));
+				memset(dfa_batch[dfa_id].match_st, -1, DFA_BATCH_SIZE * sizeof(int));
 			}
 
 			/**< Add the new packet to this DFA batch */
@@ -177,6 +190,10 @@ void *ids_func(void *ptr)
 		tot_proc = 0;
 		tot_same = 0;
 		tot_diff = 0;
+
+		#if DEBUG == 1		/**< Print matched states only once */
+		exit(0);
+		#endif
 	}
 }
 

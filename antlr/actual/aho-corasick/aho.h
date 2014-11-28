@@ -49,7 +49,7 @@ struct aho_ctrl_blk {
 };
 
 struct aho_pkt {
-	int pkd_id;				/**< An integer identifier for this packet */
+	int pkt_id;				/**< An integer identifier for this packet */
 	int dfa_id;				/**< DFA to use for matching this packet */
 	int len;				/**< Length of this packet */
 	uint8_t *content;

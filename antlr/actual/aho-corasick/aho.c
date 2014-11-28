@@ -279,6 +279,9 @@ struct aho_pkt *aho_get_pkts(const char *pkt_file, int *num_pkts)
 		int dfa_id;
 		int len;
 
+		/**< Give an identifier to this packet */
+		pkts[i].pkt_id = i;
+
 		/**< Get the DFA ID of this packet */
 		fscanf(pkt_fp, "%d", &dfa_id);
 		assert(dfa_id >= 0 && dfa_id < AHO_MAX_DFA);
