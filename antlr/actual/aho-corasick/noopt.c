@@ -15,14 +15,15 @@
 /**< Maximum number of patterns a packet can match during its DFA traversal */
 #define MAX_MATCH 8192
 
-struct matched_pat_t {
+/**< A list of patterns matched by a packet */
+struct mp_list_t {
 	int num_match;
 	uint16_t ptrn_id[MAX_MATCH];
 };
 
 /**< Plain old API-call batching */
 void process_batch(const struct aho_dfa *dfa_arr,
-	const struct aho_pkt *pkts, struct matched_pat_t *matched_pats)
+	const struct aho_pkt *pkts, struct mp_list_t *mp_list)
 {
 	int I, j;
 
@@ -39,11 +40,11 @@ void process_batch(const struct aho_dfa *dfa_arr,
 			if(count != 0) {
 				/**< This state matches some patterns: copy the pattern IDs
 				  *  to the output */
-				int offset = matched_pats[I].num_match;
-				memcpy(&matched_pats[I].ptrn_id[offset],
+				int offset = mp_list[I].num_match;
+				memcpy(&mp_list[I].ptrn_id[offset],
 					st_arr[state].out_arr, count * sizeof(uint16_t));
 
-				matched_pats[I].num_match += count;
+				mp_list[I].num_match += count;
 			}
 			int inp = pkts[I].content[j];
 			state = st_arr[state].G[inp];
@@ -62,9 +63,9 @@ void *ids_func(void *ptr)
 	int num_pkts = cb->num_pkts;
 
 	/**< Per-batch matched patterns */
-	struct matched_pat_t matched_pats[BATCH_SIZE];
+	struct mp_list_t mp_list[BATCH_SIZE];
 	for(i = 0; i < BATCH_SIZE; i ++) {
-		matched_pats[i].num_match = 0;
+		mp_list[i].num_match = 0;
 	}
 
 	/**< Being paranoid about GCC optimization: ensure that the memcpys in
@@ -80,24 +81,24 @@ void *ids_func(void *ptr)
 		clock_gettime(CLOCK_REALTIME, &start);
 
 		for(i = 0; i < num_pkts; i += BATCH_SIZE) {
-			process_batch(dfa_arr, &pkts[i], matched_pats);
+			process_batch(dfa_arr, &pkts[i], mp_list);
 
 			for(j = 0; j < BATCH_SIZE; j ++) {
-				int num_match = matched_pats[j].num_match;
+				int num_match = mp_list[j].num_match;
 				assert(num_match < MAX_MATCH);
 
 				tot_success += num_match == 0 ? 0 : 1;
 
 				int pat_i;
 				for(pat_i = 0; pat_i < num_match; pat_i ++) {
-					matched_pat_sum += matched_pats[j].ptrn_id[pat_i];
+					matched_pat_sum += mp_list[j].ptrn_id[pat_i];
 				}
 
 				tot_proc ++;
 				tot_bytes += pkts[i + j].len;
 
 				/**< Re-initialize for next iteration */
-				matched_pats[j].num_match = 0;
+				mp_list[j].num_match = 0;
 			}
 		}
 

@@ -13,8 +13,6 @@
 #define DFA_BATCH_SIZE 2048
 #define DEBUG 0
 
-/**< Maximum number of patterns a packet can match during its DFA traversal */
-#define MAX_MATCH 8192
 
 struct dfa_batch_t {
 	int batch_size;			/**< Number of items in this batch */
@@ -22,7 +20,11 @@ struct dfa_batch_t {
 	struct aho_pkt pkts[DFA_BATCH_SIZE];
 };
 
-struct matched_pat_t {
+/**< Maximum number of patterns a packet can match during its DFA traversal */
+#define MAX_MATCH 8192
+
+/**< A list of patterns matched by a packet */
+struct mp_list_t {
 	int num_match;
 	uint16_t ptrn_id[MAX_MATCH];
 };
@@ -42,7 +44,7 @@ int compare(const void *p1, const void *p2)
 }
 
 void process_batch(const struct aho_dfa *dfa,
-	const struct aho_pkt *pkts, struct matched_pat_t *matched_pats)
+	const struct aho_pkt *pkts, struct mp_list_t *mp_list)
 {
 	int j = 0, I = 0, state[BATCH_SIZE] = {0};
 	struct aho_state *st_arr = dfa->root;
@@ -59,11 +61,11 @@ void process_batch(const struct aho_dfa *dfa,
 			if(count != 0) {
 				/**< This state matches some patterns: copy the pattern IDs
 				  *  to the output */
-				int offset = matched_pats[I].num_match;
-				memcpy(&matched_pats[I].ptrn_id[offset],
+				int offset = mp_list[I].num_match;
+				memcpy(&mp_list[I].ptrn_id[offset],
 					st_arr[state[I]].out_arr, count * sizeof(uint16_t));
 
-				matched_pats[I].num_match += count;
+				mp_list[I].num_match += count;
 			}
 
 			if(j >= pkts[I].len) {
@@ -77,7 +79,7 @@ void process_batch(const struct aho_dfa *dfa,
 }
 
 void process_batch_special(const struct aho_dfa *dfa,
-	const struct aho_pkt *pkts, struct matched_pat_t *matched_pats, int len)
+	const struct aho_pkt *pkts, struct mp_list_t *mp_list, int len)
 {
 	int j = 0, I = 0, state[BATCH_SIZE] = {0};
 	struct aho_state *st_arr = dfa->root;
@@ -89,11 +91,11 @@ void process_batch_special(const struct aho_dfa *dfa,
 			if(count != 0) {
 				/**< This state matches some patterns: copy the pattern IDs
 				  *  to the output */
-				int offset = matched_pats[I].num_match;
-				memcpy(&matched_pats[I].ptrn_id[offset],
+				int offset = mp_list[I].num_match;
+				memcpy(&mp_list[I].ptrn_id[offset],
 					st_arr[state[I]].out_arr, count * sizeof(uint16_t));
 
-				matched_pats[I].num_match += count;
+				mp_list[I].num_match += count;
 			}
 
 			int inp = pkts[I].content[j];
@@ -120,9 +122,9 @@ void *ids_func(void *ptr)
 	memset(dfa_batch, 0, AHO_MAX_DFA * sizeof(struct dfa_batch_t));
 
 	/**< Per-batch matched patterns */
-	struct matched_pat_t matched_pats[BATCH_SIZE];
+	struct mp_list_t mp_list[BATCH_SIZE];
 	for(i = 0; i < BATCH_SIZE; i ++) {
-		matched_pats[i].num_match = 0;
+		mp_list[i].num_match = 0;
 	}
 
 	/**< Being paranoid about GCC optimization: ensure that the memcpys in
@@ -164,27 +166,27 @@ void *ids_func(void *ptr)
 					if(is_same == 0) {
 						tot_diff ++;
 						process_batch(&dfa_arr[dfa_id], 
-							&dfa_batch[dfa_id].pkts[j], matched_pats);
+							&dfa_batch[dfa_id].pkts[j], mp_list);
 					} else {
 						/**< Execute a much faster function if same */
 						tot_same ++;
 						process_batch_special(&dfa_arr[dfa_id], 
-							&dfa_batch[dfa_id].pkts[j], matched_pats, exp_len);
+							&dfa_batch[dfa_id].pkts[j], mp_list, exp_len);
 					}
 
 					for(k = 0; k < BATCH_SIZE; k ++) {
-						int num_match = matched_pats[k].num_match;
+						int num_match = mp_list[k].num_match;
 						assert(num_match < MAX_MATCH);
 
 						tot_success += (num_match == 0 ? 0 : 1);
 
 						int pat_i;
 						for(pat_i = 0; pat_i < num_match; pat_i ++) {
-							matched_pat_sum += matched_pats[k].ptrn_id[pat_i];
+							matched_pat_sum += mp_list[k].ptrn_id[pat_i];
 						}
 
 						/**< Re-initialize for next iteration */
-						matched_pats[k].num_match = 0;
+						mp_list[k].num_match = 0;
 					}
 				}
 
