@@ -10,18 +10,19 @@
 #include "util.h"
 #include "fpp.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
-#define MAX_MATCH 1024	/**< Maximum number of patterns a packet can match */
+/**< Maximum number of patterns a packet can match during its DFA traversal */
+#define MAX_MATCH 8192
 
-struct pat_match_t {
+struct matched_pat_t {
 	int num_match;
-	uint16_t pat_id[MAX_MATCH];
+	uint16_t ptrn_id[MAX_MATCH];
 };
 
 /**< Plain old API-call batching */
 void process_batch(const struct aho_dfa *dfa_arr,
-	const struct aho_pkt *pkts, int *match_st)
+	const struct aho_pkt *pkts, struct matched_pat_t *matched_pats)
 {
 	int I, j;
 
@@ -33,10 +34,17 @@ void process_batch(const struct aho_dfa *dfa_arr,
 		int state = 0;
 
 		for(j = 0; j < len; j ++) {
-			if(st_arr[state].output.count != 0) {
-				match_st[I] += st_arr[state].output.count;
-			}
+			int count = st_arr[state].output.count;
 
+			if(count != 0) {
+				/**< This state matches some patterns: copy the pattern IDs
+				  *  to the output */
+				int offset = matched_pats[I].num_match;
+				memcpy(&matched_pats[I].ptrn_id[offset],
+					st_arr[state].out_arr, count * sizeof(uint16_t));
+
+				matched_pats[I].num_match += count;
+			}
 			int inp = pkts[I].content[j];
 			state = st_arr[state].G[inp];
 		}
@@ -53,33 +61,43 @@ void *ids_func(void *ptr)
 	struct aho_pkt *pkts = cb->pkts;
 	int num_pkts = cb->num_pkts;
 
+	/**< Per-batch matched patterns */
+	struct matched_pat_t matched_pats[BATCH_SIZE];
+	for(i = 0; i < BATCH_SIZE; i ++) {
+		matched_pats[i].num_match = 0;
+	}
+
+	/**< Being paranoid about GCC optimization: ensure that the memcpys in
+	  *  process_batch functions don't get optimized out */
+	int matched_pat_sum = 0;
+
 	int tot_proc = 0;		/**< How many packets did we actually match ? */
 	int tot_success = 0;	/**< Packets that matched a DFA state */ 
 	int tot_bytes = 0;		/**< Total bytes matched through DFAs */
-
-	int match_st[BATCH_SIZE] = {0};
 
 	while(1) {
 		struct timespec start, end;
 		clock_gettime(CLOCK_REALTIME, &start);
 
 		for(i = 0; i < num_pkts; i += BATCH_SIZE) {
-			process_batch(dfa_arr, &pkts[i], match_st);
+			process_batch(dfa_arr, &pkts[i], matched_pats);
 
 			for(j = 0; j < BATCH_SIZE; j ++) {
+				int num_match = matched_pats[j].num_match;
+				assert(num_match < MAX_MATCH);
+
+				tot_success += num_match == 0 ? 0 : 1;
+
+				int pat_i;
+				for(pat_i = 0; pat_i < num_match; pat_i ++) {
+					matched_pat_sum += matched_pats[j].ptrn_id[pat_i];
+				}
+
 				tot_proc ++;
-				tot_success += match_st[j] == -1 ? 0 : 1;
 				tot_bytes += pkts[i + j].len;
 
-				#if DEBUG == 1
-				if(match_st[j] != 0) {
-					printf("match_st = %d\n", match_st[j]);
-					assert(match_st[j] <= 1024);
-				}
-				#endif
-
 				/**< Re-initialize for next iteration */
-				match_st[j] = 0;
+				matched_pats[j].num_match = 0;
 			}
 		}
 
@@ -89,7 +107,10 @@ void *ids_func(void *ptr)
 			(double) (end.tv_nsec - start.tv_nsec);
 		red_printf("ID %d: Rate = %.2f Gbps. tot_success = %d\n", id,
 			((double) tot_bytes * 8) / ns, tot_success);
+		red_printf("num_pkts = %d, tot_proc = %d | matched_pat_sum = %d\n",
+			num_pkts, tot_proc, matched_pat_sum);
 
+		matched_pat_sum = 0;	/**< Sum of all matched pattern IDs */
 		tot_success = 0;
 		tot_bytes = 0;
 		tot_proc = 0;

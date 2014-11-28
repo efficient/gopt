@@ -183,6 +183,7 @@ void *ids_func(void *ptr)
 							matched_pat_sum += matched_pats[k].ptrn_id[pat_i];
 						}
 
+						/**< Re-initialize for next iteration */
 						matched_pats[k].num_match = 0;
 					}
 				}
