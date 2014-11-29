@@ -10,7 +10,7 @@
 #include "util.h"
 #include "fpp.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 /**< Maximum number of patterns a packet can match during its DFA traversal */
 #define MAX_MATCH 8192
@@ -90,9 +90,21 @@ void *ids_func(void *ptr)
 				tot_success += num_match == 0 ? 0 : 1;
 
 				int pat_i;
+
+				#if DEBUG == 1
+				printf("Pkt %d matched: ", pkts[i + j].pkt_id);
+
+				for(pat_i = 0; pat_i < num_match; pat_i ++) {
+					printf("%d ", mp_list[j].ptrn_id[pat_i]);
+					matched_pat_sum += mp_list[j].ptrn_id[pat_i];
+				}
+
+				printf("\n");
+				#else
 				for(pat_i = 0; pat_i < num_match; pat_i ++) {
 					matched_pat_sum += mp_list[j].ptrn_id[pat_i];
 				}
+				#endif
 
 				tot_proc ++;
 				tot_bytes += pkts[i + j].len;

@@ -140,7 +140,7 @@ void *ids_func(void *ptr)
 	struct aho_pkt *pkts = cb->pkts;
 	int num_pkts = cb->num_pkts;
 
-	red_printf("Starting thread %d", id);
+	red_printf("Starting thread %d\n", id);
 
 	/**< Big batch variables */
 	int bb_i = 0;
@@ -171,8 +171,11 @@ void *ids_func(void *ptr)
 
 		for(i = 0; i < num_pkts; i ++) {
 
-			if(bb_i == BIG_BATCH_SIZE) {
+			/**< Add the new packet to the big batch */
+			bbatch[bb_i] = pkts[i];		/**< Shallow copy */
+			bb_i ++;
 
+			if(bb_i == BIG_BATCH_SIZE) {
 				/**< The big batch is full */
 				qsort(bbatch, BIG_BATCH_SIZE, sizeof(struct aho_pkt), compare);
 
@@ -214,9 +217,21 @@ void *ids_func(void *ptr)
 						tot_bytes += bbatch[j + k].len;
 
 						int pat_i;
+
+						#if DEBUG == 1
+						printf("Pkt %d matched: ", bbatch[j + k].pkt_id);
+
+						for(pat_i = 0; pat_i < num_match; pat_i ++) {
+							printf("%d ", mp_list[k].ptrn_id[pat_i]);
+							matched_pat_sum += mp_list[k].ptrn_id[pat_i];
+						}
+
+						printf("\n");
+						#else
 						for(pat_i = 0; pat_i < num_match; pat_i ++) {
 							matched_pat_sum += mp_list[k].ptrn_id[pat_i];
 						}
+						#endif
 
 						/**< Re-initialize for next iteration */
 						mp_list[k].num_match = 0;
@@ -226,10 +241,6 @@ void *ids_func(void *ptr)
 				/**< Reset big batch index */
 				bb_i = 0;
 			}
-
-			/**< Add the new packet to this DFA batch */
-			bbatch[bb_i] = pkts[i];		/**< Shallow copy */
-			bb_i ++;
 		}
 
 		clock_gettime(CLOCK_REALTIME, &end);
