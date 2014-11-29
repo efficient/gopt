@@ -10,7 +10,7 @@
 #include "util.h"
 #include "fpp.h"
 
-#define BIG_BATCH_SIZE 8192
+#define BIG_BATCH_SIZE (8 * 1024)
 #define DEBUG 0
 
 /**< Maximum number of patterns a packet can match during its DFA traversal */
@@ -38,7 +38,7 @@ int compare(const void *p1, const void *p2)
 	return len_diff;
 }
 
-void process_batch(const struct aho_dfa *dfa,
+void process_batch_same_dfa(const struct aho_dfa *dfa,
 	const struct aho_pkt *pkts, struct mp_list_t *mp_list)
 {
 	int j = 0, I = 0, state[BATCH_SIZE] = {0};
@@ -73,7 +73,7 @@ void process_batch(const struct aho_dfa *dfa,
 	}
 }
 
-void process_batch_special(const struct aho_dfa *dfa,
+void process_batch_same_dfa_and_len(const struct aho_dfa *dfa,
 	const struct aho_pkt *pkts, struct mp_list_t *mp_list, int len)
 {
 	int j = 0, I = 0, state[BATCH_SIZE] = {0};
@@ -95,6 +95,37 @@ void process_batch_special(const struct aho_dfa *dfa,
 
 			int inp = pkts[I].content[j];
 			state[I] = st_arr[state[I]].G[inp];
+		}
+	}
+}
+
+/**< Same as noopt's batch-processing function */
+void process_batch_diff(const struct aho_dfa *dfa_arr,
+	const struct aho_pkt *pkts, struct mp_list_t *mp_list)
+{
+	int I, j;
+
+	for(I = 0; I < BATCH_SIZE; I ++) {
+		int dfa_id = pkts[I].dfa_id;
+		int len = pkts[I].len;
+		struct aho_state *st_arr = dfa_arr[dfa_id].root;
+		
+		int state = 0;
+
+		for(j = 0; j < len; j ++) {
+			int count = st_arr[state].output.count;
+
+			if(count != 0) {
+				/**< This state matches some patterns: copy the pattern IDs
+				  *  to the output */
+				int offset = mp_list[I].num_match;
+				memcpy(&mp_list[I].ptrn_id[offset],
+					st_arr[state].out_arr, count * sizeof(uint16_t));
+
+				mp_list[I].num_match += count;
+			}
+			int inp = pkts[I].content[j];
+			state = st_arr[state].G[inp];
 		}
 	}
 }
@@ -164,13 +195,14 @@ void *ids_func(void *ptr)
 
 					if(same_dfa_and_len == 1) {
 						tot_same_dfa_and_len ++;
-						process_batch_special(&dfa_arr[_dfa_id],
+						process_batch_same_dfa_and_len(&dfa_arr[_dfa_id],
 							&bbatch[j], mp_list, _len);
 					} else if(same_dfa == 1) {
 						tot_same_dfa ++;
-						process_batch(&dfa_arr[_dfa_id], &bbatch[j], mp_list);
+						process_batch_same_dfa(&dfa_arr[_dfa_id], &bbatch[j], mp_list);
 					} else {
 						tot_diff ++;
+						process_batch_diff(dfa_arr, &bbatch[j], mp_list);
 					}
 
 					for(k = 0; k < BATCH_SIZE; k ++) {
