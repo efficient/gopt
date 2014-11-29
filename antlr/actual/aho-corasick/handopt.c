@@ -13,7 +13,6 @@
 #define DFA_BATCH_SIZE 2048
 #define DEBUG 0
 
-
 struct dfa_batch_t {
 	int batch_size;			/**< Number of items in this batch */
 	int tot_bytes;			/**< Total length of packets in this batch */
@@ -56,6 +55,10 @@ void process_batch(const struct aho_dfa *dfa,
 
 	for(j = 0; j < max_len; j ++) {
 		for(I = 0; I < BATCH_SIZE; I ++) {
+			if(j >= pkts[I].len) {
+				continue;
+			}
+
 			int count = st_arr[state[I]].output.count;
 
 			if(count != 0) {
@@ -66,10 +69,6 @@ void process_batch(const struct aho_dfa *dfa,
 					st_arr[state[I]].out_arr, count * sizeof(uint16_t));
 
 				mp_list[I].num_match += count;
-			}
-
-			if(j >= pkts[I].len) {
-				continue;
 			}
 
 			int inp = pkts[I].content[j];
