@@ -10,14 +10,8 @@
 #include "util.h"
 #include "fpp.h"
 
-#define DFA_BATCH_SIZE 2048
+#define BIG_BATCH_SIZE 8192
 #define DEBUG 0
-
-struct dfa_batch_t {
-	int batch_size;			/**< Number of items in this batch */
-	int tot_bytes;			/**< Total length of packets in this batch */
-	struct aho_pkt pkts[DFA_BATCH_SIZE];
-};
 
 /**< Maximum number of patterns a packet can match during its DFA traversal */
 #define MAX_MATCH 8192
@@ -28,18 +22,20 @@ struct mp_list_t {
 	uint16_t ptrn_id[MAX_MATCH];
 };
 
+/**< Sort packets by DFA id. For packets with same dfa_id, sort by length */
 int compare(const void *p1, const void *p2)
 {
 	const struct aho_pkt *pkt_1 = p1;
 	const struct aho_pkt *pkt_2 = p2;
 
-	if(pkt_1->len < pkt_2->len) {
-		return -1;
-	} else if(pkt_1->len > pkt_2->len) {
-		return 1;
+	int dfa_id_diff = pkt_1->dfa_id - pkt_2->dfa_id;
+	
+	if(dfa_id_diff != 0) {
+		return dfa_id_diff;
 	}
 
-	return 0;
+	int len_diff = pkt_1->len - pkt_2->len;
+	return len_diff;
 }
 
 void process_batch(const struct aho_dfa *dfa,
@@ -115,10 +111,10 @@ void *ids_func(void *ptr)
 
 	red_printf("Starting thread %d", id);
 
-	/**< Initialize all DFA batches */
-	struct dfa_batch_t *dfa_batch;
-	dfa_batch = malloc(AHO_MAX_DFA * sizeof(struct dfa_batch_t));
-	memset(dfa_batch, 0, AHO_MAX_DFA * sizeof(struct dfa_batch_t));
+	/**< Big batch variables */
+	int bb_i = 0;
+	struct aho_pkt *bbatch = malloc(BIG_BATCH_SIZE * sizeof(struct aho_pkt));
+	memset(bbatch, 0, BIG_BATCH_SIZE * sizeof(struct aho_pkt));
 
 	/**< Per-batch matched patterns */
 	struct mp_list_t mp_list[BATCH_SIZE];
@@ -134,43 +130,47 @@ void *ids_func(void *ptr)
 	int tot_success = 0;	/**< Packets that matched a DFA state */ 
 	int tot_bytes = 0;		/**< Total bytes matched through DFAs */
 
-	int tot_same = 0;		/**< Calls to the faster match function */
-	int tot_diff = 0;		/**< Calls to the slower match function */
+	int tot_same_dfa_and_len = 0;
+	int tot_same_dfa = 0;
+	int tot_diff = 0;
 
 	while(1) {
 		struct timespec start, end;
 		clock_gettime(CLOCK_REALTIME, &start);
 
 		for(i = 0; i < num_pkts; i ++) {
-			int dfa_id = pkts[i].dfa_id;
 
-			/**< Does this DFA have a full batch? */
-			if(dfa_batch[dfa_id].batch_size == DFA_BATCH_SIZE) {
+			if(bb_i == BIG_BATCH_SIZE) {
 
-				qsort(dfa_batch[dfa_id].pkts,
-					DFA_BATCH_SIZE, sizeof(struct aho_pkt), compare);
+				/**< The big batch is full */
+				qsort(bbatch, BIG_BATCH_SIZE, sizeof(struct aho_pkt), compare);
 
-				for(j = 0; j < DFA_BATCH_SIZE; j += BATCH_SIZE) {
-
-					/**< Do all packets in this mini-batch have equal len? */
-					int is_same = 1, exp_len = dfa_batch[dfa_id].pkts[j].len;
+				for(j = 0; j < BIG_BATCH_SIZE; j += BATCH_SIZE) {
+					int same_dfa_and_len = 1, same_dfa = 1;
+					int _len = bbatch[j].len;
+					int _dfa_id = bbatch[j].dfa_id;
 
 					for(k = j; k < j + BATCH_SIZE; k ++) {
-						if(dfa_batch[dfa_id].pkts[k].len != exp_len) {
-							is_same = 0;
+						if(bbatch[k].len != _len) {
+							same_dfa_and_len = 0;
+						}
+
+						if(bbatch[k].dfa_id != _dfa_id) {
+							same_dfa_and_len = 0;
+							same_dfa = 0;
 							break;
 						}
 					}
 
-					if(is_same == 0) {
-						tot_diff ++;
-						process_batch(&dfa_arr[dfa_id], 
-							&dfa_batch[dfa_id].pkts[j], mp_list);
+					if(same_dfa_and_len == 1) {
+						tot_same_dfa_and_len ++;
+						process_batch_special(&dfa_arr[_dfa_id],
+							&bbatch[j], mp_list, _len);
+					} else if(same_dfa == 1) {
+						tot_same_dfa ++;
+						process_batch(&dfa_arr[_dfa_id], &bbatch[j], mp_list);
 					} else {
-						/**< Execute a much faster function if same */
-						tot_same ++;
-						process_batch_special(&dfa_arr[dfa_id], 
-							&dfa_batch[dfa_id].pkts[j], mp_list, exp_len);
+						tot_diff ++;
 					}
 
 					for(k = 0; k < BATCH_SIZE; k ++) {
@@ -178,6 +178,8 @@ void *ids_func(void *ptr)
 						assert(num_match < MAX_MATCH);
 
 						tot_success += (num_match == 0 ? 0 : 1);
+						tot_proc ++;
+						tot_bytes += bbatch[j + k].len;
 
 						int pat_i;
 						for(pat_i = 0; pat_i < num_match; pat_i ++) {
@@ -189,20 +191,13 @@ void *ids_func(void *ptr)
 					}
 				}
 
-				/**< Collect per-thread stats */
-				tot_proc += DFA_BATCH_SIZE;
-				tot_bytes += dfa_batch[dfa_id].tot_bytes;
-
-				/**< Reset this DFA batch */
-				dfa_batch[dfa_id].batch_size = 0;
-				dfa_batch[dfa_id].tot_bytes = 0;
+				/**< Reset big batch index */
+				bb_i = 0;
 			}
 
 			/**< Add the new packet to this DFA batch */
-			int batch_index = dfa_batch[dfa_id].batch_size;
-			dfa_batch[dfa_id].pkts[batch_index] = pkts[i];		/**< Shallow copy */
-			dfa_batch[dfa_id].tot_bytes += pkts[i].len;
-			dfa_batch[dfa_id].batch_size ++;
+			bbatch[bb_i] = pkts[i];		/**< Shallow copy */
+			bb_i ++;
 		}
 
 		clock_gettime(CLOCK_REALTIME, &end);
@@ -211,16 +206,19 @@ void *ids_func(void *ptr)
 			(double) (end.tv_nsec - start.tv_nsec);
 		red_printf("ID %d: Rate = %.2f Gbps. tot_success = %d\n", id,
 			((double) tot_bytes * 8) / ns, tot_success);
-		red_printf("num_pkts = %d, tot_proc = %d "
-			"tot_same = %d, tot_diff = %d | matched_pat_sum = %d\n",
-			num_pkts, tot_proc, tot_same, tot_diff, matched_pat_sum);
+		red_printf("num_pkts = %d, tot_proc = %d, matched_pat_sum = %d\n"
+			"same_dfa_and_len %d, same_dfa = %d, diff = %d\n",
+			num_pkts, tot_proc, matched_pat_sum,
+			tot_same_dfa_and_len, tot_same_dfa, tot_diff);
+
+		tot_same_dfa_and_len = 0;
+		tot_same_dfa = 0;
+		tot_diff = 0;
 
 		matched_pat_sum = 0;	/**< Sum of all matched pattern IDs */
 		tot_success = 0;
 		tot_bytes = 0;
 		tot_proc = 0;
-		tot_same = 0;
-		tot_diff = 0;
 
 		#if DEBUG == 1		/**< Print matched states only once */
 		exit(0);
@@ -231,7 +229,7 @@ void *ids_func(void *ptr)
 int main(int argc, char *argv[])
 {
 	assert(argc == 2);
-	assert(DFA_BATCH_SIZE % BATCH_SIZE == 0);
+	assert(BIG_BATCH_SIZE % BATCH_SIZE == 0);
 
 	int num_threads = atoi(argv[1]);
 	assert(num_threads >= 1 && num_threads <= AHO_MAX_THREADS);
