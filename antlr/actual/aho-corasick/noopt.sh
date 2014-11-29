@@ -10,6 +10,6 @@ for i in `seq 0 450`; do
 	sudo ipcrm -M $i 1>/dev/null 2>/dev/null
 done
 
-blue "Running handopt"
+blue "Running noopt"
 shm-rm.sh 1>/dev/null 2>/dev/null
 sudo numactl --cpunodebind=0 --membind=0 ./noopt 1
