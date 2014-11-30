@@ -19,7 +19,6 @@
 
 #define AHO_PACKET_FILE "../../../data_dump/snort/snort_packets"
 #define AHO_MAX_PKTS (32 * 1024)	/**< Reading 2M packets takes a long time */
-#define AHO_MAX_PKT_LEN (1460)
 
 struct aho_dfa {
 	int id;

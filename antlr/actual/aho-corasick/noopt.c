@@ -10,7 +10,7 @@
 #include "util.h"
 #include "fpp.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 /**< Maximum number of patterns a packet can match during its DFA traversal */
 #define MAX_MATCH 8192

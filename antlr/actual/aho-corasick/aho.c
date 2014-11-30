@@ -318,8 +318,10 @@ struct aho_pkt *aho_get_pkts(const char *pkt_file, int *num_pkts)
 
 void aho_preprocess_dfa(struct aho_dfa *dfa)
 {
-	printf("\taho: Preprocessing DFA %d. num_states = %d\n", 
-		dfa->id, dfa->num_used_states);
+	static int tot_states = 0;		/**< Total states across all DFAs */
+	tot_states += dfa->num_used_states;
+	printf("\taho: Preprocessing DFA %d. num_states = %d | tot_states = %d\n",
+		dfa->id, dfa->num_used_states, tot_states);
 	assert(dfa != NULL);
 
 	struct aho_state *st_arr = dfa->root;
