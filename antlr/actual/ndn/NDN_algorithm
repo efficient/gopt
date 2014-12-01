@@ -14,8 +14,7 @@ we should do some sort of load-balancing between candidate ports.
 
 Semantics of "terminal" prefixes:
 =================================
-
-A terminal prefix means that an LPM should stop here.
+	A terminal prefix means that an LPM should stop here.
 
 
 
@@ -40,8 +39,11 @@ For example, the URL com/google/maps leads to the insertion of three prefixes:
 	> If the new prefix is non-terminal, the is_terminal field of the log entry
 	should be set to non-terminal.
 	> If the new prefix is terminal, the is_terminal field of the log entry
-	should remain unchanged.
-
+	should remain unchanged. However, the port should be over-written. For example,
+	if there are 2 FIB entries:
+		a/b/c -> Port 1
+		a/b -> Port 2
+	Then name "a/b/d" matches prefix "a/b" and should go on port 2.
 
 
 

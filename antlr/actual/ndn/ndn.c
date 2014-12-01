@@ -18,9 +18,9 @@ char *ndn_get_prefix(const char *url, int len)
 	return prefix;
 }
 
-/**< Check if a prefix exists in the NDN hash table. If this prefix is
-  *  non-terminal, then update the existing prefix's log entry, i.e, set
-  *  is_terminal = 0.
+/**< Check if a prefix exists in the NDN hash table. If it does:
+  *  If this is non-terminal, then downgrade existing prefix to non-terminal.
+  *  If this is terminal, then override the dst port of existing prefix.
   *
   *  To use this function just to test is a prefix is present (without any
   *  updates to the log, call with is_terminal = 1.
@@ -69,6 +69,8 @@ int ndn_contains(const char *url, int len,
 					/**< Should we downgrade this prefix to "non-terminal" ? */
 					if(is_terminal == 0) {
 						log_ptr[1] = 0;
+					} else {
+						log_ptr[2] = (uint8_t) dst_port;
 					}
 
 					return 1;
@@ -192,6 +194,10 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_ht *ht)
 
 		/**< The destination port for all prefixes from this URL */
 		int dst_port = port_arr[rand() % num_active_ports];
+
+		#if NDN_DEBUG == 1
+		printf("Inserting FIB entry: URL %s -> port %d\n", url, dst_port);
+		#endif
 
 		/**< Is this prefix terminal? */
 		int is_terminal;

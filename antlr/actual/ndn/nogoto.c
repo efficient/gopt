@@ -17,8 +17,6 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 		char *name = name_lo[batch_index].name;
 		int name_len = strlen(name);
 
-		/**< The last character (not '/') is a good tag */
-		uint16_t tag = name[name_len - 1];
 		name[name_len] = '/';		/**< This character was 0 */
 
 		int c_i, i;	/**< URL char iterator and slot iterator */
@@ -38,6 +36,9 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 			if(name[c_i] != '/') {
 				continue;
 			}
+
+			/**< The character before '/' is the tag for this name prefix */
+			uint16_t tag = name[c_i - 1];
 
 			/**< name[0] -> name[c_i] is a prefix of length c_i + 1 */
 			for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
@@ -90,6 +91,9 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 				break;
 			}
 		}	/**< Loop over URL characters ends here */
+	
+		/**< Undo the change to this URL */
+		name[name_len] = 0;
 	}	/**< Loop over batch ends here */
 }
 
@@ -128,21 +132,21 @@ int main(int argc, char **argv)
 		process_batch(&name_arr[i], dst_ports, &ht);
 
 		for(j = 0; j < BATCH_SIZE; j ++) {
+			#if NDN_DEBUG == 1
+			printf("Name %s -> port %d\n", name_arr[i + j].name, dst_ports[j]);
+			#endif
 			nb_succ += (dst_ports[j] == -1) ? 0 : 1;
 		}
 	}
-
-	/**< All lookup names should get a match */
-	assert(nb_names == nb_succ);
 
 	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {
 		printf("PAPI error: retval: %d\n", retval);
 		exit(1);
 	}
 
-	red_printf("Time = %.4f s, Lookup rate = %.2f M/s\n"
+	red_printf("Time = %.4f s, Lookup rate = %.2f M/s | nb_succ = %d\n"
 		"Instructions = %lld, IPC = %f\n",
-		real_time, nb_names / (real_time * 1000000),
+		real_time, nb_names / (real_time * 1000000), nb_succ,
 		ins, ipc);
 
 	return 0;

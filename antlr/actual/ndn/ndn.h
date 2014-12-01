@@ -1,7 +1,14 @@
 #include "util.h"
 
+#define NDN_DEBUG 1
+
+#if NDN_DEBUG == 1
+#define URL_FILE "data/fib_test"
+#define NAME_FILE "data/name_test"
+#else
 #define URL_FILE "data/fib_1010"
 #define NAME_FILE "data/fib_1010"
+#endif
 
 /**< SHM keys for the hash-table index and log */
 #define NDN_HT_INDEX_KEY 1
