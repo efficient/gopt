@@ -26,16 +26,16 @@ char *ndn_get_prefix(const char *url, int len)
   *  updates to the log, call with is_terminal = 1.
   *
   *  Returns 1 if the prefix was found, and 0 otherwise. */
-int ndn_contains(const char *url, int len,
+int ndn_contains(const char *prefix, int len,
 	int is_terminal, int dst_port, struct ndn_ht *ht)
 {
 	/**< A prefix ends with a '/', so it contains at least 2 characters */
 	assert(len >= 2);
-	assert(url[len - 1] == '/');
+	assert(prefix[len - 1] == '/');
 
 	int i;
 	int bkt_num, bkt_1, bkt_2;
-	uint16_t tag = (uint16_t) url[len - 2];	/**< url[len - 1] is '/' */
+	uint16_t tag = (uint16_t) prefix[len - 2];	/**< prefix[len - 1] is '/' */
 
 	struct ndn_bucket *ht_index = ht->ht_index;
 	ULL *slot;
@@ -46,7 +46,7 @@ int ndn_contains(const char *url, int len,
 
 		/**< Get the slot array for this bucket */
 		if(bkt_num == 1) {
-			bkt_1 = CityHash64(url, len) & NDN_NUM_BKT_;
+			bkt_1 = CityHash64(prefix, len) & NDN_NUM_BKT_;
 			slot = ht_index[bkt_1].slot;
 		} else {
 			bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
@@ -61,10 +61,10 @@ int ndn_contains(const char *url, int len,
 			uint8_t *log_ptr = &ht_log[slot_offset];
 	
 			if(slot_offset != 0 && slot_tag == tag) {
-				uint8_t prefix_len = log_ptr[0];
+				uint8_t log_prefix_len = log_ptr[0];
 
-				if(prefix_len == (uint8_t) len && 
-					memcmp(url, &log_ptr[3], len) == 0) {
+				if(log_prefix_len == (uint8_t) len && 
+					memcmp(prefix, &log_ptr[3], len) == 0) {
 
 					/**< Should we downgrade this prefix to "non-terminal" ? */
 					if(is_terminal == 0) {
@@ -82,25 +82,25 @@ int ndn_contains(const char *url, int len,
 	return 0;
 }
 
-/**< Insert a prefix (specified by "url" and "len") into the NDN hash table. 
+/**< Insert a prefix into the NDN hash table. 
   *  Returns 0 on success and -1 on failure. */
-int ndn_ht_insert(const char *url, int len, 
+int ndn_ht_insert(const char *prefix, int len, 
 	int is_terminal, int dst_port, struct ndn_ht *ht) 
 {
 	/**< A prefix ends with a '/', so it contains at least 2 characters */
 	assert(len >= 2 && len <= NDN_MAX_URL_LENGTH && len < 256);
-	assert(url[len - 1] == '/');
+	assert(prefix[len - 1] == '/');
 
 	assert(is_terminal == 0 || is_terminal == 1);
 	assert(dst_port < NDN_MAX_ETHPORTS);
 
-	if(ndn_contains(url, len, is_terminal, dst_port, ht)) {
+	if(ndn_contains(prefix, len, is_terminal, dst_port, ht)) {
 		return 0;
 	}
 
 	int i;
 	int bkt_num, bkt_1, bkt_2;
-	uint16_t tag = (uint16_t) url[len - 2];	/**< url[len - 1] is '/' */
+	uint16_t tag = (uint16_t) prefix[len - 2];	/**< prefix[len - 1] is '/' */
 
 	struct ndn_bucket *ht_index = ht->ht_index;
 	ULL *slot;
@@ -111,7 +111,7 @@ int ndn_ht_insert(const char *url, int len,
 
 		/**< Get the slot array for this bucket */
 		if(bkt_num == 1) {
-			bkt_1 = CityHash64(url, len) & NDN_NUM_BKT_;
+			bkt_1 = CityHash64(prefix, len) & NDN_NUM_BKT_;
 			slot = ht_index[bkt_1].slot;
 		} else {
 			bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
@@ -137,16 +137,16 @@ int ndn_ht_insert(const char *url, int len,
 				ht_log[insert_offset] = len;
 				ht_log[insert_offset + 1] = is_terminal;
 				ht_log[insert_offset + 2] = dst_port;
-				memcpy(&ht_log[insert_offset + 3], url, len);
+				memcpy(&ht_log[insert_offset + 3], prefix, len);
 
 				return 0;
 			}
 		}
 	}
 
-	/**< We do not perform cuckoo evictions: each key has 16 (8x2) candaidate
+	/**< We do not perform cuckoo evictions: each key has 16 (8x2) candidate
 	  *  slots which should be enough. */
-	printf("\tUnable to insert URL: %s\n", url);
+	printf("\tUnable to insert prefix: %s\n", prefix);
 	return -1;
 }
 
@@ -190,7 +190,9 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_ht *ht)
 			break;
 		}
 
-		assert(url[NDN_MAX_URL_LENGTH - 1] == 0);
+		int url_len = strlen(url);
+		assert(url[url_len - 1] == '/');
+		assert(url_len < NDN_MAX_URL_LENGTH - 3);	/**< Plenty of headroom */
 
 		/**< The destination port for all prefixes from this URL */
 		int dst_port = port_arr[rand() % num_active_ports];
@@ -203,17 +205,18 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_ht *ht)
 		int is_terminal;
 
 		int i;
-		for(i = 0; i < NDN_MAX_URL_LENGTH; i ++) {
-			if(url[i] == '/') {
+		for(i = 0; i < url_len; i ++) {
+			/**< Testing url[i + 1] is OK because of headroom after url_len */
+
+			if(url[i] == '/' && url[i + 1] != 0) {
 				/**< Non-terminal prefixes */
 				is_terminal = 0;
 				if(ndn_ht_insert(url, i + 1, is_terminal, dst_port, ht) != 0) {
 					nb_fail ++;
 				}
-			} else if(url[i] == 0) {
+			} else if(url[i] == '/' && url[i + 1] == 0) {
 				/**< Terminal prefix. All inserted prefixes end with '/' */
 				is_terminal = 1;
-				url[i] = '/';
 				if(ndn_ht_insert(url, i + 1, is_terminal, dst_port, ht) != 0) {
 					nb_fail ++;
 				}
@@ -234,7 +237,8 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_ht *ht)
 
 }
 
-/**< Check if all the URLs in "urls_file" are inserted in the hash table */
+/**< Check if all the URLs in "urls_file" are inserted in the hash table.
+  *  WARNING: Will mess up the hash table's log (is_terminal and dst port) */
 void ndn_check(const char *urls_file, struct ndn_ht *ht)
 {
 	int nb_urls = 0;
@@ -243,6 +247,7 @@ void ndn_check(const char *urls_file, struct ndn_ht *ht)
 	FILE *url_fp = fopen(urls_file, "r");
 	assert(url_fp != NULL);
 
+	int is_terminal = 0, dst_port = -1, len;
 	while(1) {
 
 		/**< Read a new URL from the file and check if its valid */
@@ -254,21 +259,13 @@ void ndn_check(const char *urls_file, struct ndn_ht *ht)
 		assert(url[NDN_MAX_URL_LENGTH - 1] == 0);
 
 		int i;
-		for(i = 0; i < NDN_MAX_URL_LENGTH; i ++) {
-			/**< While calling ndn_contains(), use is_terminal = 1 to avoid
-			  *  downgrading the log entry to is_terminal = 0 */
+		for(i = 0; i < NDN_MAX_URL_LENGTH - 1; i ++) {
 			if(url[i] == '/') {
-				if(ndn_contains(url, i + 1, 1, -1, ht) == 0) {
+				len = i + 1;
+				if(ndn_contains(url, len, is_terminal, dst_port, ht) == 0) {
 					printf("Prefix %s absent.\n", ndn_get_prefix(url, i + 1));
 					assert(0);
 				}
-			} else if(url[i] == 0) {
-				url[i] = '/';
-				if(ndn_contains(url, i + 1, 1, -1, ht) == 0) {
-					printf("Prefix %s absent.\n", ndn_get_prefix(url, i + 1));
-					assert(0);
-				}
-				break;
 			}
 		}
 		
@@ -328,8 +325,8 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 
 		int name_len = strlen(name);
 
-		/**< The file's URLs should *not* end with a '/' */
-		assert(name[name_len - 1] != '/');
+		/**< The file's names should end with a '/' */
+		assert(name[name_len - 1] == '/');
 
 		memcpy((char *) &name_arr[i], name, name_len);
 		memset(name, 0, NDN_MAX_NAME_LENGTH);
@@ -371,7 +368,7 @@ void ndn_print_url_stats(const char *urls_file)
 }
 
 /**< Count the number of components in this URL. Example of expected format:
-  *  "com/google" i.e. no beginning and trailing slash. */
+  *  "com/google/" i.e. no beginning slash, yes trailing slash. */
 inline int ndn_num_components(const char *url)
 {
 	int i, num_slash = 0;
@@ -385,5 +382,6 @@ inline int ndn_num_components(const char *url)
 		}
 	}
 
-	return num_slash + 1;
+	/**< Each component is ended by a slash */
+	return num_slash;
 }

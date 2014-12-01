@@ -15,7 +15,7 @@
 #define NDN_HT_LOG_KEY 2
 
 /**< The longest URL in Tsinghua's 10M FIB is 97 bytes*/
-#define NDN_MAX_URL_LENGTH 100
+#define NDN_MAX_URL_LENGTH 150
 #define NDN_LOG_HEADROOM (NDN_MAX_URL_LENGTH * 3)
 
 #define NDN_MAX_NAME_LENGTH 200		/**< For struct ndn_name */

@@ -17,8 +17,6 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 		char *name = name_lo[batch_index].name;
 		int name_len = strlen(name);
 
-		name[name_len] = '/';		/**< This character was 0 */
-
 		int c_i, i;	/**< URL char iterator and slot iterator */
 		int bkt_num, bkt_1, bkt_2;
 
@@ -32,7 +30,7 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 		/**< For names that we cannot find, dst_port is -1 */
 		dst_ports[batch_index] = -1;
 
-		for(c_i = 0; c_i <= name_len; c_i ++) {
+		for(c_i = 0; c_i < name_len; c_i ++) {
 			if(name[c_i] != '/') {
 				continue;
 			}
@@ -92,8 +90,6 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 			}
 		}	/**< Loop over URL characters ends here */
 	
-		/**< Undo the change to this URL */
-		name[name_len] = 0;
 	}	/**< Loop over batch ends here */
 }
 
