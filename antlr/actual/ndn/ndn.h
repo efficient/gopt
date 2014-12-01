@@ -1,6 +1,6 @@
 #include "util.h"
 
-#define NDN_DEBUG 1
+#define NDN_DEBUG 0
 
 #if NDN_DEBUG == 1
 #define URL_FILE "data/fib_test"

@@ -332,6 +332,15 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 		memset(name, 0, NDN_MAX_NAME_LENGTH);
 	}
 
+	/**< Shuffle */
+	struct ndn_name temp;
+	for(i = 0; i < nb_names; i ++) {
+		int t = rand() % (i + 1);
+		temp = name_arr[i];
+		name_arr[i] = name_arr[t];
+		name_arr[t] = temp;
+	}
+
 	return name_arr;
 }
 

@@ -31,6 +31,12 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 		dst_ports[batch_index] = -1;
 
 		for(c_i = 0; c_i < name_len; c_i ++) {
+			if(name[c_i] == '/') {
+				break;
+			}
+		}
+
+		for(; c_i < name_len; c_i ++) {
 			if(name[c_i] != '/') {
 				continue;
 			}
@@ -46,7 +52,7 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 					slot = ht_index[bkt_1].slot;
 				} else {
 					bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
-					FPP_EXPENSIVE(&ht_index[bkt_1]);
+					FPP_EXPENSIVE(&ht_index[bkt_2]);
 					slot = ht_index[bkt_2].slot;
 				}
 
