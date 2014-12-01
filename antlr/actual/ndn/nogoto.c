@@ -36,13 +36,14 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 			}
 		}
 
+		c_i ++;
 		for(; c_i < name_len; c_i ++) {
 			if(name[c_i] != '/') {
 				continue;
 			}
 
-			/**< The character before '/' is the tag for this name prefix */
-			uint16_t tag = name[c_i - 1];
+			/**< Length of the prefix is c_i + 1 */
+			uint16_t tag = ndn_tag_func(name, c_i + 1);
 
 			/**< name[0] -> name[c_i] is a prefix of length c_i + 1 */
 			for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
@@ -103,7 +104,7 @@ int main(int argc, char **argv)
 {
 	struct ndn_ht ht;
 	int i, j;
-	int dst_ports[BATCH_SIZE], nb_succ = 0;
+	int dst_ports[BATCH_SIZE], nb_succ = 0, dst_port_sum = 0;
 
 	/** < Variables for PAPI */
 	float real_time, proc_time, ipc;
@@ -138,6 +139,7 @@ int main(int argc, char **argv)
 			printf("Name %s -> port %d\n", name_arr[i + j].name, dst_ports[j]);
 			#endif
 			nb_succ += (dst_ports[j] == -1) ? 0 : 1;
+			dst_port_sum += dst_ports[j];
 		}
 	}
 
@@ -146,9 +148,9 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	red_printf("Time = %.4f s, Lookup rate = %.2f M/s | nb_succ = %d\n"
+	red_printf("Time = %.4f s, Lookup rate = %.2f M/s | nb_succ = %d, sum = %d\n"
 		"Instructions = %lld, IPC = %f\n",
-		real_time, nb_names / (real_time * 1000000), nb_succ,
+		real_time, nb_names / (real_time * 1000000), nb_succ, dst_port_sum,
 		ins, ipc);
 
 	return 0;
