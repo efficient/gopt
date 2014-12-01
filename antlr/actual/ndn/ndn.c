@@ -31,6 +31,7 @@ int ndn_contains(const char *url, int len,
 {
 	/**< A prefix ends with a '/', so it contains at least 2 characters */
 	assert(len >= 2);
+	assert(url[len - 1] == '/');
 
 	int i;
 	int bkt_num, bkt_1, bkt_2;
@@ -86,11 +87,11 @@ int ndn_ht_insert(const char *url, int len,
 	int is_terminal, int dst_port_id, struct ndn_ht *ht) 
 {
 	/**< A prefix ends with a '/', so it contains at least 2 characters */
-	assert(len >= 2);
+	assert(len >= 2 && len <= NDN_MAX_URL_LENGTH && len < 256);
+	assert(url[len - 1] == '/');
 
 	assert(is_terminal == 0 || is_terminal == 1);
 	assert(dst_port_id < NDN_MAX_ETHPORTS);
-	assert(len <= NDN_MAX_URL_LENGTH);
 
 	if(ndn_contains(url, len, is_terminal, dst_port_id, ht)) {
 		return 0;
@@ -104,7 +105,7 @@ int ndn_ht_insert(const char *url, int len,
 	ULL *slot;
 	uint8_t *ht_log = ht->ht_log;
 
-	/**< Test the two candidate buckets */
+	/**< Check if the two candidate buckets contain an empty slot. */
 	for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
 
 		/**< Get the slot array for this bucket */
@@ -120,7 +121,7 @@ int ndn_ht_insert(const char *url, int len,
 		for(i = 0; i < 8; i ++) {
 			int slot_offset = NDN_SLOT_TO_OFFSET(slot[i]);
 	
-			/**< Found an empty slot */
+			/**< Filled slots have slot_offset >= 1 */
 			if(slot_offset == 0) {
 				int insert_offset = ht->log_head;
 				assert(insert_offset + NDN_LOG_HEADROOM < NDN_LOG_CAP);
@@ -142,6 +143,8 @@ int ndn_ht_insert(const char *url, int len,
 		}
 	}
 
+	/**< We do not perform cuckoo evictions: each key has 16 (8x2) candaidate
+	  *  slots which should be enough. */
 	printf("\tUnable to insert URL: %s\n", url);
 	return -1;
 }
@@ -171,7 +174,7 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_ht *ht)
 	ht->ht_log = shmat(log_sid, 0, 0);
 	memset((char *) ht->ht_log, 0, log_size);
 
-	/**< In any slot, log_head >= 1 means that it is a valid slot */
+	/**< In any slot, log offset >= 1 means that it is a valid slot */
 	ht->log_head = 1;
 
 	FILE *url_fp = fopen(urls_file, "r");
@@ -315,6 +318,9 @@ struct ndn_linear_url *ndn_get_url_array(const char *urls_file)
 		assert(url[NDN_MAX_URL_LENGTH - 1] == 0);
 
 		int url_len = strlen(url);
+
+		/**< The file's URLs should *not* end with a '/' */
+		assert(url[url_len - 1] != '/');
 
 		memcpy((char *) &url_arr[i], url, url_len);
 		memset(url, 0, NDN_MAX_URL_LENGTH);

@@ -7,9 +7,15 @@ have *only* two inserted URLs:
 	com/google/maps/ --> Port #1
 	com/google/drive/ --> Port #2
 
-and a incoming packet has destination URL /com/google/, our outbound port
-is undefined. The algorithm *does* need to have a defined outbound port 
-if the URL com/google/ was also present.
+and a incoming packet has destination URL "com/google/", our outbound port
+is the outbound port of the *first* inserted URL that had this prefix. Ideally,
+we should do some sort of load-balancing between candidate ports.
+
+
+Semantics of "terminal" prefixes:
+=================================
+
+A terminal prefix means that an LPM should stop here.
 
 
 
@@ -24,36 +30,22 @@ For example, the URL com/google/maps leads to the insertion of three prefixes:
 	com/google/maps/ -> terminal
 
 
-	Requirements for insertion:
-	===========================
-
-	1. Non-terminal prefixes should *not* have an outbound port.
-	2. Terminal prefixes should have an outbound port.
-
-	
 	Overwriting existing prefixes:
 	==============================
 
 	As the existing prefix has an entry in the log (ht_log), it needs to be 
-	updated.
+	updated.  We never need to update the destination port (according to chosen
+	semantics above).
 
-	1. Overwriting a non-terminal prefix with a terminal prefix: the port
-	field and the "is_terminal" field in the log entry need to be changed.
-
-	2. Overwriting a terminal prefix with a non-terminal prefix: no changes
-	need to be made.
-
-
-
-Semantics of "terminal" prefixes:
-=================================
-
-A terminal prefix does not mean that the LPM should stop here. It only means
-that the LPM *could* stop here if the URL that we're looking up does not
-have more components.
+	> If the new prefix is non-terminal, the is_terminal field of the log entry
+	should be set to non-terminal.
+	> If the new prefix is terminal, the is_terminal field of the log entry
+	should remain unchanged.
 
 
-10M FIB stats (Tsinghua FIB)
+
+
+10M FIB stats (Tsinghua's FIB)
 ============================
 
 This is the 10-million entry FIB from the NDN papers by Prof. Bin Liu and 
@@ -71,7 +63,7 @@ students.
 
 20% of the URLs have 3 components.
 
-The "Fast Name Lookup for Named Data Networking" (IWQoS) paper claims that 
-15.4% of their URLs have 3 components. That is for the smaller FIB with 3 
-million entries.
+The "Fast Name Lookup for Named Data Networking" (IWQoS 2014) paper claims that
+15.4% of their URLs have 3 components. That is for Tsinghua's smaller FIB with
+3 million entries.
 
