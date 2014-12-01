@@ -9,36 +9,40 @@
 #include "ndn.h"
 
 int batch_index = 0;
-int nb_succ = 0;
 
-void process_batch(struct ndn_linear_url *url_lo, struct ndn_ht *ht) 
+void process_batch(struct ndn_name *name_lo, int *dst_ports,
+	struct ndn_ht *ht) 
 {
 	foreach(batch_index, BATCH_SIZE) {
-		char *url = url_lo[batch_index].url;
-		int url_len = strlen(url);
+		char *name = name_lo[batch_index].name;
+		int name_len = strlen(name);
 
 		/**< The last character (not '/') is a good tag */
-		uint16_t tag = url[url_len - 1];
-		url[url_len] = '/';		/**< This character was 0 */
+		uint16_t tag = name[name_len - 1];
+		name[name_len] = '/';		/**< This character was 0 */
 
 		int c_i, i;	/**< URL char iterator and slot iterator */
 		int bkt_num, bkt_1, bkt_2;
 
 		struct ndn_bucket *ht_index = ht->ht_index;
-		ULL *slot;
 		uint8_t *ht_log = ht->ht_log;
+		ULL *slot;
 
-		int match_found = 0;
+		int terminate = 0;			/**< Stop processing this URL? */
+		int prefix_match_found = 0;	/**< Stop this hash-table lookup ? */
 
-		for(c_i = url_len; c_i >= 0; c_i --) {
-			if(url[c_i] != '/') {
+		/**< For names that we cannot find, dst_port is -1 */
+		dst_ports[batch_index] = -1;
+
+		for(c_i = 0; c_i <= name_len; c_i ++) {
+			if(name[c_i] != '/') {
 				continue;
 			}
 
-			/**< url[0] -> url[i] is a prefix of length i + 1 */
+			/**< name[0] -> name[c_i] is a prefix of length c_i + 1 */
 			for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
 				if(bkt_num == 1) {
-					bkt_1 = CityHash64(url, c_i + 1) & NDN_NUM_BKT_;
+					bkt_1 = CityHash64(name, c_i + 1) & NDN_NUM_BKT_;
 					FPP_EXPENSIVE(&ht_index[bkt_1]);
 					slot = ht_index[bkt_1].slot;
 				} else {
@@ -56,25 +60,33 @@ void process_batch(struct ndn_linear_url *url_lo, struct ndn_ht *ht)
 	
 					if(slot_offset != 0 && slot_tag == tag) {
 						FPP_EXPENSIVE(log_ptr);
-						uint8_t prefix_len = log_ptr[0];
-						/**< Length of the current prefix is (i + 1) */
-						if(prefix_len == (uint8_t) (c_i + 1) &&
-							memcmp(url, &log_ptr[3], c_i + 1) == 0) {
-							match_found = 1;
-							nb_succ ++;
+						uint8_t log_prefix_len = log_ptr[0];
+
+						/**< Length of the current prefix is (c_i + 1) */
+						if(log_prefix_len == (uint8_t) (c_i + 1) &&
+							memcmp(name, &log_ptr[3], c_i + 1) == 0) {
+
+							/**< Hash-table match found for name[0 ... c_i] */
+							dst_ports[batch_index] = log_ptr[2];
+							if(log_ptr[1] == 1) {
+								/**< A terminal FIB entry: we're done! */
+								terminate = 1;
+							}
+
+							prefix_match_found = 1;
 							break;
 						}
 					}
 				}
 	
-				/**< Stop processing smaller prefixes if match found */
-				if(match_found == 1) {
+				/**< Stop the hash-table lookup for name[0 ... c_i] */
+				if(prefix_match_found == 1) {
 					break;
 				}
 			}
 
-			/**< Stop processing buckets if match found */
-			if(match_found == 1) {
+			/**< Stop processing the name if we found a terminal FIB entry */
+			if(terminate == 1) {
 				break;
 			}
 		}	/**< Loop over URL characters ends here */
@@ -84,7 +96,8 @@ void process_batch(struct ndn_linear_url *url_lo, struct ndn_ht *ht)
 int main(int argc, char **argv)
 {
 	struct ndn_ht ht;
-	int i;
+	int i, j;
+	int dst_ports[BATCH_SIZE], nb_succ = 0;
 
 	/** < Variables for PAPI */
 	float real_time, proc_time, ipc;
@@ -95,39 +108,41 @@ int main(int argc, char **argv)
 	ndn_init(URL_FILE, 0xf, &ht);
 	red_printf("\tmain: Setting up NDN index done!\n");
 
-	/*red_printf("main: Checking if all URLs were inserted\n");
-	ndn_check(URL_FILE, &ht);
-	red_printf("\tmain: Check succeeded\n");*/
+	red_printf("main: Getting name array for lookups\n");
+	int nb_names = ndn_get_num_lines(NAME_FILE);
+	nb_names = nb_names - (nb_names % BATCH_SIZE);	/**< Align input to batch */
 
-	red_printf("main: Getting URL array\n");
-	int nb_urls = ndn_get_num_urls(URL_FILE);
-	nb_urls = nb_urls - (nb_urls % BATCH_SIZE);	/**< Align input to batch */
-
-	struct ndn_linear_url *url_arr = ndn_get_url_array(URL_FILE);
-	red_printf("\tmain: Constructed URL array!\n");
+	struct ndn_name *name_arr = ndn_get_name_array(NAME_FILE);
+	red_printf("\tmain: Constructed name array!\n");
 
 	red_printf("main: Starting NDN lookups\n");
+
 	/** < Init PAPI_TOT_INS and PAPI_TOT_CYC counters */
 	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {
 		printf("PAPI error: retval: %d\n", retval);
 		exit(1);
 	}
 
-	for(i = 0; i < nb_urls; i += BATCH_SIZE) {
-		process_batch(&url_arr[i], &ht);
+	for(i = 0; i < nb_names; i += BATCH_SIZE) {
+		memset(dst_ports, -1, BATCH_SIZE * sizeof(int));
+		process_batch(&name_arr[i], dst_ports, &ht);
+
+		for(j = 0; j < BATCH_SIZE; j ++) {
+			nb_succ += (dst_ports[j] == -1) ? 0 : 1;
+		}
 	}
 
-	/**< All URLs should get a match */
-	assert(nb_urls == nb_succ);
+	/**< All lookup names should get a match */
+	assert(nb_names == nb_succ);
 
 	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {
 		printf("PAPI error: retval: %d\n", retval);
 		exit(1);
 	}
 
-	red_printf("Time = %.4f s, rate = %.2f\n"
+	red_printf("Time = %.4f s, Lookup rate = %.2f M/s\n"
 		"Instructions = %lld, IPC = %f\n",
-		real_time, nb_urls / real_time,
+		real_time, nb_names / (real_time * 1000000),
 		ins, ipc);
 
 	return 0;

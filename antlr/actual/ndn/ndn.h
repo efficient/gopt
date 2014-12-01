@@ -1,20 +1,21 @@
 #include "util.h"
 
 #define URL_FILE "data/fib_1010"
-// #define URL_FILE "/home/akalia/fastpp/data_dump/ndn_distributed_sample"
-// #define URL_FILE "data/ndn_distributed_sample_small"
-// #define URL_FILE "data/test"
+#define NAME_FILE "data/fib_1010"
 
 /**< SHM keys for the hash-table index and log */
 #define NDN_HT_INDEX_KEY 1
 #define NDN_HT_LOG_KEY 2
 
-/**< The longest URL in data_dump/ndn_distributed_sample is 147 bytes*/
-#define NDN_MAX_URL_LENGTH 150
+/**< The longest URL in Tsinghua's 10M FIB is 97 bytes*/
+#define NDN_MAX_URL_LENGTH 100
 #define NDN_LOG_HEADROOM (NDN_MAX_URL_LENGTH * 3)
 
-/**< The maximum number of components is 5 */
-#define NDN_MAX_COMPONENTS 10
+#define NDN_MAX_NAME_LENGTH 200		/**< For struct ndn_name */
+#define NDN_MAX_LINE_LENGTH 10000	/**< For ndn_get_num_lines() */
+
+/**< The maximum number of components is Tsinghua's 10M FIB is 13 */
+#define NDN_MAX_COMPONENTS 15
 
 /**< Don't want to include rte headers for RTE_MAX_ETHPORTS */
 #define NDN_MAX_ETHPORTS 16
@@ -32,11 +33,8 @@ in fastpp/data_dump. This file has 11 million URLs and is around
 #define NDN_NUM_BKT (8 * 1024 * 1024)
 #define NDN_NUM_BKT_ (NDN_NUM_BKT - 1)
 
-/**< Log entry format for an inserted prefix:
-  *  byte 0: length of the prefix
-  *  byte 1: == 1 iff this prefix is a terminal prefix 
-  *  byte 2: destination port for this prefix
-  *  byte 3 onwards: the actual prefix */
+/**< Log entry format for an inserted prefix. Format: 
+  *  <length> <is terminal> <dst port> <byte_0> ... */
 #define NDN_LOG_CAP (300 * 1024 * 1024)
 
 /**< Slot: bytes 0:1 = tag | bytes 2:7 = offset in log */
@@ -53,9 +51,9 @@ struct ndn_ht
 };
 
 /**< For storing URLs linearly */
-struct ndn_linear_url
+struct ndn_name
 {
-	char url[NDN_MAX_URL_LENGTH];
+	char name[NDN_MAX_NAME_LENGTH];
 };
 
 /**< These macros should be safe for use with the ANTLR code */
@@ -73,11 +71,11 @@ int ndn_ht_insert(const char *url, int len,
 /**< Check if all the URLs in "urls_file" are inserted in the hash table */
 void ndn_check(const char *urls_file, struct ndn_ht *ht);
 
-/**< Return the number of URLs in a file */
-int ndn_get_num_urls(const char *urls_file);
+/**< Return the number of lines in a file */
+int ndn_get_num_lines(const char *file_name);
 
 /**< Put all the URLs in a linear array with fixed sized slots */
-struct ndn_linear_url *ndn_get_url_array(const char *urls_file);
+struct ndn_name *ndn_get_name_array(const char *names_file);
 
 /**< Print some useful stats for the URLs in this file */
 void ndn_print_url_stats(const char *urls_file);
