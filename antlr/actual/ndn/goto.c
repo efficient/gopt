@@ -8,13 +8,10 @@
 #include "fpp.h"
 #include "ndn.h"
 
-int batch_index = 0;
-
 void process_batch(struct ndn_name *name_lo, int *dst_ports,
                    struct ndn_ht *ht)
 {
 	char *name[BATCH_SIZE];
-	int name_len[BATCH_SIZE];
 	int i[BATCH_SIZE];
 	int c_i[BATCH_SIZE];
 	int bkt_2[BATCH_SIZE];
@@ -43,7 +40,6 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 fpp_start:
 
         name[I] = name_lo[I].name;
-        name_len[I] = strlen(name[I]);
         
          /**< URL char iterator and slot iterator */
         
@@ -56,14 +52,14 @@ fpp_start:
         /**< For names that we cannot find, dst_port is -1 */
         dst_ports[I] = -1;
         
-        for(c_i[I] = 0; c_i[I] < name_len[I]; c_i[I] ++) {
+        for(c_i[I] = 0; name[I][c_i[I]] != 0; c_i[I] ++) {
             if(name[I][c_i[I]] == '/') {
                 break;
             }
         }
         
         c_i[I] ++;
-        for(; c_i[I] < name_len[I]; c_i[I] ++) {
+        for(; name[I][c_i[I]] != 0; c_i[I] ++) {
             if(name[I][c_i[I]] != '/') {
                 continue;
             }
@@ -137,7 +133,7 @@ fpp_end:
     if(iMask == (1 << BATCH_SIZE) - 1) {
         return;
     }
-    I = (I + 1) < BATCH_SIZE ? I + 1 : 0;
+    I = (I + 1) & BATCH_SIZE_;
     goto *batch_rips[I];
 
 }
