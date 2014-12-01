@@ -1,8 +1,36 @@
-snort_valid_rules: uncommented rules from Snort 2.9.7's community rules.
+ALERT:
+======
+	The packets file here contains only 150K packets to save space. I've tested
+	with 2 million packets with similar (or sometimes slightly higher performance).
+	The full file with 2 million packets is in /mnt/ssd/akalia/snort/ on
+	xia-router2.
 
-snort_dfa_patterns: patterns inserted by Snort 2.9.7 with detection = ac-q, and no max-length
+snort_valid_rules:
+==================
+	uncommented rules from Snort 2.9.7's community rules.
 
-snort_packers: packets matched by Snort against its DFAs for the DARPA dataset
+snort_dfa_patterns:
+===================
+	patterns inserted by Snort 2.9.7 with detection = ac-q, and no max-length
 
-packet_sz_dist: distribution of packet sizes matched by Snort for the DARPA dataset
+snort_packets:
+==============
+	packets matched by Snort against its DFAs for the DARPA dataset
 
+packet_sz_dist:
+===============
+	distribution of packet sizes matched by Snort for the DARPA dataset
+
+proc.java:
+==========
+	2 input files:
+
+		snort_dfa_patterns:
+		===================
+			<dfa_pointer> <ptrn_len> <byte 1> ...
+		
+		snort_packets:
+		==============
+			<dfa_pointer> <pkt_len> <byte 1> ...
+
+	Converts the dfa_pointer in both files to an integer (dfa_id)
