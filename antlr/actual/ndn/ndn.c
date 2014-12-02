@@ -316,27 +316,29 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 		malloc(nb_names * sizeof(struct ndn_name));
 	memset(name_arr, 0, nb_names * sizeof(struct ndn_name));
 
-	char name[NDN_MAX_NAME_LENGTH] = {0};
+	char temp_name[NDN_MAX_NAME_LENGTH] = {0};
 	FILE *name_fp = fopen(names_file, "r");
 	assert(name_fp != NULL);
 
 	for(i = 0; i < nb_names; i ++) {
-		fscanf(name_fp, "%s", name);
-		if(name[0] == 0) {
+		fscanf(name_fp, "%s", temp_name);
+		if(temp_name[0] == 0) {
 			break;
 		}
-		assert(name[NDN_MAX_URL_LENGTH - 1] == 0);
+		assert(temp_name[NDN_MAX_URL_LENGTH - 1] == 0);
 
-		int name_len = strlen(name);
+		int len = strlen(temp_name);
 
 		/**< The file's names should end with a '/' */
-		assert(name[name_len - 1] == '/');
+		assert(temp_name[len - 1] == '/');
 
-		memcpy((char *) &name_arr[i], name, name_len);
-		memset(name, 0, NDN_MAX_NAME_LENGTH);
+		memcpy(name_arr[i].name, temp_name, len);
+
+		memset(temp_name, 0, NDN_MAX_NAME_LENGTH);
 	}
 
 	/**< Shuffle */
+	printf("\tndn: Shuffling names\n");
 	struct ndn_name temp;
 	for(i = 0; i < nb_names; i ++) {
 		int t = rand() % (i + 1);
