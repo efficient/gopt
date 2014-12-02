@@ -22,6 +22,7 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 	ULL *slot[BATCH_SIZE];
 	int terminate[BATCH_SIZE];
 	int prefix_match_found[BATCH_SIZE];
+	uint64_t prefix_hash[BATCH_SIZE];
 	uint16_t tag[BATCH_SIZE];
 	int slot_offset[BATCH_SIZE];
 	uint16_t slot_tag[BATCH_SIZE];
@@ -64,13 +65,13 @@ fpp_start:
                 continue;
             }
             
-            /**< Length of the prefix is c_i + 1 */
-            tag[I] = ndn_tag_func(name[I], c_i[I] + 1);
+            prefix_hash[I] = CityHash64(name[I], c_i[I] + 1);
+            tag[I] = prefix_hash[I] >> 48;
             
             /**< name[0] -> name[c_i] is a prefix of length c_i + 1 */
             for(bkt_num[I] = 1; bkt_num[I] <= 2; bkt_num[I] ++) {
                 if(bkt_num[I] == 1) {
-                    bkt_1[I] = CityHash64(name[I], c_i[I] + 1) & NDN_NUM_BKT_;
+                    bkt_1[I] = prefix_hash[I] & NDN_NUM_BKT_;
                     FPP_PSS(&ht_index[I][bkt_1[I]], fpp_label_1);
 fpp_label_1:
 
@@ -122,7 +123,7 @@ fpp_label_3:
             /**< Stop processing the name if we found a terminal FIB entry */
             if(terminate[I] == 1) {
                 break;
-            }
+            }   
         }   /**< Loop over URL characters ends here */
         
        /**< Loop over batch ends here */

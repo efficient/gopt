@@ -8,11 +8,11 @@
 #include "fpp.h"
 #include "ndn.h"
 
+int batch_index = 0;
+
 void process_batch(struct ndn_name *name_lo, int *dst_ports,
 	struct ndn_ht *ht) 
 {
-	int batch_index = 0;
-
 	foreach(batch_index, BATCH_SIZE) {
 		char *name = name_lo[batch_index].name;
 
@@ -41,13 +41,13 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 				continue;
 			}
 
-			/**< Length of the prefix is c_i + 1 */
-			uint16_t tag = ndn_tag_func(name, c_i + 1);
+			uint64_t prefix_hash = CityHash64(name, c_i + 1);
+			uint16_t tag = prefix_hash >> 48;
 
 			/**< name[0] -> name[c_i] is a prefix of length c_i + 1 */
 			for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
 				if(bkt_num == 1) {
-					bkt_1 = CityHash64(name, c_i + 1) & NDN_NUM_BKT_;
+					bkt_1 = prefix_hash & NDN_NUM_BKT_;
 					FPP_EXPENSIVE(&ht_index[bkt_1]);
 					slot = ht_index[bkt_1].slot;
 				} else {

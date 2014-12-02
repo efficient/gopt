@@ -35,7 +35,9 @@ int ndn_contains(const char *prefix, int len,
 
 	int i;
 	int bkt_num, bkt_1, bkt_2;
-	uint16_t tag = ndn_tag_func(prefix, len);
+
+	uint64_t prefix_hash = CityHash64(prefix, len);
+	uint16_t tag = prefix_hash >> 48;
 
 	struct ndn_bucket *ht_index = ht->ht_index;
 	ULL *slot;
@@ -46,7 +48,7 @@ int ndn_contains(const char *prefix, int len,
 
 		/**< Get the slot array for this bucket */
 		if(bkt_num == 1) {
-			bkt_1 = CityHash64(prefix, len) & NDN_NUM_BKT_;
+			bkt_1 = prefix_hash & NDN_NUM_BKT_;
 			slot = ht_index[bkt_1].slot;
 		} else {
 			bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
@@ -100,7 +102,9 @@ int ndn_ht_insert(const char *prefix, int len,
 
 	int i;
 	int bkt_num, bkt_1, bkt_2;
-	uint16_t tag = ndn_tag_func(prefix, len);
+
+	uint64_t prefix_hash = CityHash64(prefix, len);
+	uint16_t tag = prefix_hash >> 48;
 
 	struct ndn_bucket *ht_index = ht->ht_index;
 	ULL *slot;
@@ -111,7 +115,7 @@ int ndn_ht_insert(const char *prefix, int len,
 
 		/**< Get the slot array for this bucket */
 		if(bkt_num == 1) {
-			bkt_1 = CityHash64(prefix, len) & NDN_NUM_BKT_;
+			bkt_1 = prefix_hash & NDN_NUM_BKT_;
 			slot = ht_index[bkt_1].slot;
 		} else {
 			bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;

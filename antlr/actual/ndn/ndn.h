@@ -93,12 +93,3 @@ inline int ndn_num_components(const char *url);
 /**< Create a mutable prefix from a URL */
 char *ndn_get_prefix(const char *url, int len);
 
-static inline uint16_t ndn_tag_func(const char *prefix, int len)
-{
-	uint16_t ret = 0;
-	int i;
-	for(i = 0; i < len; i ++) {
-		ret += prefix[i];
-	}
-	return ret;
-}
