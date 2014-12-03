@@ -202,7 +202,8 @@ void *ids_func(void *ptr)
 							&bbatch[j], mp_list, _len);
 					} else if(same_dfa == 1) {
 						tot_same_dfa ++;
-						process_batch_same_dfa(&dfa_arr[_dfa_id], &bbatch[j], mp_list);
+						process_batch_same_dfa(&dfa_arr[_dfa_id],
+							&bbatch[j], mp_list);
 					} else {
 						tot_diff ++;
 						process_batch_diff(dfa_arr, &bbatch[j], mp_list);

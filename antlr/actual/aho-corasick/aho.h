@@ -12,9 +12,10 @@
 #define AHO_MAX_PATTERN_LEN (1024)
 #define AHO_MAX_THREADS 16
 
-/**< DFAs created with the following configuration:
-  *  snort 2.9.7, conf: config detection: search-method ac-q */
 #define AHO_MAX_DFA 450
+
+/**< DFAs patterns captured with the following configuration:
+  *  snort 2.9.7, conf: config detection: search-method ac-q */
 #define AHO_PATTERN_FILE "../../../data_dump/snort/snort_dfa_patterns"
 
 #define AHO_PACKET_FILE "../../../data_dump/snort/snort_packets"
@@ -30,7 +31,11 @@ struct aho_state {
 	uint16_t G[AHO_ALPHA_SIZE];		/**< Goto function */
 	uint16_t F;						/**< Failure function */
 	struct ds_queue output;			/**< Output patterns at this state */
-	uint16_t out_arr[16];			/**< Up to 16 output patterns */
+
+	/**< Up to 16 output patterns per-state. This makes the state cacheline
+	  *  aligned. We can fit in (32 - 1) patterns by getting rid of the
+	  *  output queue since it's not needed at runtime. */
+	uint16_t out_arr[16];
 };
 
 struct aho_pattern {
