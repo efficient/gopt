@@ -320,6 +320,8 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 	FILE *name_fp = fopen(names_file, "r");
 	assert(name_fp != NULL);
 
+	int tot_len = 0;
+
 	for(i = 0; i < nb_names; i ++) {
 		fscanf(name_fp, "%s", temp_name);
 		if(temp_name[0] == 0) {
@@ -328,6 +330,7 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 		assert(temp_name[NDN_MAX_URL_LENGTH - 1] == 0);
 
 		int len = strlen(temp_name);
+		tot_len += len;
 
 		/**< The file's names should end with a '/' */
 		assert(temp_name[len - 1] == '/');
@@ -337,6 +340,8 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 		memset(temp_name, 0, NDN_MAX_NAME_LENGTH);
 	}
 
+	printf("\tndn: Average name length = %.2f\n",
+		(double) tot_len / nb_names);
 	/**< Shuffle */
 	printf("\tndn: Shuffling names\n");
 	struct ndn_name temp;
