@@ -8,8 +8,10 @@
 #include "fpp.h"
 #include "ndn.h"
 
+int batch_index = 0;
+
 void process_batch(struct ndn_name *name_lo, int *dst_ports,
-                   struct ndn_ht *ht)
+                   struct ndn_bucket *ht)
 {
 	char *name[BATCH_SIZE];
 	int i[BATCH_SIZE];
@@ -17,17 +19,13 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 	int bkt_2[BATCH_SIZE];
 	int bkt_1[BATCH_SIZE];
 	int bkt_num[BATCH_SIZE];
-	struct ndn_bucket *ht_index[BATCH_SIZE];
-	uint8_t *ht_log[BATCH_SIZE];
-	ULL *slot[BATCH_SIZE];
 	int terminate[BATCH_SIZE];
 	int prefix_match_found[BATCH_SIZE];
 	uint64_t prefix_hash[BATCH_SIZE];
 	uint16_t tag[BATCH_SIZE];
-	int slot_offset[BATCH_SIZE];
-	uint16_t slot_tag[BATCH_SIZE];
-	uint8_t *log_ptr[BATCH_SIZE];
-	uint8_t log_prefix_len[BATCH_SIZE];
+	struct ndn_slot *slots[BATCH_SIZE];
+	int8_t _dst_port[BATCH_SIZE];
+	uint64_t _hash[BATCH_SIZE];
 
 	int I = 0;			// batch index
 	void *batch_rips[BATCH_SIZE];		// goto targets
@@ -43,9 +41,6 @@ fpp_start:
         name[I] = name_lo[I].name;
         
          /**< URL char iterator and slot iterator */
-        
-        ht_index[I] = ht->ht_index;
-        ht_log[I] = ht->ht_log;
         
         terminate[I] = 0;          /**< Stop processing this URL? */
         prefix_match_found[I] = 0; /**< Stop this hash-table lookup ? */
@@ -72,45 +67,37 @@ fpp_start:
             for(bkt_num[I] = 1; bkt_num[I] <= 2; bkt_num[I] ++) {
                 if(bkt_num[I] == 1) {
                     bkt_1[I] = prefix_hash[I] & NDN_NUM_BKT_;
-                    FPP_PSS(&ht_index[I][bkt_1[I]], fpp_label_1);
+                    FPP_PSS(&ht[bkt_1[I]], fpp_label_1);
 fpp_label_1:
 
-                    slot[I] = ht_index[I][bkt_1[I]].slot;
+                    slots[I] = ht[bkt_1[I]].slots;
                 } else {
                     bkt_2[I] = (bkt_1[I] ^ CityHash64((char *) &tag[I], 2)) & NDN_NUM_BKT_;
-                    FPP_PSS(&ht_index[I][bkt_2[I]], fpp_label_2);
+                    FPP_PSS(&ht[bkt_2[I]], fpp_label_2);
 fpp_label_2:
 
-                    slot[I] = ht_index[I][bkt_2[I]].slot;
+                    slots[I] = ht[bkt_2[I]].slots;
                 }
                 
-                /**< Now, "slot" points to an ndn_bucket. Find a valid slot
+                /**< Now, "slots" points to an ndn_bucket. Find a valid slot
                  *  with a matching tag. */
-                for(i[I] = 0; i[I] < 8; i[I] ++) {
-                    slot_offset[I] = NDN_SLOT_TO_OFFSET(slot[I][i[I]]);
-                    slot_tag[I] = NDN_SLOT_TO_TAG(slot[I][i[I]]);
-                    log_ptr[I] = &ht_log[I][slot_offset[I]];
+                for(i[I] = 0; i[I] < NDN_NUM_SLOTS; i[I] ++) {
+                    _dst_port[I] = slots[I][i[I]].dst_port;
+                    _hash[I] = slots[I][i[I]].cityhash;
                     
-                    if(slot_offset[I] != 0 && slot_tag[I] == tag[I]) {
-                        FPP_PSS(log_ptr[I], fpp_label_3);
-fpp_label_3:
-
-                        log_prefix_len[I] = log_ptr[I][0];
+                    if(_dst_port[I] >= 0 && _hash[I] == prefix_hash[I]) {
                         
-                        /**< Length of the current prefix is (c_i + 1) */
-                        if(log_prefix_len[I] == (uint8_t) (c_i[I] + 1) &&
-                           memcmp(name[I], &log_ptr[I][3], c_i[I] + 1) == 0) {
-                            
-                            /**< Hash-table match found for name[0 ... c_i] */
-                            dst_ports[I] = log_ptr[I][2];
-                            if(log_ptr[I][1] == 1) {
-                                /**< A terminal FIB entry: we're done! */
-                                terminate[I] = 1;
-                            }
-                            
-                            prefix_match_found[I] = 1;
-                            break;
+                        /**< Record the dst port: this may get overwritten by
+                         *  longer prefix matches later */
+                        dst_ports[I] = slots[I][i[I]].dst_port;
+                        
+                        if(slots[I][i[I]].is_terminal == 1) {
+                            /**< A terminal FIB entry: we're done! */
+                            terminate[I] = 1;
                         }
+                        
+                        prefix_match_found[I] = 1;
+                        break;
                     }
                 }
                 
@@ -123,7 +110,7 @@ fpp_label_3:
             /**< Stop processing the name if we found a terminal FIB entry */
             if(terminate[I] == 1) {
                 break;
-            }   
+            }
         }   /**< Loop over URL characters ends here */
         
        /**< Loop over batch ends here */
@@ -141,7 +128,7 @@ fpp_end:
 
 int main(int argc, char **argv)
 {
-	struct ndn_ht ht;
+	struct ndn_bucket *ht;
 	int i, j;
 	int dst_ports[BATCH_SIZE], nb_succ = 0, dst_port_sum = 0;
 
@@ -171,7 +158,7 @@ int main(int argc, char **argv)
 
 	for(i = 0; i < nb_names; i += BATCH_SIZE) {
 		memset(dst_ports, -1, BATCH_SIZE * sizeof(int));
-		process_batch(&name_arr[i], dst_ports, &ht);
+		process_batch(&name_arr[i], dst_ports, ht);
 
 		for(j = 0; j < BATCH_SIZE; j ++) {
 			#if NDN_DEBUG == 1

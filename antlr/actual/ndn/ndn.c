@@ -9,6 +9,37 @@
 #include "ndn.h"
 #include "util.h"
 
+inline uint32_t ndn_crc(const char *str, uint32_t len)
+{
+
+	uint32_t q = len / sizeof(uint32_t);
+	uint32_t r = len % sizeof(uint32_t);
+	uint32_t *p = (uint32_t*) str;
+	uint32_t crc = 0;
+
+	while(q --) {
+		__asm__ __volatile__(
+			".byte 0xf2, 0xf, 0x38, 0xf1, 0xf1;"
+			:"=S" (crc)
+			:"0" (crc), "c" (*p)
+		);
+		p++;
+	}
+
+	str = (char*) p;
+	while(r --) {
+		__asm__ __volatile__(
+			".byte 0xf2, 0xf, 0x38, 0xf0, 0xf1"
+			:"=S" (crc)
+			:"0" (crc), "c" (*str)
+		);
+		str++;
+	}
+
+	return crc;
+
+}
+
 /**< Create a mutable prefix from a URL */
 char *ndn_get_prefix(const char *url, int len)
 {
@@ -21,13 +52,14 @@ char *ndn_get_prefix(const char *url, int len)
 /**< Check if a prefix exists in the NDN hash table. If it does:
   *  If this is non-terminal, then downgrade existing prefix to non-terminal.
   *  If this is terminal, then override the dst port of existing prefix.
+  *  This is OK because terminal prefixes should take priority over
+  *  non-terminal, and the same terminal prefix should *not* be inserted twice.
   *
-  *  To use this function just to test is a prefix is present (without any
-  *  updates to the log, call with is_terminal = 1.
+  *  DO NOT USE THIS FUNCTION TO SIMPLY CHECK IF A PREFIX IS PRESENT.
   *
   *  Returns 1 if the prefix was found, and 0 otherwise. */
 int ndn_contains(const char *prefix, int len,
-	int is_terminal, int dst_port, struct ndn_ht *ht)
+	int is_terminal, int dst_port, struct ndn_bucket *ht)
 {
 	/**< A prefix ends with a '/', so it contains at least 2 characters */
 	assert(len >= 2);
@@ -39,9 +71,7 @@ int ndn_contains(const char *prefix, int len,
 	uint64_t prefix_hash = CityHash64(prefix, len);
 	uint16_t tag = prefix_hash >> 48;
 
-	struct ndn_bucket *ht_index = ht->ht_index;
-	ULL *slot;
-	uint8_t *ht_log = ht->ht_log;
+	struct ndn_slot *slots;
 
 	/**< Test the two candidate buckets */
 	for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
@@ -49,34 +79,27 @@ int ndn_contains(const char *prefix, int len,
 		/**< Get the slot array for this bucket */
 		if(bkt_num == 1) {
 			bkt_1 = prefix_hash & NDN_NUM_BKT_;
-			slot = ht_index[bkt_1].slot;
+			slots = ht[bkt_1].slots;
 		} else {
 			bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
-			slot = ht_index[bkt_2].slot;
+			slots = ht[bkt_2].slots;
 		}
 
 		/**< Now, "slot" points to an ndn_bucket. Find a valid slot with 
 		  *  a matching tag. */
-		for(i = 0; i < 8; i ++) {
-			int slot_offset = NDN_SLOT_TO_OFFSET(slot[i]);
-			uint16_t slot_tag = NDN_SLOT_TO_TAG(slot[i]);
-			uint8_t *log_ptr = &ht_log[slot_offset];
-	
-			if(slot_offset != 0 && slot_tag == tag) {
-				uint8_t log_prefix_len = log_ptr[0];
+		for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+			int8_t dst_port = slots[i].dst_port;
+			uint64_t _hash = slots[i].cityhash;
 
-				if(log_prefix_len == (uint8_t) len && 
-					memcmp(prefix, &log_ptr[3], len) == 0) {
-
-					/**< Should we downgrade this prefix to "non-terminal" ? */
-					if(is_terminal == 0) {
-						log_ptr[1] = 0;
-					} else {
-						log_ptr[2] = (uint8_t) dst_port;
-					}
-
-					return 1;
+			if(dst_port >= 0 && _hash == prefix_hash) {
+				/**< Should we downgrade this prefix to "non-terminal" ? */
+				if(is_terminal == 0) {
+					slots[i].is_terminal = 0;
+				} else {
+					slots[i].dst_port = dst_port;
 				}
+
+				return 1;
 			}
 		}
 	}
@@ -87,7 +110,7 @@ int ndn_contains(const char *prefix, int len,
 /**< Insert a prefix into the NDN hash table. 
   *  Returns 0 on success and -1 on failure. */
 int ndn_ht_insert(const char *prefix, int len, 
-	int is_terminal, int dst_port, struct ndn_ht *ht) 
+	int is_terminal, int dst_port, struct ndn_bucket *ht) 
 {
 	/**< A prefix ends with a '/', so it contains at least 2 characters */
 	assert(len >= 2 && len <= NDN_MAX_URL_LENGTH && len < 256);
@@ -106,9 +129,7 @@ int ndn_ht_insert(const char *prefix, int len,
 	uint64_t prefix_hash = CityHash64(prefix, len);
 	uint16_t tag = prefix_hash >> 48;
 
-	struct ndn_bucket *ht_index = ht->ht_index;
-	ULL *slot;
-	uint8_t *ht_log = ht->ht_log;
+	struct ndn_slot *slots;
 
 	/**< Check if the two candidate buckets contain an empty slot. */
 	for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
@@ -116,32 +137,21 @@ int ndn_ht_insert(const char *prefix, int len,
 		/**< Get the slot array for this bucket */
 		if(bkt_num == 1) {
 			bkt_1 = prefix_hash & NDN_NUM_BKT_;
-			slot = ht_index[bkt_1].slot;
+			slots = ht[bkt_1].slots;
 		} else {
 			bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
-			slot = ht_index[bkt_2].slot;
+			slots = ht[bkt_2].slots;
 		}
 
 		/**< Now, "slot" points to an ndn_bucket */
-		for(i = 0; i < 8; i ++) {
-			int slot_offset = NDN_SLOT_TO_OFFSET(slot[i]);
-	
-			/**< Filled slots have slot_offset >= 1 */
-			if(slot_offset == 0) {
-				int insert_offset = ht->log_head;
-				assert(insert_offset + NDN_LOG_HEADROOM < NDN_LOG_CAP);
+		for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+
+			if(slots[i].dst_port == -1) {
 
 				/**< Initialize the slot */
-				slot[i] = ((ULL) tag << 48) | insert_offset;
-
-				/**< We write "len" bytes and 3 bytes of metadata to the log */
-				ht->log_head += (3 + len);
-
-				/**< Actually write the prefix and metadata to the log */
-				ht_log[insert_offset] = len;
-				ht_log[insert_offset + 1] = is_terminal;
-				ht_log[insert_offset + 2] = dst_port;
-				memcpy(&ht_log[insert_offset + 3], prefix, len);
+				slots[i].dst_port = dst_port;
+				slots[i].is_terminal = is_terminal;
+				slots[i].cityhash = prefix_hash;
 
 				return 0;
 			}
@@ -154,33 +164,31 @@ int ndn_ht_insert(const char *prefix, int len,
 	return -1;
 }
 
-void ndn_init(const char *urls_file, int portmask, struct ndn_ht *ht)
+void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 {
-	int nb_urls = 0;
+	int i, j, nb_urls = 0;
 	char url[NDN_MAX_URL_LENGTH] = {0};
 	int shm_flags = IPC_CREAT | 0666 | SHM_HUGETLB;
 
 	int index_size = (int) (NDN_NUM_BKT * sizeof(struct ndn_bucket));
-	int log_size = (int) (NDN_LOG_CAP * sizeof(uint8_t));
 
 	int num_active_ports = bitcount(portmask);
 	int *port_arr = get_active_bits(portmask);
 
-	/**< Allocate the hash index and URL log, and zero-out the log head */
-	red_printf("Initializing NDN hash of size = %lu bytes\n", index_size);
+	/**< Allocate the hash index */
+	red_printf("Initializing NDN index of size = %lu bytes\n", index_size);
 	int index_sid = shmget(NDN_HT_INDEX_KEY, index_size, shm_flags);
 	assert(index_sid >= 0);
-	ht->ht_index = shmat(index_sid, 0, 0);
-	memset((char *) ht->ht_index, 0, index_size);
+	*ht = shmat(index_sid, 0, 0);
+	memset((char *) *ht, 0, index_size);
 
-	red_printf("Initializing NDN URL log of size = %lu bytes\n", log_size);
-	int log_sid = shmget(NDN_HT_LOG_KEY, log_size, shm_flags);
-	assert(log_sid >= 0);
-	ht->ht_log = shmat(log_sid, 0, 0);
-	memset((char *) ht->ht_log, 0, log_size);
-
-	/**< In any slot, log offset >= 1 means that it is a valid slot */
-	ht->log_head = 1;
+	/**< Set all dst_port fields to -1 */
+	for(i = 0; i < NDN_NUM_BKT; i ++) {
+		struct ndn_slot *slots = ((*ht)[i]).slots;
+		for(j = 0; j < NDN_NUM_SLOTS; j ++) {
+			slots[j].dst_port = -1;
+		}
+	}
 
 	FILE *url_fp = fopen(urls_file, "r");
 	assert(url_fp != NULL);
@@ -215,13 +223,13 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_ht *ht)
 			if(url[i] == '/' && url[i + 1] != 0) {
 				/**< Non-terminal prefixes */
 				is_terminal = 0;
-				if(ndn_ht_insert(url, i + 1, is_terminal, dst_port, ht) != 0) {
+				if(ndn_ht_insert(url, i + 1, is_terminal, dst_port, *ht) != 0) {
 					nb_fail ++;
 				}
 			} else if(url[i] == '/' && url[i + 1] == 0) {
 				/**< Terminal prefix. All inserted prefixes end with '/' */
 				is_terminal = 1;
-				if(ndn_ht_insert(url, i + 1, is_terminal, dst_port, ht) != 0) {
+				if(ndn_ht_insert(url, i + 1, is_terminal, dst_port, *ht) != 0) {
 					nb_fail ++;
 				}
 				break;
@@ -232,18 +240,17 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_ht *ht)
 		nb_urls ++;
 
 		if((nb_urls & K_512_) == 0) {
-			printf("Total urls = %d. Fails = %d\n", nb_urls, nb_fail);
+			printf("\tTotal urls = %d. Fails = %d\n", nb_urls, nb_fail);
 		}
 	}
 
 	red_printf("Total urls = %d. Fails = %d.\n", nb_urls, nb_fail);
-	red_printf("Total log memory used = %d bytes\n", ht->log_head);
 
 }
 
 /**< Check if all the URLs in "urls_file" are inserted in the hash table.
   *  WARNING: Will mess up the hash table's log (is_terminal and dst port) */
-void ndn_check(const char *urls_file, struct ndn_ht *ht)
+void ndn_check(const char *urls_file, struct ndn_bucket *ht)
 {
 	int nb_urls = 0;
 	char url[NDN_MAX_URL_LENGTH] = {0};

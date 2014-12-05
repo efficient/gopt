@@ -10,9 +10,8 @@
 #define NAME_FILE "data/fib_1010"
 #endif
 
-/**< SHM keys for the hash-table index and log */
+/**< SHM keys for the hash-table index */
 #define NDN_HT_INDEX_KEY 1
-#define NDN_HT_LOG_KEY 2
 
 /**< The longest URL in Tsinghua's 10M FIB is 97 bytes*/
 #define NDN_MAX_URL_LENGTH 150
@@ -34,27 +33,24 @@ in fastpp/data_dump. This file has 11 million URLs and is around
 270 MB in size
 **************************************************************/
 
-/**< A URL is inserted into the hash index and the log multiple times
-  *  (as many times as the number of components). So, the number of slots
-  *  and the log size are large enough for a 3X overhead. */
+/**< A URL is inserted into the hash index multiple times (as many times
+  *  as the number of components). So, the number of slots is large enough
+  *  for a 3X overhead. */
 #define NDN_NUM_BKT (8 * 1024 * 1024)
 #define NDN_NUM_BKT_ (NDN_NUM_BKT - 1)
+#define NDN_NUM_SLOTS 8
 
-/**< Log entry format for an inserted prefix. Format: 
-  *  <length> <is terminal> <dst port> <byte_0> ... */
-#define NDN_LOG_CAP (300 * 1024 * 1024)
-
-/**< Slot: bytes 0:1 = tag | bytes 2:7 = offset in log */
-struct ndn_bucket
+struct __attribute__((__packed__)) ndn_slot
 {
-	ULL slot[8];
+	int8_t dst_port;			/**< -1 for invalid slots */
+	uint8_t is_terminal;
+	uint64_t cityhash;
+	uint8_t pad[6];				/**< Space for more signatures */
 };
 
-struct ndn_ht
+struct ndn_bucket
 {
-	struct ndn_bucket *ht_index;
-	uint8_t *ht_log;
-	ULL log_head;	/**< log_head >= 1 means that this slot is valid */
+	struct ndn_slot slots[NDN_NUM_SLOTS];
 };
 
 /**< For storing URLs linearly */
@@ -67,16 +63,19 @@ struct ndn_name
 #define NDN_SLOT_TO_OFFSET(s) (s & ((1L << 48) - 1))	/**< Lower 48 bytes */
 #define NDN_SLOT_TO_TAG(s) (s >> 48)	/**< Higher 16 bytes */
 
+/**< Fast crc using SSE instructions */
+uint32_t ndn_crc(const char *str, uint32_t len);
+
 /**< NDN-specific function prototypes */
-void ndn_init(const char *urls_file, int portmask, struct ndn_ht *ht);
+void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht);
 
 /**< Insert a prefix (specified by "url" and "len") into the NDN hash table. 
   *  Returns 0 on success and -1 on failure. */
 int ndn_ht_insert(const char *url, int len, 
-	int is_terminal, int dst_port_id, struct ndn_ht *ht);
+	int is_terminal, int dst_port_id, struct ndn_bucket *ht);
 
 /**< Check if all the URLs in "urls_file" are inserted in the hash table */
-void ndn_check(const char *urls_file, struct ndn_ht *ht);
+void ndn_check(const char *urls_file, struct ndn_bucket *ht);
 
 /**< Return the number of lines in a file */
 int ndn_get_num_lines(const char *file_name);

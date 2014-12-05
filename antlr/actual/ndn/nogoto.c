@@ -11,17 +11,13 @@
 int batch_index = 0;
 
 void process_batch(struct ndn_name *name_lo, int *dst_ports,
-	struct ndn_ht *ht) 
+	struct ndn_bucket *ht) 
 {
 	foreach(batch_index, BATCH_SIZE) {
 		char *name = name_lo[batch_index].name;
 
 		int c_i, i;	/**< URL char iterator and slot iterator */
 		int bkt_num, bkt_1, bkt_2;
-
-		struct ndn_bucket *ht_index = ht->ht_index;
-		uint8_t *ht_log = ht->ht_log;
-		ULL *slot;
 
 		int terminate = 0;			/**< Stop processing this URL? */
 		int prefix_match_found = 0;	/**< Stop this hash-table lookup ? */
@@ -44,46 +40,42 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 			uint64_t prefix_hash = CityHash64(name, c_i + 1);
 			uint16_t tag = prefix_hash >> 48;
 
+			struct ndn_slot *slots;
+
 			/**< name[0] -> name[c_i] is a prefix of length c_i + 1 */
 			for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
 				if(bkt_num == 1) {
 					bkt_1 = prefix_hash & NDN_NUM_BKT_;
-					FPP_EXPENSIVE(&ht_index[bkt_1]);
-					slot = ht_index[bkt_1].slot;
+					FPP_EXPENSIVE(&ht[bkt_1]);
+					slots = ht[bkt_1].slots;
 				} else {
 					bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
-					FPP_EXPENSIVE(&ht_index[bkt_2]);
-					slot = ht_index[bkt_2].slot;
+					FPP_EXPENSIVE(&ht[bkt_2]);
+					slots = ht[bkt_2].slots;
 				}
 
-				/**< Now, "slot" points to an ndn_bucket. Find a valid slot 
+				/**< Now, "slots" points to an ndn_bucket. Find a valid slot
 				  *  with a matching tag. */
-				for(i = 0; i < 8; i ++) {
-					int slot_offset = NDN_SLOT_TO_OFFSET(slot[i]);
-					uint16_t slot_tag = NDN_SLOT_TO_TAG(slot[i]);
-					uint8_t *log_ptr = &ht_log[slot_offset];
-	
-					if(slot_offset != 0 && slot_tag == tag) {
-						FPP_EXPENSIVE(log_ptr);
-						uint8_t log_prefix_len = log_ptr[0];
+				for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+					int8_t _dst_port = slots[i].dst_port;
+					uint64_t _hash = slots[i].cityhash;
 
-						/**< Length of the current prefix is (c_i + 1) */
-						if(log_prefix_len == (uint8_t) (c_i + 1) &&
-							memcmp(name, &log_ptr[3], c_i + 1) == 0) {
+					if(_dst_port >= 0 && _hash == prefix_hash) {
 
-							/**< Hash-table match found for name[0 ... c_i] */
-							dst_ports[batch_index] = log_ptr[2];
-							if(log_ptr[1] == 1) {
-								/**< A terminal FIB entry: we're done! */
-								terminate = 1;
-							}
+						/**< Record the dst port: this may get overwritten by
+						  *  longer prefix matches later */
+						dst_ports[batch_index] = slots[i].dst_port;
 
-							prefix_match_found = 1;
-							break;
+						if(slots[i].is_terminal == 1) {
+							/**< A terminal FIB entry: we're done! */
+							terminate = 1;
 						}
+
+						prefix_match_found = 1;
+						break;
 					}
 				}
-	
+
 				/**< Stop the hash-table lookup for name[0 ... c_i] */
 				if(prefix_match_found == 1) {
 					break;
@@ -101,7 +93,8 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 
 int main(int argc, char **argv)
 {
-	struct ndn_ht ht;
+	printf("%lu\n", sizeof(struct ndn_bucket));
+	struct ndn_bucket *ht;
 	int i, j;
 	int dst_ports[BATCH_SIZE], nb_succ = 0, dst_port_sum = 0;
 
@@ -131,7 +124,7 @@ int main(int argc, char **argv)
 
 	for(i = 0; i < nb_names; i += BATCH_SIZE) {
 		memset(dst_ports, -1, BATCH_SIZE * sizeof(int));
-		process_batch(&name_arr[i], dst_ports, &ht);
+		process_batch(&name_arr[i], dst_ports, ht);
 
 		for(j = 0; j < BATCH_SIZE; j ++) {
 			#if NDN_DEBUG == 1
