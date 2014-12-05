@@ -68,7 +68,7 @@ int ndn_contains(const char *prefix, int len,
 	int i;
 	int bkt_num, bkt_1, bkt_2;
 
-	uint64_t prefix_hash = CityHash64(prefix, len);
+	uint64_t prefix_hash = CityHash64WithSeed(prefix, len, NDN_SEED);
 	uint16_t tag = prefix_hash >> 48;
 
 	struct ndn_slot *slots;
@@ -126,7 +126,7 @@ int ndn_ht_insert(const char *prefix, int len,
 	int i;
 	int bkt_num, bkt_1, bkt_2;
 
-	uint64_t prefix_hash = CityHash64(prefix, len);
+	uint64_t prefix_hash = CityHash64WithSeed(prefix, len, NDN_SEED);
 	uint16_t tag = prefix_hash >> 48;
 
 	struct ndn_slot *slots;

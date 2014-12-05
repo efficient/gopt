@@ -10,6 +10,8 @@
 #define NAME_FILE "data/fib_1010"
 #endif
 
+#define NDN_SEED 3185
+
 /**< SHM keys for the hash-table index */
 #define NDN_HT_INDEX_KEY 1
 

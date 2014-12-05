@@ -60,7 +60,7 @@ fpp_start:
                 continue;
             }
             
-            prefix_hash[I] = CityHash64(name[I], c_i[I] + 1);
+            prefix_hash[I] = CityHash64WithSeed(name[I], c_i[I] + 1, NDN_SEED);
             tag[I] = prefix_hash[I] >> 48;
             
             /**< name[0] -> name[c_i] is a prefix of length c_i + 1 */

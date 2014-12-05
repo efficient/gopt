@@ -37,7 +37,7 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 				continue;
 			}
 
-			uint64_t prefix_hash = CityHash64(name, c_i + 1);
+			uint64_t prefix_hash = CityHash64WithSeed(name, c_i + 1, NDN_SEED);
 			uint16_t tag = prefix_hash >> 48;
 
 			struct ndn_slot *slots;
