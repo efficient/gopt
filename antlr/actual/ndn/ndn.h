@@ -12,14 +12,17 @@
 
 #define NDN_SEED 3185
 
-/**< SHM keys for the hash-table index */
+/**< SHM key for the hash-table index */
 #define NDN_HT_INDEX_KEY 1
+
+/**< SHM key for for the names array */
+#define NDN_NAMES_KEY 2
 
 /**< The longest URL in Tsinghua's 10M FIB is 97 bytes*/
 #define NDN_MAX_URL_LENGTH 150
 #define NDN_LOG_HEADROOM (NDN_MAX_URL_LENGTH * 3)
 
-#define NDN_MAX_NAME_LENGTH 200		/**< For struct ndn_name */
+#define NDN_MAX_NAME_LENGTH 192		/**< For struct ndn_name */
 #define NDN_MAX_LINE_LENGTH 10000	/**< For ndn_get_num_lines() */
 
 /**< The maximum number of components is Tsinghua's 10M FIB is 13 */

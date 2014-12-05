@@ -39,7 +39,9 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 fpp_start:
 
         name[I] = name_lo[I].name;
-        
+        FPP_PSS(name[I], fpp_label_1);
+fpp_label_1:
+
          /**< URL char iterator and slot iterator */
         
         terminate[I] = 0;          /**< Stop processing this URL? */
@@ -67,14 +69,14 @@ fpp_start:
             for(bkt_num[I] = 1; bkt_num[I] <= 2; bkt_num[I] ++) {
                 if(bkt_num[I] == 1) {
                     bkt_1[I] = prefix_hash[I] & NDN_NUM_BKT_;
-                    FPP_PSS(&ht[bkt_1[I]], fpp_label_1);
-fpp_label_1:
+                    FPP_PSS(&ht[bkt_1[I]], fpp_label_2);
+fpp_label_2:
 
                     slots[I] = ht[bkt_1[I]].slots;
                 } else {
                     bkt_2[I] = (bkt_1[I] ^ CityHash64((char *) &tag[I], 2)) & NDN_NUM_BKT_;
-                    FPP_PSS(&ht[bkt_2[I]], fpp_label_2);
-fpp_label_2:
+                    FPP_PSS(&ht[bkt_2[I]], fpp_label_3);
+fpp_label_3:
 
                     slots[I] = ht[bkt_2[I]].slots;
                 }
@@ -125,6 +127,7 @@ fpp_end:
     goto *batch_rips[I];
 
 }
+
 
 int main(int argc, char **argv)
 {

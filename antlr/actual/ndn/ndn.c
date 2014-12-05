@@ -319,8 +319,14 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 {
 	int i;
 	int nb_names = ndn_get_num_lines(names_file);
-	struct ndn_name *name_arr = 
-		malloc(nb_names * sizeof(struct ndn_name));
+
+	int shm_flags = IPC_CREAT | 0666 | SHM_HUGETLB;
+
+	int name_sid = shmget(NDN_NAMES_KEY,
+		nb_names * sizeof(struct ndn_name), shm_flags);
+	assert(name_sid >= 0);
+	
+	struct ndn_name *name_arr = shmat(name_sid, 0, 0);
 	memset(name_arr, 0, nb_names * sizeof(struct ndn_name));
 
 	char temp_name[NDN_MAX_NAME_LENGTH] = {0};
