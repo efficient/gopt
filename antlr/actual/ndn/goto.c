@@ -128,9 +128,9 @@ fpp_end:
 
 }
 
-
 int main(int argc, char **argv)
 {
+	printf("%lu\n", sizeof(struct ndn_bucket));
 	struct ndn_bucket *ht;
 	int i, j;
 	int dst_ports[BATCH_SIZE], nb_succ = 0, dst_port_sum = 0;
