@@ -160,7 +160,7 @@ int ndn_ht_insert(const char *prefix, int len,
 
 	/**< We do not perform cuckoo evictions: each key has 16 (8x2) candidate
 	  *  slots which should be enough. */
-	printf("\tUnable to insert prefix: %s\n", prefix);
+	printf("\tndn: Unable to insert prefix: %s\n", prefix);
 	return -1;
 }
 
@@ -176,7 +176,7 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 	int *port_arr = get_active_bits(portmask);
 
 	/**< Allocate the hash index */
-	red_printf("Initializing NDN index of size = %lu bytes\n", index_size);
+	red_printf("ndn: Init NDN index of size = %lu bytes\n", index_size);
 	int index_sid = shmget(NDN_HT_INDEX_KEY, index_size, shm_flags);
 	assert(index_sid >= 0);
 	*ht = shmat(index_sid, 0, 0);
@@ -190,6 +190,7 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 		}
 	}
 
+	red_printf("ndn: Reading URLs from file %s\n", urls_file);
 	FILE *url_fp = fopen(urls_file, "r");
 	assert(url_fp != NULL);
 	int nb_fail = 0;
@@ -210,7 +211,7 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 		int dst_port = port_arr[rand() % num_active_ports];
 
 		#if NDN_DEBUG == 1
-		printf("Inserting FIB entry: URL %s -> port %d\n", url, dst_port);
+		printf("ndn: Inserting FIB entry: URL %s -> port %d\n", url, dst_port);
 		#endif
 
 		/**< Is this prefix terminal? */
@@ -240,11 +241,11 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 		nb_urls ++;
 
 		if((nb_urls & K_512_) == 0) {
-			printf("\tTotal urls = %d. Fails = %d\n", nb_urls, nb_fail);
+			printf("\tndn: Total urls = %d. Fails = %d\n", nb_urls, nb_fail);
 		}
 	}
 
-	red_printf("Total urls = %d. Fails = %d.\n", nb_urls, nb_fail);
+	red_printf("ndn: Total urls = %d. Fails = %d.\n", nb_urls, nb_fail);
 
 }
 
@@ -274,7 +275,8 @@ void ndn_check(const char *urls_file, struct ndn_bucket *ht)
 			if(url[i] == '/') {
 				len = i + 1;
 				if(ndn_contains(url, len, is_terminal, dst_port, ht) == 0) {
-					printf("Prefix %s absent.\n", ndn_get_prefix(url, i + 1));
+					printf("ndn: Prefix %s absent.\n",
+						ndn_get_prefix(url, i + 1));
 					assert(0);
 				}
 			}
@@ -284,7 +286,7 @@ void ndn_check(const char *urls_file, struct ndn_bucket *ht)
 		nb_urls ++;
 
 		if((nb_urls & K_512_) == 0) {
-			printf("Checked %d URLs.\n", nb_urls);
+			printf("ndn: Checked %d URLs.\n", nb_urls);
 		}
 	}
 }
@@ -330,6 +332,8 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 	memset(name_arr, 0, nb_names * sizeof(struct ndn_name));
 
 	char temp_name[NDN_MAX_NAME_LENGTH] = {0};
+
+	red_printf("ndn: Reading names from file %s\n", names_file);
 	FILE *name_fp = fopen(names_file, "r");
 	assert(name_fp != NULL);
 
@@ -394,9 +398,9 @@ void ndn_print_url_stats(const char *urls_file)
 		memset(url, 0, NDN_MAX_URL_LENGTH);
 	}
 
-	red_printf("URL stats:\n");
+	red_printf("ndn: URL stats:\n");
 	for(i = 0; i <= NDN_MAX_COMPONENTS; i ++) {
-		printf("%d URLs have %d components\n", components_stats[i], i);
+		printf("ndn: %d URLs have %d components\n", components_stats[i], i);
 	}
 }
 

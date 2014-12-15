@@ -15,7 +15,9 @@ void process_batch(struct ndn_name *name_lo, int *dst_ports,
 {
 	foreach(batch_index, BATCH_SIZE) {
 		char *name = name_lo[batch_index].name;
-		FPP_EXPENSIVE(name);
+		if(batch_index != BATCH_SIZE - 1) {
+			__builtin_prefetch(name_lo[batch_index + 1].name, 0, 3);
+		}
 
 		int c_i, i;	/**< URL char iterator and slot iterator */
 		int bkt_num, bkt_1, bkt_2;
