@@ -8,8 +8,6 @@ Directory structure:
 	antlr/actual:
 	============
 		Sample applications for benchmarking the transformation.
-	antlr/results/microbenchmarks:
-
 
 	l2fwd:
 	======
@@ -20,8 +18,4 @@ Directory structure:
 		Contains data files for:
 			1. Unique IPv4 and IPv6 prefixes from RouteViews.
 			2. Processed IPv6 prefixes: suitable for trie insertion.
-			3. Domain names distributed according to the distribution
-			in Liu's NDN papers.
-			
-
-	
+			3. Snort 2.9.7's valid rules, patterns and packets.
