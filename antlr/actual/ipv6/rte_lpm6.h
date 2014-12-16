@@ -52,145 +52,33 @@ struct rte_lpm6_config {
 	int flags;               /**< This field is currently unused. */
 };
 
-/**
- * Create an LPM object.
- *
- * @param socket_id
- *   NUMA socket ID for LPM table memory allocation
- * @param config
- *   Structure containing the configuration
- * @return
- *   Handle to LPM object on success, NULL otherwise with rte_errno set
- *   to an appropriate values. Possible rte_errno values include:
- *    - E_RTE_NO_CONFIG - function could not get pointer to rte_config structure
- *    - E_RTE_SECONDARY - function was called from a secondary process instance
- *    - E_RTE_NO_TAILQ - no tailq list could be got for the lpm object list
- *    - EINVAL - invalid parameter passed to function
- *    - ENOSPC - the maximum number of memzones has already been allocated
- *    - EEXIST - a memzone with the same name already exists
- *    - ENOMEM - no appropriate memory area found in which to create memzone
- */
-struct rte_lpm6 *
-rte_lpm6_create(int socket_id, const struct rte_lpm6_config *config);
+/**< Create an LPM object */
+struct rte_lpm6 *rte_lpm6_create(int socket_id,
+	const struct rte_lpm6_config *config);
 
-/**
- * Find an existing LPM object and return a pointer to it.
- *
- * @param name
- *   Name of the lpm object as passed to rte_lpm6_create()
- * @return
- *   Pointer to lpm object or NULL if object not found with rte_errno
- *   set appropriately. Possible rte_errno values include:
- *    - ENOENT - required entry not available to return.
- */
-struct rte_lpm6 *
-rte_lpm6_find_existing(const char *name);
+/**< Free an LPM object */
+void rte_lpm6_free(struct rte_lpm6 *lpm);
 
-/**
- * Free an LPM object.
- *
- * @param lpm
- *   LPM object handle
- * @return
- *   None
- */
-void
-rte_lpm6_free(struct rte_lpm6 *lpm);
+/**< Add a rule to the LPM table */
+int rte_lpm6_add(struct rte_lpm6 *lpm,
+	uint8_t *ip, uint8_t depth, uint8_t next_hop);
 
-/**
- * Add a rule to the LPM table.
- *
- * @param lpm
- *   LPM object handle
- * @param ip
- *   IP of the rule to be added to the LPM table
- * @param depth
- *   Depth of the rule to be added to the LPM table
- * @param next_hop
- *   Next hop of the rule to be added to the LPM table
- * @return
- *   0 on success, negative value otherwise
- */
-int
-rte_lpm6_add(struct rte_lpm6 *lpm, uint8_t *ip, uint8_t depth,
-		uint8_t next_hop);
+/**< Delete a rule from the LPM table */
+int rte_lpm6_delete(struct rte_lpm6 *lpm, uint8_t *ip, uint8_t depth);
 
-/**
- * Delete a rule from the LPM table.
- *
- * @param lpm
- *   LPM object handle
- * @param ip
- *   IP of the rule to be deleted from the LPM table
- * @param depth
- *   Depth of the rule to be deleted from the LPM table
- * @return
- *   0 on success, negative value otherwise
- */
-int
-rte_lpm6_delete(struct rte_lpm6 *lpm, uint8_t *ip, uint8_t depth);
+/**< Delete a rule from the LPM table */
+int rte_lpm6_delete_bulk_func(struct rte_lpm6 *lpm,
+	uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE], uint8_t *depths, unsigned n);
 
-/**
- * Delete a rule from the LPM table.
- *
- * @param lpm
- *   LPM object handle
- * @param ips
- *   Array of IPs to be deleted from the LPM table
- * @param depths
- *   Array of depths of the rules to be deleted from the LPM table
- * @param n
- *   Number of rules to be deleted from the LPM table
- * @return
- *   0 on success, negative value otherwise.
- */
-int
-rte_lpm6_delete_bulk_func(struct rte_lpm6 *lpm,
-		uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE], uint8_t *depths, unsigned n);
+/**< Delete all rules from the LPM table */
+void rte_lpm6_delete_all(struct rte_lpm6 *lpm);
 
-/**
- * Delete all rules from the LPM table.
- *
- * @param lpm
- *   LPM object handle
- */
-void
-rte_lpm6_delete_all(struct rte_lpm6 *lpm);
+/**< Lookup an IP into the LPM table */
+int rte_lpm6_lookup(const struct rte_lpm6 *lpm,
+	uint8_t *ip, uint8_t *next_hop);
 
-/**
- * Lookup an IP into the LPM table.
- *
- * @param lpm
- *   LPM object handle
- * @param ip
- *   IP to be looked up in the LPM table
- * @param next_hop
- *   Next hop of the most specific rule found for IP (valid on lookup hit only)
- * @return
- *   -EINVAL for incorrect arguments, -ENOENT on lookup miss, 0 on lookup hit
- */
-int
-rte_lpm6_lookup(const struct rte_lpm6 *lpm, uint8_t *ip, uint8_t *next_hop);
-
-/**
- * Lookup multiple IP addresses in an LPM table.
- *
- * @param lpm
- *   LPM object handle
- * @param ips
- *   Array of IPs to be looked up in the LPM table
- * @param next_hops
- *   Next hop of the most specific rule found for IP (valid on lookup hit only).
- *   This is an array of two byte values. The next hop will be stored on
- *   each position on success; otherwise the position will be set to -1.
- * @param n
- *   Number of elements in ips (and next_hops) array to lookup.
- *  @return
- *   -EINVAL for incorrect arguments, otherwise 0
- */
-int
-rte_lpm6_lookup_bulk_func(const struct rte_lpm6 *lpm,
-		uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE],
-		int16_t * next_hops, unsigned n);
+/**< Lookup multiple IP addresses in an LPM table */
+int rte_lpm6_lookup_bulk_func(const struct rte_lpm6 *lpm,
+	uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE], int16_t *next_hops, unsigned n);
 
 void *hrd_malloc_socket(int shm_key, int size, int socket_id);
