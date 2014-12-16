@@ -32,28 +32,16 @@
  */
 #include <string.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <errno.h>
-#include <sys/queue.h>
-/*
-#include <rte_log.h>
-#include <rte_branch_prediction.h>
-#include <rte_common.h>
-#include <rte_memory.h>
-#include <rte_malloc.h>
-#include <rte_memzone.h>
-#include <rte_memcpy.h>
-#include <rte_tailq.h>
-#include <rte_eal.h>
-#include <rte_eal_memconfig.h>
-#include <rte_per_lcore.h>
-#include <rte_string_fns.h>
-#include <rte_errno.h>
-#include <rte_rwlock.h>
-#include <rte_spinlock.h>
-*/
+#include <assert.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <numaif.h>
+
 #include "rte_lpm6.h"
 
 #define RTE_LPM6_TBL24_NUM_ENTRIES        (1 << 24)
@@ -77,8 +65,6 @@ enum valid_flag {
 	VALID
 };
 
-TAILQ_HEAD(rte_lpm6_list, rte_lpm6);
-
 /** Tbl entry structure. It is the same for both tbl24 and tbl8 */
 struct rte_lpm6_tbl_entry {
 	uint32_t next_hop:	21;  /**< Next hop / next table to be checked. */
@@ -99,8 +85,6 @@ struct rte_lpm6_rule {
 
 /** LPM6 structure. */
 struct rte_lpm6 {
-	TAILQ_ENTRY(rte_lpm6) next;      /**< Next in list. */
-
 	/* LPM metadata. */
 	char name[RTE_LPM6_NAMESIZE];    /**< Name of the lpm. */
 	uint32_t max_rules;              /**< Max number of rules. */
@@ -115,6 +99,21 @@ struct rte_lpm6 {
 	struct rte_lpm6_tbl_entry tbl8[0]
 			__rte_cache_aligned; /**< LPM tbl8 table. */
 };
+
+/**< Allocate size bytes in hugepages on this socket */
+void *hrd_malloc_socket(int shm_key, int size, int socket_id)
+{
+	int shmid = shmget(shm_key, size, IPC_CREAT | 0666 | SHM_HUGETLB);
+	assert(shmid >= 0);
+	void *buf = shmat(shmid, 0, 0);
+	assert(buf != NULL);
+
+	/**< Bind the buffer to this socket */
+	const unsigned long nodemask = (1 << socket_id);
+	mbind(buf, size, MPOL_BIND, &nodemask, 32, 0);
+
+	return buf;
+}
 
 /*
  * Takes an array of uint8_t (IPv6 address) and masks it using the depth.
@@ -144,106 +143,37 @@ mask_ip(uint8_t *ip, uint8_t depth)
  * Allocates memory for LPM object
  */
 struct rte_lpm6 *
-rte_lpm6_create(const char *name, int socket_id,
-		const struct rte_lpm6_config *config)
+rte_lpm6_create(int socket_id, const struct rte_lpm6_config *config)
 {
-	char mem_name[RTE_LPM6_NAMESIZE];
 	struct rte_lpm6 *lpm = NULL;
 	uint64_t mem_size, rules_size;
-	struct rte_lpm6_list *lpm_list;
 
-	/* Check that we have an initialised tail queue */
-	if ((lpm_list = 
-	     RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_LPM6, rte_lpm6_list)) == NULL) {
-		rte_errno = E_RTE_NO_TAILQ;
-		return NULL;	
-	}
 
-	RTE_BUILD_BUG_ON(sizeof(struct rte_lpm6_tbl_entry) != sizeof(uint32_t));
+	assert(sizeof(struct rte_lpm6_tbl_entry) == sizeof(uint32_t));
 
 	/* Check user arguments. */
-	if ((name == NULL) || (socket_id < -1) || (config == NULL) ||
-			(config->max_rules == 0) ||
-			config->number_tbl8s > RTE_LPM6_TBL8_MAX_NUM_GROUPS) {
-		rte_errno = EINVAL;
-		return NULL;
-	}
-
-	rte_snprintf(mem_name, sizeof(mem_name), "LPM_%s", name);
+	assert(socket_id >= 0 && config != NULL && config->max_rules > 0 &&
+		config->number_tbl8s <= RTE_LPM6_TBL8_MAX_NUM_GROUPS);
 
 	/* Determine the amount of memory to allocate. */
 	mem_size = sizeof(*lpm) + (sizeof(lpm->tbl8[0]) *
 			RTE_LPM6_TBL8_GROUP_NUM_ENTRIES * config->number_tbl8s);
 	rules_size = sizeof(struct rte_lpm6_rule) * config->max_rules;
 
-	rte_rwlock_write_lock(RTE_EAL_TAILQ_RWLOCK);
-
-	/* Guarantee there's no existing */
-	TAILQ_FOREACH(lpm, lpm_list, next) {
-		if (strncmp(name, lpm->name, RTE_LPM6_NAMESIZE) == 0)
-			break;
-	}
-	if (lpm != NULL)
-		goto exit;
-
 	/* Allocate memory to store the LPM data structures. */
-	lpm = (struct rte_lpm6 *)rte_zmalloc_socket(mem_name, (size_t)mem_size,
-			CACHE_LINE_SIZE, socket_id);
+	lpm = (struct rte_lpm6 *) hrd_malloc_socket(RTE_LPM6_SHM_KEY,
+			mem_size, socket_id);
+	assert(lpm != NULL);
 			
-	if (lpm == NULL) {
-		RTE_LOG(ERR, LPM, "LPM memory allocation failed\n");
-		goto exit;
-	}
-
-	lpm->rules_tbl = (struct rte_lpm6_rule *)rte_zmalloc_socket(NULL,
-			(size_t)rules_size, CACHE_LINE_SIZE, socket_id);
+	/**< Not accessed on datapath */
+	lpm->rules_tbl = (struct rte_lpm6_rule *) malloc(rules_size);
+	assert(lpm->rules_tbl != NULL);
 			
-	if (lpm->rules_tbl == NULL) {
-		RTE_LOG(ERR, LPM, "LPM memory allocation failed\n");
-		rte_free(lpm);
-		goto exit;
-	}
-
 	/* Save user arguments. */
 	lpm->max_rules = config->max_rules;
 	lpm->number_tbl8s = config->number_tbl8s;
-	rte_snprintf(lpm->name, sizeof(lpm->name), "%s", name);
-
-	TAILQ_INSERT_TAIL(lpm_list, lpm, next);
-
-exit:	
-	rte_rwlock_write_unlock(RTE_EAL_TAILQ_RWLOCK);
 
 	return lpm;
-}
-
-/*
- * Find an existing lpm table and return a pointer to it.
- */
-struct rte_lpm6 *
-rte_lpm6_find_existing(const char *name)
-{
-	struct rte_lpm6 *l;
-	struct rte_lpm6_list *lpm_list;
-
-	/* Check that we have an initialised tail queue */
-	if ((lpm_list = RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_LPM6,
-			rte_lpm6_list)) == NULL) {
-		rte_errno = E_RTE_NO_TAILQ;
-		return NULL;
-	}
-
-	rte_rwlock_read_lock(RTE_EAL_TAILQ_RWLOCK);
-	TAILQ_FOREACH(l, lpm_list, next) {
-		if (strncmp(name, l->name, RTE_LPM6_NAMESIZE) == 0)
-			break;
-	}
-	rte_rwlock_read_unlock(RTE_EAL_TAILQ_RWLOCK);
-
-	if (l == NULL)
-		rte_errno = ENOENT;
-
-	return l;
 }
 
 /*
@@ -256,7 +186,6 @@ rte_lpm6_free(struct rte_lpm6 *lpm)
 	if (lpm == NULL)
 		return;
 
-	RTE_EAL_TAILQ_REMOVE(RTE_TAILQ_LPM6, rte_lpm6_list, lpm);
 	rte_free(lpm->rules_tbl);
 	rte_free(lpm);
 }

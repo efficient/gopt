@@ -36,9 +36,11 @@
 /** Max number of characters in LPM name. */
 #define RTE_LPM6_NAMESIZE                 32
 
-
 /**< Added to avoid DPDK dependencies */
+#define CACHE_LINE_SIZE 64
 #define __rte_cache_aligned __attribute__((__aligned__(CACHE_LINE_SIZE)))
+
+#define RTE_LPM6_SHM_KEY 1
 
 /** LPM structure. */
 struct rte_lpm6;
@@ -53,8 +55,6 @@ struct rte_lpm6_config {
 /**
  * Create an LPM object.
  *
- * @param name
- *   LPM object name
  * @param socket_id
  *   NUMA socket ID for LPM table memory allocation
  * @param config
@@ -71,8 +71,7 @@ struct rte_lpm6_config {
  *    - ENOMEM - no appropriate memory area found in which to create memzone
  */
 struct rte_lpm6 *
-rte_lpm6_create(const char *name, int socket_id,
-		const struct rte_lpm6_config *config);
+rte_lpm6_create(int socket_id, const struct rte_lpm6_config *config);
 
 /**
  * Find an existing LPM object and return a pointer to it.
@@ -194,3 +193,4 @@ rte_lpm6_lookup_bulk_func(const struct rte_lpm6 *lpm,
 		uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE],
 		int16_t * next_hops, unsigned n);
 
+void *hrd_malloc_socket(int shm_key, int size, int socket_id);
