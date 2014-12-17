@@ -458,13 +458,13 @@ lookup_step(const struct rte_lpm6 *lpm, const struct rte_lpm6_tbl_entry *tbl,
 	uint32_t tbl8_index, tbl_entry;
 	
 	/* Take the integer value from the pointer. */
-	tbl_entry = *(const uint32_t *)tbl;
+	tbl_entry = *(const uint32_t *) tbl;
 	
 	/* If it is valid and extended we calculate the new pointer to return. */
 	if ((tbl_entry & RTE_LPM6_VALID_EXT_ENTRY_BITMASK) ==
 			RTE_LPM6_VALID_EXT_ENTRY_BITMASK) {
 
-		tbl8_index = ip[first_byte-1] +
+		tbl8_index = ip[first_byte - 1] +
 				((tbl_entry & RTE_LPM6_TBL8_BITMASK) *
 				RTE_LPM6_TBL8_GROUP_NUM_ENTRIES);
 
