@@ -4,10 +4,12 @@
 #include <assert.h>
 #include "rte_lpm6.h"
 
+#define IPV6_ADDR_SIZE 16
+
 int main()
 {
 	int i, j;
-	uint8_t ipv6_buf[RTE_LPM6_IPV6_ADDR_SIZE];
+	uint8_t ipv6_buf[IPV6_ADDR_SIZE] = {0};
 
 	/**< Create the lmp6 struct */
 	struct rte_lpm6_config ipv6_config;
@@ -24,11 +26,12 @@ int main()
 	printf("Inserting %d prefixes\n", num_prefixes);
 
 	for(i = 0; i < num_prefixes; i ++) {
-		memset(ipv6_buf, 0, RTE_LPM6_IPV6_ADDR_SIZE * sizeof(uint8_t));
+		memset(ipv6_buf, 0, IPV6_ADDR_SIZE * sizeof(uint8_t));
 
 		int prefix_depth, cur_byte;
 		fscanf(prefix_fp, "%d", &prefix_depth);
-		for(j = 0; j < prefix_depth; j ++) {
+		printf("prefix_depth = %d\n", prefix_depth);
+		for(j = 0; j < IPV6_ADDR_SIZE; j ++) {
 			fscanf(prefix_fp, "%d", &cur_byte);
 			assert(cur_byte >= 0 && cur_byte <= 255);
 
@@ -50,10 +53,10 @@ int main()
 	printf("Probing %d ips\n", num_ips);
 
 	for(i = 0; i < num_ips; i ++) {
-		memset(ipv6_buf, 0, RTE_LPM6_IPV6_ADDR_SIZE * sizeof(uint8_t));
+		memset(ipv6_buf, 0, IPV6_ADDR_SIZE * sizeof(uint8_t));
 		int cur_byte, dst_port;
 
-		for(j = 0; j < RTE_LPM6_IPV6_ADDR_SIZE; j ++) {
+		for(j = 0; j < IPV6_ADDR_SIZE; j ++) {
 			fscanf(ips_fp, "%d", &cur_byte);
 			assert(cur_byte >= 0 && cur_byte <= 255);
 
@@ -67,4 +70,7 @@ int main()
 	}
 
 	printf("\tDone probing IPs\n");
+
+	return 0;
+
 }

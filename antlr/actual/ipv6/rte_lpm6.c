@@ -177,20 +177,6 @@ rte_lpm6_create(int socket_id, const struct rte_lpm6_config *config)
 }
 
 /*
- * Deallocates memory for given LPM table.
- */
-void
-rte_lpm6_free(struct rte_lpm6 *lpm)
-{
-	/* Check user arguments. */
-	if (lpm == NULL)
-		return;
-
-	rte_free(lpm->rules_tbl);
-	rte_free(lpm);
-}
-
-/*
  * Checks if a rule already exists in the rules table and updates
  * the nexthop if so. Otherwise it adds a new rule if enough space is available.
  */
@@ -221,7 +207,7 @@ rule_add(struct rte_lpm6 *lpm, uint8_t *ip, uint8_t next_hop, uint8_t depth)
 	}
 
 	/* If there is space for the new rule add it. */
-	rte_memcpy(lpm->rules_tbl[rule_index].ip, ip, RTE_LPM6_IPV6_ADDR_SIZE);
+	memcpy(lpm->rules_tbl[rule_index].ip, ip, RTE_LPM6_IPV6_ADDR_SIZE);
 	lpm->rules_tbl[rule_index].next_hop = next_hop;
 	lpm->rules_tbl[rule_index].depth = depth;
 
