@@ -1,10 +1,13 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 #include <assert.h>
 #include "rte_lpm6.h"
 
 #define IPV6_ADDR_SIZE 16
+#define IP_FILE "java/ip_file"
+#define PREFIX_FILE "java/prefix_file"
 
 int main()
 {
@@ -18,7 +21,7 @@ int main()
 	struct rte_lpm6 *lpm = rte_lpm6_create(0, &ipv6_config);
 
 	/**< Read the prefixes from a prefixes file */
-	FILE *prefix_fp = fopen("prefix_file", "r");
+	FILE *prefix_fp = fopen(PREFIX_FILE, "r");
 	assert(prefix_fp != NULL);
 	int num_prefixes;
 	fscanf(prefix_fp, "%d", &num_prefixes);
@@ -40,7 +43,6 @@ int main()
 		}
 
 		fscanf(prefix_fp, "%d", &dst_port);
-
 		printf("prefix_depth = %d, dst_port = %d\n", prefix_depth, dst_port);
 		
 		rte_lpm6_add(lpm, ipv6_buf, prefix_depth, dst_port);
@@ -48,14 +50,15 @@ int main()
 
 	printf("\tDone inserting prefixes\n");
 	
-
 	/**< Read the probe IPv6 addresses from an IPs file */
-	FILE *ips_fp = fopen("ip_file", "r");
+	FILE *ips_fp = fopen(IP_FILE, "r");
 	assert(ips_fp != NULL);
 	int num_ips;
 	fscanf(ips_fp, "%d", &num_ips);
 	assert(num_ips > 0);
 	printf("Probing %d ips\n", num_ips);
+
+	int *dst_ports = malloc(num_ips * sizeof(int));
 
 	for(i = 0; i < num_ips; i ++) {
 		memset(ipv6_buf, 0, IPV6_ADDR_SIZE * sizeof(uint8_t));
@@ -70,9 +73,19 @@ int main()
 		
 		uint8_t next_hop;
 		int success = rte_lpm6_lookup(lpm, ipv6_buf, &next_hop);
+		dst_ports[i] = next_hop;
+	}
+
+	/**< Check if the computed dst ports are correct */
+	for(i = 0; i < num_ips; i ++) {
 		int exp_dst_port;
-		printf("IP #%d, success = %d, next_hop = %d\n",
-			i, success, next_hop);
+		fscanf(ips_fp, "%d", &exp_dst_port);
+		if(dst_ports[i] == exp_dst_port) {
+			printf("IP %d passed!\n", i);
+		} else {
+			printf("IP %d failed! Got: %d, Expected: %d\n",
+				i, dst_ports[i], exp_dst_port);
+		}
 	}
 
 	printf("\tDone probing IPs\n");
