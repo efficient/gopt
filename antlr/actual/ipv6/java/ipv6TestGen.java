@@ -7,9 +7,10 @@ public class ipv6TestGen {
 	static int num_prefixes = 32;
 	static int num_ips = 32;
 	static int max_prefix_len = 48;
+	private static Random generator = new Random(2);
 
 	public static int rand() {
-		return (int) (Math.random() * 1000000000);
+		return generator.nextInt(Integer.MAX_VALUE);
 	}
 
 	public static String getBits(byte b[], int len) {
@@ -64,6 +65,8 @@ public class ipv6TestGen {
 
 		/*< Generarate the probe IPs */
 		System.out.println("Generating IPs");
+		int dst_ports[] = new int[num_ips];
+
 		for(int i = 0; i < num_ips; i ++) {
 			addresses[i] = new IPv6Address();
 
@@ -107,8 +110,15 @@ public class ipv6TestGen {
 			for(int j = 0; j < 16; j ++) {
 				System.out.print(addresses[i].bytes[j] + " ");
 			}
+			System.out.println();
 
-			System.out.println(" " + dst_port);
+			/*< Record the destination port for this IP; print later */
+			dst_ports[i] = dst_port;
+		}
+
+		System.out.println("Expected output");
+		for(int i = 0; i < num_ips; i ++) {
+			System.out.println(dst_ports[i]);
 		}
 		
 	}
