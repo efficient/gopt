@@ -103,6 +103,7 @@ struct rte_lpm6 {
 /**< Allocate size bytes in hugepages on this socket */
 void *hrd_malloc_socket(int shm_key, int size, int socket_id)
 {
+	printf("rte_lpm6: Allocating %d bytes on socket %d\n", size, socket_id);
 	int shmid = shmget(shm_key, size, IPC_CREAT | 0666 | SHM_HUGETLB);
 	assert(shmid >= 0);
 	void *buf = shmat(shmid, 0, 0);
@@ -148,7 +149,6 @@ rte_lpm6_create(int socket_id, const struct rte_lpm6_config *config)
 	struct rte_lpm6 *lpm = NULL;
 	uint64_t mem_size, rules_size;
 
-
 	assert(sizeof(struct rte_lpm6_tbl_entry) == sizeof(uint32_t));
 
 	/* Check user arguments. */
@@ -160,10 +160,11 @@ rte_lpm6_create(int socket_id, const struct rte_lpm6_config *config)
 			RTE_LPM6_TBL8_GROUP_NUM_ENTRIES * config->number_tbl8s);
 	rules_size = sizeof(struct rte_lpm6_rule) * config->max_rules;
 
-	/* Allocate memory to store the LPM data structures. */
+	/* Allocate memory to store the LPM data structures. Zero out counters. */
 	lpm = (struct rte_lpm6 *) hrd_malloc_socket(RTE_LPM6_SHM_KEY,
 			mem_size, socket_id);
 	assert(lpm != NULL);
+	memset(lpm, 0, mem_size);
 			
 	/**< Not accessed on datapath */
 	lpm->rules_tbl = (struct rte_lpm6_rule *) malloc(rules_size);

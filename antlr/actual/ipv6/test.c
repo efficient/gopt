@@ -45,7 +45,8 @@ int main()
 		fscanf(prefix_fp, "%d", &dst_port);
 		printf("prefix_depth = %d, dst_port = %d\n", prefix_depth, dst_port);
 		
-		rte_lpm6_add(lpm, ipv6_buf, prefix_depth, dst_port);
+		int add_status = rte_lpm6_add(lpm, ipv6_buf, prefix_depth, dst_port);
+		assert(add_status >= 0);
 	}
 
 	printf("\tDone inserting prefixes\n");
@@ -81,10 +82,12 @@ int main()
 		int exp_dst_port;
 		fscanf(ips_fp, "%d", &exp_dst_port);
 		if(dst_ports[i] == exp_dst_port) {
-			printf("IP %d passed!\n", i);
+			printf("IP %d passed! Got: %d, Expected: %d\n",
+				i, dst_ports[i], exp_dst_port);
 		} else {
 			printf("IP %d failed! Got: %d, Expected: %d\n",
 				i, dst_ports[i], exp_dst_port);
+			exit(-1);
 		}
 	}
 

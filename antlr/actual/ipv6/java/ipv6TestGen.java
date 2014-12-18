@@ -4,9 +4,9 @@ import java.util.*;
 
 /*< Class to generate prefixes and probe IPv6 addresses for testing */
 public class ipv6TestGen {
-	static int num_prefixes = 32;
-	static int num_ips = 32;
-	static int max_prefix_len = 48;
+	static int num_prefixes = 512;
+	static int num_ips = 512;
+	static int max_prefix_len = 64;
 	private static Random generator = new Random(2);
 
 	public static int rand() {
@@ -55,7 +55,7 @@ public class ipv6TestGen {
 			System.out.print(prefixes[i].len + "  ");
 
 			for(int j = 0; j < 16; j ++) {
-				prefixes[i].bytes[j] = (byte) (rand() % 4);
+				prefixes[i].bytes[j] = (byte) (rand() % 16);
 				System.out.print(prefixes[i].bytes[j] + " ");
 			}
 
@@ -71,7 +71,7 @@ public class ipv6TestGen {
 			addresses[i] = new IPv6Address();
 
 			for(int j = 0; j < 16; j ++) {
-				addresses[i].bytes[j] = (byte) (rand() % 4);
+				addresses[i].bytes[j] = (byte) (rand() % 16);
 			}
 
 			int dst_port = -1, lpm_len = -1;

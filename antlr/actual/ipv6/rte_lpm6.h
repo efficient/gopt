@@ -59,7 +59,8 @@ struct rte_lpm6 *rte_lpm6_create(int socket_id,
 /**< Free an LPM object */
 void rte_lpm6_free(struct rte_lpm6 *lpm);
 
-/**< Add a rule to the LPM table */
+/**< Add a rule to the LPM table
+  *  Return: 0 on success, negative value otherwise */
 int rte_lpm6_add(struct rte_lpm6 *lpm,
 	uint8_t *ip, uint8_t depth, uint8_t next_hop);
 
@@ -73,11 +74,13 @@ int rte_lpm6_delete_bulk_func(struct rte_lpm6 *lpm,
 /**< Delete all rules from the LPM table */
 void rte_lpm6_delete_all(struct rte_lpm6 *lpm);
 
-/**< Lookup an IP into the LPM table */
+/**< Lookup an IP into the LPM table.
+  *  Return: -EINVAL for incorrect arguments, otherwise 0 */
 int rte_lpm6_lookup(const struct rte_lpm6 *lpm,
 	uint8_t *ip, uint8_t *next_hop);
 
-/**< Lookup multiple IP addresses in an LPM table */
+/**< Lookup multiple IP addresses in an LPM table.
+  *  Return: -EINVAL for incorrect arguments, otherwise 0 */
 int rte_lpm6_lookup_bulk_func(const struct rte_lpm6 *lpm,
 	uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE], int16_t *next_hops, unsigned n);
 
