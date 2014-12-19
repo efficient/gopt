@@ -16,7 +16,7 @@ int main()
 
 	/**< Create the lmp6 struct */
 	struct rte_lpm6_config ipv6_config;
-	ipv6_config.max_rules = 1024;
+	ipv6_config.max_rules = 20000;
 	ipv6_config.number_tbl8s = 1024 * 1024;
 	struct rte_lpm6 *lpm = rte_lpm6_create(0, &ipv6_config);
 
@@ -46,7 +46,11 @@ int main()
 		printf("prefix_depth = %d, dst_port = %d\n", prefix_depth, dst_port);
 		
 		int add_status = rte_lpm6_add(lpm, ipv6_buf, prefix_depth, dst_port);
-		assert(add_status >= 0);
+		if(add_status < 0) {
+			printf("Failed to add IPv6 prefix %d. Status = %d\n",
+				i, add_status);
+			exit(-1);
+		}
 	}
 
 	printf("\tDone inserting prefixes\n");
@@ -63,7 +67,7 @@ int main()
 
 	for(i = 0; i < num_ips; i ++) {
 		memset(ipv6_buf, 0, IPV6_ADDR_SIZE * sizeof(uint8_t));
-		int cur_byte, dst_port;
+		int cur_byte;
 
 		for(j = 0; j < IPV6_ADDR_SIZE; j ++) {
 			fscanf(ips_fp, "%d", &cur_byte);
@@ -72,9 +76,7 @@ int main()
 			ipv6_buf[j] = (uint8_t) cur_byte;
 		}
 		
-		uint8_t next_hop;
-		int success = rte_lpm6_lookup(lpm, ipv6_buf, &next_hop);
-		dst_ports[i] = next_hop;
+		rte_lpm6_lookup(lpm, ipv6_buf, (uint8_t *) &dst_ports[i]);
 	}
 
 	/**< Check if the computed dst ports are correct */

@@ -103,7 +103,8 @@ struct rte_lpm6 {
 /**< Allocate size bytes in hugepages on this socket */
 void *hrd_malloc_socket(int shm_key, int size, int socket_id)
 {
-	printf("rte_lpm6: Allocating %d bytes on socket %d\n", size, socket_id);
+	printf("rte_lpm6: Allocating %d B (hugepage) on socket %d. SHM key = %d\n",
+		size, socket_id, shm_key);
 	int shmid = shmget(shm_key, size, IPC_CREAT | 0666 | SHM_HUGETLB);
 	assert(shmid >= 0);
 	void *buf = shmat(shmid, 0, 0);
@@ -403,8 +404,10 @@ rte_lpm6_add(struct rte_lpm6 *lpm, uint8_t *ip, uint8_t depth,
 	int i;
 	
 	/* Check user arguments. */
-	if ((lpm == NULL) || (depth < 1) || (depth > RTE_LPM6_MAX_DEPTH))
-		return -EINVAL;
+	if ((lpm == NULL) || (depth < 1) || (depth > RTE_LPM6_MAX_DEPTH)) {
+		printf("rte_lpm6: Invalid arguments to rte_lpm6_add\n");
+		assert(0);
+	}
 		
 	/* Copy the IP and mask it to avoid modifying user's input data. */
 	memcpy(masked_ip, ip, RTE_LPM6_IPV6_ADDR_SIZE);
@@ -415,7 +418,8 @@ rte_lpm6_add(struct rte_lpm6 *lpm, uint8_t *ip, uint8_t depth,
 
 	/* If there is no space available for new rule return error. */
 	if (rule_index < 0) {
-		return rule_index;
+		printf("rte_lpm6: No space for new rule!\n");
+		assert(0);
 	}
 
 	/* Inspect the first three bytes through tbl24 on the first step. */

@@ -14,6 +14,8 @@ public class ProcRib {
 		
 		/*< Only process prefixes of length = reqLen in this pass */
 		for(int reqLen = 0; reqLen <= 128; reqLen ++) {
+			Random randGen = new Random(2);
+
 			Scanner c = new Scanner(new File("uniq_ipv6_rib_201409"));
 
 			for(int i = 0; i < N; i ++) {
@@ -67,6 +69,8 @@ public class ProcRib {
 					}
 				}
 	
+				System.out.print(prefixLen + "  ");
+
 				for(int j = 0; j < 8; j ++) {
 
 					int resInt = Integer.parseInt(res[j], 16);
@@ -84,8 +88,10 @@ public class ProcRib {
 					System.out.print(msB + " " + lsB + " ");
 
 				}
+
+				int dstPort = randGen.nextInt(256);
+				System.out.println(" " + dstPort);
 				
-				System.out.println(prefixLen);
 			}
 			c.close();
 		}
