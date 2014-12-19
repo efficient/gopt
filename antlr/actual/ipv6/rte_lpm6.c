@@ -447,6 +447,10 @@ rte_lpm6_add(struct rte_lpm6 *lpm, uint8_t *ip, uint8_t depth,
 		}
 	}
 	
+	if(rand() % 100 == 0) {
+		printf("rte_lpm6: next_tbl8 = %d\n", lpm->next_tbl8);
+	}
+
 	return status;
 }
 
