@@ -19,3 +19,5 @@ struct ipv6_prefix *ipv6_read_prefixes(const char *prefixes_file,
 struct ipv6_addr *ipv6_gen_addrs(int num_addrs,
 	struct ipv6_prefix *prefix_arr, int num_prefixes);
 
+void ipv6_print_prefix(struct ipv6_prefix *prefix);
+void ipv6_print_addr(struct ipv6_addr *addr);

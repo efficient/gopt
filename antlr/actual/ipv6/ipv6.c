@@ -61,3 +61,25 @@ struct ipv6_addr *ipv6_gen_addrs(int num_addrs,
 
 	return addr_arr;
 }
+
+void ipv6_print_prefix(struct ipv6_prefix *prefix)
+{
+	int i;
+	printf("depth: %d, bytes: ", prefix->depth);
+	for(i = 0; i < IPV6_ADDR_LEN; i ++) {
+		printf("%d ", prefix->bytes[i]);
+	}
+
+	printf(" dst_port: %d\n", prefix->dst_port);
+}
+
+void ipv6_print_addr(struct ipv6_addr *addr)
+{
+	int i;
+	for(i = 0; i < IPV6_ADDR_LEN; i ++) {
+		printf("%d ", addr->bytes[i]);
+	}
+
+	printf("\n");
+}
+
