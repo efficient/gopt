@@ -11,13 +11,25 @@ struct ipv6_addr {
 	uint8_t bytes[IPV6_ADDR_LEN];
 };
 
+struct ipv6_perm {
+	uint8_t P[256];
+};
+
 /**< Read IPv6 prefixes from a file */
 struct ipv6_prefix *ipv6_read_prefixes(const char *prefixes_file,
 	int *num_prefixes);
 
+/**< Increase the number of prefixes in prefix_arr. Returns a new
+  *  array with num_prefixes * amp_factor prefixes */
+struct ipv6_prefix *ipv6_amp_prefixes(struct ipv6_prefix *prefix_arr,
+	int num_prefixes, int amp_factor);
+
 /**< Generate probe IPv6 addresses from prefixes */
 struct ipv6_addr *ipv6_gen_addrs(int num_addrs,
 	struct ipv6_prefix *prefix_arr, int num_prefixes);
+
+/**< Generate N different permutations of 0, ..., 255 */
+struct ipv6_perm *ipv6_gen_perms(int N);
 
 void ipv6_print_prefix(struct ipv6_prefix *prefix);
 void ipv6_print_addr(struct ipv6_addr *addr);

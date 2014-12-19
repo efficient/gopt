@@ -103,8 +103,8 @@ struct rte_lpm6 {
 /**< Allocate size bytes in hugepages on this socket */
 void *hrd_malloc_socket(int shm_key, int size, int socket_id)
 {
-	printf("rte_lpm6: Allocating %d B (hugepage) on socket %d. SHM key = %d\n",
-		size, socket_id, shm_key);
+	printf("rte_lpm6: Allocating %d MB (hugepg) on socket %d. SHM key = %d\n",
+		size / (1024 * 1024), socket_id, shm_key);
 	int shmid = shmget(shm_key, size, IPC_CREAT | 0666 | SHM_HUGETLB);
 	assert(shmid >= 0);
 	void *buf = shmat(shmid, 0, 0);

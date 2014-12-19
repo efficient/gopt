@@ -7,6 +7,7 @@
 #include "rte_lpm6.h"
 #include "ipv6.h"
 
+/**< Read IPv6 prefixes from a file */
 struct ipv6_prefix *ipv6_read_prefixes(const char *prefixes_file,
 	int *num_prefixes)
 {
@@ -42,6 +43,40 @@ struct ipv6_prefix *ipv6_read_prefixes(const char *prefixes_file,
 	return prefix_arr;	
 }
 
+/**< Increase the number of prefixes in prefix_arr */
+struct ipv6_prefix *ipv6_amp_prefixes(struct ipv6_prefix *prefix_arr,
+	int num_prefixes, int amp_factor)
+{
+	int mem_size = num_prefixes * amp_factor * sizeof(struct ipv6_prefix);
+	struct ipv6_prefix *new_prefix_arr = malloc(mem_size);
+	assert(new_prefix_arr != NULL);
+
+	struct ipv6_perm *perm_arr = ipv6_gen_perms(amp_factor);
+
+	int i, j, k;
+	for(i = 0; i < num_prefixes * amp_factor; i += amp_factor) {
+
+		/**< New prefixes i, ..., i + amp_factor - 1 come from old prefix
+		  *  numbered i / amp_factor */
+		for(j = 0; j < amp_factor; j ++) {
+			new_prefix_arr[i + j] = prefix_arr[i / amp_factor];
+
+			/**< Transform only the valid bytes */
+			int bytes_to_transform = prefix_arr[i / amp_factor].depth / 8;
+
+			for(k = 0; k < bytes_to_transform; k ++) {
+				int old_byte = new_prefix_arr[i + j].bytes[k];
+				int new_byte = perm_arr[j].P[old_byte];
+
+				new_prefix_arr[i + j].bytes[k] = new_byte;
+			}
+		}
+	}
+
+	return new_prefix_arr;
+}
+
+/**< Generate probe IPv6 addresses from prefixes */
 struct ipv6_addr *ipv6_gen_addrs(int num_addrs,
 	struct ipv6_prefix *prefix_arr, int num_prefixes)
 {
@@ -83,3 +118,31 @@ void ipv6_print_addr(struct ipv6_addr *addr)
 	printf("\n");
 }
 
+/**< Generate N different permutations of 0, ..., 255 */
+struct ipv6_perm *ipv6_gen_perms(int N)
+{
+	struct ipv6_perm *res = malloc(N * sizeof(struct ipv6_perm));
+	assert(res != 0);
+
+	int i, j;
+	for(i = 0; i < N; i ++) {
+		/**< Generate the ith permutation */
+		for(j = 0; j < 256; j ++) {
+			res[i].P[j] = j;
+		}
+
+		/**< The 1st permutation returned is an identity permutation */
+		if(i == 0) {
+			continue;
+		}
+
+		for(j = 255; j >= 0; j --) {
+			int k = rand() % (j + 1);
+			uint8_t temp = res[i].P[j];
+			res[i].P[j] = res[i].P[k];
+			res[i].P[k] = temp;
+		}
+	}
+
+	return res;
+}

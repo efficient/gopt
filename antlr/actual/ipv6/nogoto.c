@@ -9,7 +9,8 @@
 #include "ipv6.h"
 
 #define PREFIX_FILE "../../../data_dump/ipv6/ipv6_java_out"
-#define NUM_IPS (16 * 1024 * 1024)
+#define NUM_IPS (64 * 1024 * 1024)
+#define AMP_FACTOR 10
 
 int main()
 {
@@ -17,7 +18,7 @@ int main()
 
 	/**< Create the lmp6 struct */
 	struct rte_lpm6_config ipv6_config;
-	ipv6_config.max_rules = 20000;
+	ipv6_config.max_rules = 1000000;
 	ipv6_config.number_tbl8s = 1024 * 1024;
 	struct rte_lpm6 *lpm = rte_lpm6_create(0, &ipv6_config);
 
@@ -26,7 +27,12 @@ int main()
 	int num_prefixes;
 
 	prefix_arr = ipv6_read_prefixes(PREFIX_FILE, &num_prefixes);
-	printf("main: Read %d prefixes\n", num_prefixes);
+	printf("main: Read %d prefixes. Amplifying by %d.\n",
+		num_prefixes, AMP_FACTOR);
+
+	prefix_arr = ipv6_amp_prefixes(prefix_arr, num_prefixes, AMP_FACTOR);
+	num_prefixes *= AMP_FACTOR;
+	assert(num_prefixes < ipv6_config.max_rules);
 
 	for(i = 0; i < num_prefixes; i ++) {
 		int add_status = rte_lpm6_add(lpm,
@@ -36,6 +42,10 @@ int main()
 			printf("main: Failed to add IPv6 prefix %d. Status = %d\n",
 				i, add_status);
 			exit(-1);
+		}
+
+		if(i % 1000 == 0) {
+			printf("main: Added prefixes = %d, total = %d\n", i, num_prefixes);
 		}
 	}
 
