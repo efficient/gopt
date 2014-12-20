@@ -84,4 +84,7 @@ int rte_lpm6_lookup(const struct rte_lpm6 *lpm,
 int rte_lpm6_lookup_bulk_func(const struct rte_lpm6 *lpm,
 	uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE], int16_t *next_hops, unsigned n);
 
+void rte_lpm6_lookup_nogoto(const struct rte_lpm6 *lpm,
+	uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE], int16_t *next_hops, unsigned n);
+
 void *hrd_malloc_socket(int shm_key, int size, int socket_id);

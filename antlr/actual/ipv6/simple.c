@@ -11,11 +11,10 @@
 #define PREFIX_FILE "../../../data_dump/ipv6/ipv6_java_out"
 #define NUM_IPS (64 * 1024 * 1024)
 #define AMP_FACTOR 2
-#define BATCH_SIZE 8
 
 int main()
 {
-	int i, j;
+	int i;
 
 	/**< Create the lmp6 struct */
 	struct rte_lpm6_config ipv6_config;
@@ -70,13 +69,11 @@ int main()
 		exit(1);
 	}
 
-	int16_t dst_port[BATCH_SIZE];
 	int dst_port_sum = 0;
-	for(i = 0; i < NUM_IPS; i += BATCH_SIZE) {
-		rte_lpm6_lookup_nogoto(lpm, (void *) addr_arr[i].bytes, dst_port, BATCH_SIZE);
-		for(j = 0; j < BATCH_SIZE; j ++) {
-			dst_port_sum += dst_port[j];
-		}
+	for(i = 0; i < NUM_IPS; i ++) {
+		uint8_t dst_port;
+		rte_lpm6_lookup(lpm, (void *) addr_arr[i].bytes, &dst_port);
+		dst_port_sum += dst_port;
 	}
 
 	if((retval = PAPI_ipc(&real_time, &proc_time, &ins, &ipc)) < PAPI_OK) {
