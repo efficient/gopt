@@ -19,6 +19,9 @@ struct ipv6_perm {
 struct ipv6_prefix *ipv6_read_prefixes(const char *prefixes_file,
 	int *num_prefixes);
 
+/**< Generate IPv6 prefixes randomly */
+struct ipv6_prefix *ipv6_gen_rand_prefixes(int num_prefixes);
+
 /**< Increase the number of prefixes in prefix_arr. Returns a new
   *  array with num_prefixes * amp_factor prefixes */
 struct ipv6_prefix *ipv6_amp_prefixes(struct ipv6_prefix *prefix_arr,

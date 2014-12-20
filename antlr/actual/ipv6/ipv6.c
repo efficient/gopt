@@ -43,6 +43,31 @@ struct ipv6_prefix *ipv6_read_prefixes(const char *prefixes_file,
 	return prefix_arr;	
 }
 
+/**< Generate IPv6 prefixes randomly */
+struct ipv6_prefix *ipv6_gen_rand_prefixes(int num_prefixes)
+{
+	assert(num_prefixes > 0);
+
+	int prefix_mem_size = num_prefixes * sizeof(struct ipv6_prefix);
+	struct ipv6_prefix *prefix_arr = malloc(prefix_mem_size);
+	assert(prefix_arr != NULL);
+
+	int i, j;
+	for(i = 0; i < num_prefixes; i ++) {
+
+		/**< Prefix depth is between 48 and 64 */
+		prefix_arr[i].depth = (rand() % 17) + 48;
+
+		for(j = 0; j < IPV6_ADDR_LEN; j ++) {
+			prefix_arr[i].bytes[j] = rand() % 256;
+		}
+
+		prefix_arr[i].dst_port = rand() % 256;
+	}
+
+	return prefix_arr;
+}
+
 /**< Increase the number of prefixes in prefix_arr */
 struct ipv6_prefix *ipv6_amp_prefixes(struct ipv6_prefix *prefix_arr,
 	int num_prefixes, int amp_factor)

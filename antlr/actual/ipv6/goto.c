@@ -10,13 +10,19 @@
 
 #define PREFIX_FILE "../../../data_dump/ipv6/ipv6_java_out"
 #define NUM_IPS (64 * 1024 * 1024)
+#define NUM_RAND_PREFIXES 200000
 #define AMP_FACTOR 10
 #define BATCH_SIZE 8
 
-int main()
+/**< Usage: ./exe <use_random_prefixes> */
+int main(int argc, char **argv)
 {
 	int i, j;
 
+	assert(argc == 2);
+	int use_random_prefixes = atoi(argv[1]);
+	assert(use_random_prefixes == 1 || use_random_prefixes == 0);
+	
 	/**< Create the lmp6 struct */
 	struct rte_lpm6_config ipv6_config;
 	ipv6_config.max_rules = 1000000;
@@ -27,12 +33,20 @@ int main()
 	struct ipv6_prefix *prefix_arr;
 	int num_prefixes;
 
-	prefix_arr = ipv6_read_prefixes(PREFIX_FILE, &num_prefixes);
-	printf("main: Read %d prefixes. Amplifying by %d.\n",
-		num_prefixes, AMP_FACTOR);
+	if(use_random_prefixes == 0) {
+		/**< Generate prefixes at random: Real prefixes have great cache
+		  *  behavior. */
+		prefix_arr = ipv6_read_prefixes(PREFIX_FILE, &num_prefixes);
+		printf("main: Read %d prefixes. Amplifying by %d.\n",
+			num_prefixes, AMP_FACTOR);
+	
+		prefix_arr = ipv6_amp_prefixes(prefix_arr, num_prefixes, AMP_FACTOR);
+		num_prefixes *= AMP_FACTOR;
+	} else {
+		num_prefixes = NUM_RAND_PREFIXES;
+		prefix_arr = ipv6_gen_rand_prefixes(num_prefixes);
+	}
 
-	prefix_arr = ipv6_amp_prefixes(prefix_arr, num_prefixes, AMP_FACTOR);
-	num_prefixes *= AMP_FACTOR;
 	assert(num_prefixes < ipv6_config.max_rules);
 
 	for(i = 0; i < num_prefixes; i ++) {

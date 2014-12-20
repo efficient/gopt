@@ -649,10 +649,10 @@ fpp_label_1:
 fpp_end:
     batch_rips[I] = &&fpp_end;
     iMask = FPP_SET(iMask, I); 
-    if(iMask == (1 << BATCH_SIZE) - 1) {
+    if(iMask == (1 << n) - 1) {
         return;
     }
-    I = (I + 1) & BATCH_SIZE_;
+    I = (I + 1) < n ? I + 1 : 0;
     goto *batch_rips[I];
 
 }
