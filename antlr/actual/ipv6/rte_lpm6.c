@@ -583,7 +583,7 @@ void rte_lpm6_lookup_nogoto(const struct rte_lpm6 *lpm,
 		first_byte = LOOKUP_FIRST_BYTE;
 		tbl24_index = (ips[batch_index][0] << BYTES2_SIZE) |
 				(ips[batch_index][1] << BYTE_SIZE) | ips[batch_index][2];
-		FPP_EXPENSIVE(&lpm->tbl24[tbl_index]);
+		FPP_EXPENSIVE(&lpm->tbl24[tbl24_index]);
 
 		/* Calculate pointer to the first entry to be inspected */
 		tbl = &lpm->tbl24[tbl24_index];
@@ -600,6 +600,60 @@ void rte_lpm6_lookup_nogoto(const struct rte_lpm6 *lpm,
 		else
 			next_hops[batch_index] = next_hop;
 	}
+}
+
+void rte_lpm6_lookup_goto(const struct rte_lpm6 *lpm,
+                            uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE],
+                            int16_t *next_hops, unsigned n)
+{
+	const struct rte_lpm6_tbl_entry *tbl[BATCH_SIZE];
+	const struct rte_lpm6_tbl_entry *tbl_next[BATCH_SIZE];
+	uint32_t tbl24_index[BATCH_SIZE];
+	uint8_t next_hop[BATCH_SIZE];
+	uint8_t first_byte[BATCH_SIZE];
+	int status[BATCH_SIZE];
+
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&fpp_start;
+	}
+
+fpp_start:
+
+        first_byte[I] = LOOKUP_FIRST_BYTE;
+        tbl24_index[I] = (ips[I][0] << BYTES2_SIZE) |
+        (ips[I][1] << BYTE_SIZE) | ips[I][2];
+        FPP_PSS(&lpm->tbl24[tbl24_index[I]], fpp_label_1, n);
+fpp_label_1:
+
+        /* Calculate pointer to the first entry to be inspected */
+        tbl[I] = &lpm->tbl24[tbl24_index[I]];
+        
+        do {
+            /* Continue inspecting following levels until success or failure */
+            status[I] = lookup_step(lpm, tbl[I], &tbl_next[I], ips[I], first_byte[I]++,
+                                 &next_hop[I]);
+            tbl[I] = tbl_next[I];
+        } while (status[I] == 1);
+        
+        if (status[I] < 0)
+            next_hops[I] = -1;
+        else
+            next_hops[I] = next_hop[I];
+    
+fpp_end:
+    batch_rips[I] = &&fpp_end;
+    iMask = FPP_SET(iMask, I); 
+    if(iMask == (1 << BATCH_SIZE) - 1) {
+        return;
+    }
+    I = (I + 1) & BATCH_SIZE_;
+    goto *batch_rips[I];
+
 }
 
 /*

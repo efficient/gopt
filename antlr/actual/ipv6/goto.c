@@ -73,7 +73,7 @@ int main()
 	int16_t dst_port[BATCH_SIZE];
 	int dst_port_sum = 0;
 	for(i = 0; i < NUM_IPS; i += BATCH_SIZE) {
-		rte_lpm6_lookup_nogoto(lpm, (void *) addr_arr[i].bytes, dst_port, BATCH_SIZE);
+		rte_lpm6_lookup_goto(lpm, (void *) addr_arr[i].bytes, dst_port, BATCH_SIZE);
 		for(j = 0; j < BATCH_SIZE; j ++) {
 			dst_port_sum += dst_port[j];
 		}
