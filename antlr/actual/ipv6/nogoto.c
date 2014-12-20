@@ -10,7 +10,7 @@
 
 #define PREFIX_FILE "../../../data_dump/ipv6/ipv6_java_out"
 #define NUM_IPS (64 * 1024 * 1024)
-#define AMP_FACTOR 2
+#define AMP_FACTOR 10
 #define BATCH_SIZE 8
 
 int main()

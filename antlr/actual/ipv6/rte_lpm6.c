@@ -448,7 +448,7 @@ rte_lpm6_add(struct rte_lpm6 *lpm, uint8_t *ip, uint8_t depth,
 		}
 	}
 	
-	if(rand() % 100 == 0) {
+	if(rand() % 1000 == 0) {
 		printf("rte_lpm6: next_tbl8 = %d\n", lpm->next_tbl8);
 	}
 
@@ -583,12 +583,12 @@ void rte_lpm6_lookup_nogoto(const struct rte_lpm6 *lpm,
 		first_byte = LOOKUP_FIRST_BYTE;
 		tbl24_index = (ips[batch_index][0] << BYTES2_SIZE) |
 				(ips[batch_index][1] << BYTE_SIZE) | ips[batch_index][2];
-		FPP_EXPENSIVE(&lpm->tbl24[tbl24_index]);
 
 		/* Calculate pointer to the first entry to be inspected */
 		tbl = &lpm->tbl24[tbl24_index];
 		
 		do {
+			FPP_EXPENSIVE(tbl);
 			/* Continue inspecting following levels until success or failure */		
 			status = lookup_step(lpm, tbl, &tbl_next, ips[batch_index], first_byte++,
 					&next_hop);
@@ -627,13 +627,14 @@ fpp_start:
         first_byte[I] = LOOKUP_FIRST_BYTE;
         tbl24_index[I] = (ips[I][0] << BYTES2_SIZE) |
         (ips[I][1] << BYTE_SIZE) | ips[I][2];
-        FPP_PSS(&lpm->tbl24[tbl24_index[I]], fpp_label_1, n);
-fpp_label_1:
-
+        
         /* Calculate pointer to the first entry to be inspected */
         tbl[I] = &lpm->tbl24[tbl24_index[I]];
         
         do {
+            FPP_PSS(tbl[I], fpp_label_1, n);
+fpp_label_1:
+
             /* Continue inspecting following levels until success or failure */
             status[I] = lookup_step(lpm, tbl[I], &tbl_next[I], ips[I], first_byte[I]++,
                                  &next_hop[I]);
@@ -644,7 +645,7 @@ fpp_label_1:
             next_hops[I] = -1;
         else
             next_hops[I] = next_hop[I];
-    
+       
 fpp_end:
     batch_rips[I] = &&fpp_end;
     iMask = FPP_SET(iMask, I); 
