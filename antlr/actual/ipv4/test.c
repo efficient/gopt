@@ -30,7 +30,8 @@ int main()
 	for(i = 0; i < num_prefixes; i ++) {
 		memset(ipv4_buf, 0, IPV4_ADDR_SIZE * sizeof(uint8_t));
 
-		int prefix_depth, cur_byte, dst_port, prefix_ip = 0;
+		int prefix_depth, cur_byte, dst_port;
+		uint32_t prefix_ip = 0;
 
 		fscanf(prefix_fp, "%d", &prefix_depth);
 
@@ -43,7 +44,10 @@ int main()
 		}
 
 		fscanf(prefix_fp, "%d", &dst_port);
-		printf("prefix_depth = %d, dst_port = %d\n", prefix_depth, dst_port);
+		printf("prefix_depth = %d, dst_port = %d, prefix_ip = %x "
+			"bytes= %x %x %x %x\n",
+			prefix_depth, dst_port, prefix_ip,
+			ipv4_buf[0], ipv4_buf[1], ipv4_buf[2], ipv4_buf[3]);
 		
 		int add_status = rte_lpm_add(lpm, prefix_ip, prefix_depth, dst_port);
 		if(add_status < 0) {
@@ -67,7 +71,8 @@ int main()
 
 	for(i = 0; i < num_ips; i ++) {
 		memset(ipv4_buf, 0, IPV4_ADDR_SIZE * sizeof(uint8_t));
-		int cur_byte, probe_ip = 0;
+		int cur_byte;
+		uint32_t probe_ip = 0;
 
 		for(j = 0; j < IPV4_ADDR_SIZE; j ++) {
 			fscanf(ips_fp, "%d", &cur_byte);

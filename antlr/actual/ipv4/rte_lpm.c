@@ -329,7 +329,7 @@ add_depth_small(struct rte_lpm *lpm, uint32_t ip, uint8_t depth,
 
 		/* If tbl24 entry is valid and extended calculate the index
 		 * into tbl8. */
-		tbl8_index = lpm->tbl24[tbl24_index].tbl8_gindex * 
+		tbl8_index = lpm->tbl24[i].tbl8_gindex *
 				RTE_LPM_TBL8_GROUP_NUM_ENTRIES;
 		tbl8_group_end = tbl8_index + RTE_LPM_TBL8_GROUP_NUM_ENTRIES;
 
@@ -472,6 +472,7 @@ add_depth_big(struct rte_lpm *lpm, uint32_t ip_masked, uint8_t depth,
 					.valid = VALID,
 					.depth = depth,
 					.next_hop = next_hop,
+					.valid_group = lpm->tbl8[i].valid_group,
 				};
 
 				/*
@@ -737,6 +738,7 @@ delete_depth_big(struct rte_lpm *lpm, uint32_t ip_masked,
 		struct rte_lpm_tbl8_entry new_tbl8_entry = {
 			.valid = VALID,
 			.depth = sub_rule_depth,
+			.valid_group = lpm->tbl8[tbl8_group_start].valid_group,
 			.next_hop = lpm->rules_tbl[sub_rule_index].next_hop,
 		};
 
