@@ -285,7 +285,8 @@ tbl8_alloc(struct rte_lpm_tbl8_entry *tbl8)
 	}
 
 	/* If there are no tbl8 groups free then return error. */
-	return -ENOSPC;
+	printf("rte_lpm: tbl8_alloc() failed. No tbl8 groups left\n");
+	assert(0);
 }
 
 static inline void
@@ -374,7 +375,8 @@ add_depth_big(struct rte_lpm *lpm, uint32_t ip_masked, uint8_t depth,
 
 		/* Check tbl8 allocation was successful. */
 		if (tbl8_group_index < 0) {
-			return tbl8_group_index;
+			printf("rte_lpm: tbl8_alloc() failed\n");
+			assert(0);
 		}
 
 		/* Find index into tbl8 and range. */
@@ -410,7 +412,8 @@ add_depth_big(struct rte_lpm *lpm, uint32_t ip_masked, uint8_t depth,
 		tbl8_group_index = tbl8_alloc(lpm->tbl8);
 
 		if (tbl8_group_index < 0) {
-			return tbl8_group_index;
+			printf("rte_lpm: tbl8_alloc() failed\n");
+			assert(0);
 		}
 
 		tbl8_group_start = tbl8_group_index *
@@ -500,8 +503,9 @@ rte_lpm_add(struct rte_lpm *lpm, uint32_t ip, uint8_t depth,
 	uint32_t ip_masked;
 
 	/* Check user arguments. */
-	if ((lpm == NULL) || (depth < 1) || (depth > RTE_LPM_MAX_DEPTH))
-		return -EINVAL;
+	if ((lpm == NULL) || (depth < 1) || (depth > RTE_LPM_MAX_DEPTH)) {
+		printf("rte_lpm: Invalid arguments!\n");
+	}
 
 	ip_masked = ip & depth_to_mask(depth);
 
@@ -510,7 +514,8 @@ rte_lpm_add(struct rte_lpm *lpm, uint32_t ip, uint8_t depth,
 
 	/* If the is no space available for new rule return error. */
 	if (rule_index < 0) {
-		return rule_index;
+		printf("rte_lpm: No space for new rule\n");
+		assert(0);
 	}
 
 	if (depth <= MAX_DEPTH_TBL24) {

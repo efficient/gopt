@@ -54,7 +54,7 @@
 #define RTE_LPM_TBL8_GROUP_NUM_ENTRIES  256
 
 /** @internal Total number of tbl8 groups in the tbl8. */
-#define RTE_LPM_TBL8_NUM_GROUPS         256
+#define RTE_LPM_TBL8_NUM_GROUPS         (1024 * 32)
 
 /** @internal Total number of tbl8 entries. */
 #define RTE_LPM_TBL8_NUM_ENTRIES        (RTE_LPM_TBL8_NUM_GROUPS * \

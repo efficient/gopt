@@ -8,8 +8,8 @@
 #define IPV4_ADDR_SIZE 4
 
 #define MAX_IPV4_RULES (2 * 1024 * 1024)
-#define IP_FILE "java/ip_file"
 #define PREFIX_FILE "java/prefix_file"
+#define IP_FILE "java/ip_file"
 
 int main()
 {
