@@ -101,6 +101,12 @@ struct ipv6_prefix *ipv6_amp_prefixes(struct ipv6_prefix *prefix_arr,
 	return new_prefix_arr;
 }
 
+inline uint32_t fastrand(uint64_t* seed)
+{
+    *seed = *seed * 1103515245 + 12345;
+    return (uint32_t)(*seed >> 32);
+}
+
 /**< Generate probe IPv6 addresses from prefixes */
 struct ipv6_addr *ipv6_gen_addrs(int num_addrs,
 	struct ipv6_prefix *prefix_arr, int num_prefixes)
@@ -113,10 +119,23 @@ struct ipv6_addr *ipv6_gen_addrs(int num_addrs,
 	addr_arr = hrd_malloc_socket(PROBE_ADDR_SHM_KEY, addr_mem_size, 0);
 
 	/**< Generate addresses using randomly chosen prefixes */
-	int i;
+	int i, j;
+	uint64_t seed = 0xdeadbeef;
+
 	for(i = 0; i < num_addrs; i ++) {
 		int prefix_id = rand() % num_prefixes;
-		memcpy(addr_arr[i].bytes, prefix_arr[prefix_id].bytes, IPV6_ADDR_LEN);
+		int prefix_depth = prefix_arr[prefix_id].depth;
+		int last_full_byte = (prefix_depth / 8) - 1;
+		assert(last_full_byte >= 0 && last_full_byte < IPV6_ADDR_LEN);
+
+		for(j = 0; j < IPV6_ADDR_LEN; j ++) {
+			addr_arr[i].bytes[j] = prefix_arr[prefix_id].bytes[j];
+		}
+
+		for(j = last_full_byte + 1; j < IPV6_ADDR_LEN; j ++) {
+			addr_arr[i].bytes[j] += fastrand(&seed) % 128;
+			addr_arr[i].bytes[j] %= 256;
+		}
 	}
 
 	return addr_arr;

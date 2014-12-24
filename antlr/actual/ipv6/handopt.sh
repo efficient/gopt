@@ -10,5 +10,5 @@ use_random_prefixes=1
 blue "Removing hugepages"
 shm-rm.sh 1>/dev/null 2>/dev/null
 
-blue "Running goto with use_random_prefixes = $use_random_prefixes"
-sudo taskset -c 0 ./goto $use_random_prefixes
+blue "Running handopt with use_random_prefixes = $use_random_prefixes"
+sudo taskset -c 0 ./handopt $use_random_prefixes

@@ -602,6 +602,60 @@ void rte_lpm6_lookup_nogoto(const struct rte_lpm6 *lpm,
 	}
 }
 
+void rte_lpm6_lookup_handopt(const struct rte_lpm6 *lpm,
+		uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE],
+		int16_t *next_hops, unsigned n)
+{
+	const struct rte_lpm6_tbl_entry *tbl[BATCH_SIZE];
+	const struct rte_lpm6_tbl_entry *tbl_next[BATCH_SIZE] = {NULL};
+	uint32_t tbl24_index[BATCH_SIZE];
+	uint8_t first_byte[BATCH_SIZE], next_hop[BATCH_SIZE];
+	int status[BATCH_SIZE];
+
+	int I;
+	for(I = 0; I < BATCH_SIZE; I ++) {
+		status[I] = 1;
+		first_byte[I] = LOOKUP_FIRST_BYTE;
+		tbl24_index[I] = (ips[I][0] << BYTES2_SIZE) |
+				(ips[I][1] << BYTE_SIZE) | ips[I][2];
+		/* Calculate pointer to the first entry to be inspected */
+		tbl[I] = &lpm->tbl24[tbl24_index[I]];
+		__builtin_prefetch(tbl[I], 0, 0);
+	}
+
+	int progress = 1;
+
+	while(1) {
+		if(progress == 0) {
+			break;
+		}
+
+		progress = 0;
+
+		for(I = 0; I < BATCH_SIZE; I ++) {
+			if(status[I] != 1) {
+				continue;
+			}
+			status[I] = lookup_step(lpm, tbl[I], &tbl_next[I], ips[I], first_byte[I]++,
+					&next_hop[I]);
+			tbl[I] = tbl_next[I];
+			__builtin_prefetch(tbl[I], 0, 0);
+
+			if(status[I] == 1) {
+				progress = 1;
+			}
+		}
+	}
+
+	for(I = 0; I < BATCH_SIZE; I ++) {
+		if (status[I] < 0) {
+			next_hops[I] = -1;
+		} else {
+			next_hops[I] = next_hop[I];
+		}
+	}
+}
+
 void rte_lpm6_lookup_goto(const struct rte_lpm6 *lpm,
                             uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE],
                             int16_t *next_hops, unsigned n)
