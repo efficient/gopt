@@ -1,8 +1,7 @@
 #include "main.h"
 int is_client = -1, client_id;
 
-/** IPv4 lookup-specific stuff */
-struct dir_ipv4_table *ipv4_table;
+struct rte_lpm *lpm;
 
 // Disable all offload features
 static const struct rte_eth_conf port_conf = {
@@ -52,7 +51,7 @@ l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 	if(is_client) {
 		run_client(client_id, l2fwd_pktmbuf_pool);
 	} else {
-		run_server(ipv4_table);
+		run_server(lpm);
 	}
 	return 1;
 }
@@ -65,25 +64,22 @@ main(int argc, char **argv)
 	uint8_t port_id;
 	unsigned lcore_id;
 
-	/** < Allocate the ipv4_table struct */
-	ipv4_table = malloc(sizeof(struct dir_ipv4_table));
 
-	// Don't move this allocation: must be before EAL's ops
-	red_printf("Creating ipv4 lookup table \n");
-	dir_ipv4_init(ipv4_table, XIA_R2_PORT_MASK);
-	red_printf("\tSetting up ipv4 lookup tables done!\n");
-
-	if(argc > 5) {		// Do this before eal parsing
+	if(argc > 5) {		/**< Do this before eal parsing */
 		is_client = 1;
 		client_id = atoi(argv[6]);
 	} else {
 		is_client = 0;
+		/**< Don't move this allocation: must be before EAL's ops */
+		red_printf("Creating IPv4 lpm\n");
+		lpm = ipv4_init(XIA_R2_PORT_MASK);
+		red_printf("\tSetting up ipv4 lookup tables done!\n");
 	}
 
 	ret = rte_eal_init(argc, argv);
 	CPE(ret < 0, "Invalid EAL arguments\n");
 
-	CPE(rte_pmd_init_all() < 0, "Cannot init pmd\n");	// Not needed in DPDK 1.7
+	CPE(rte_pmd_init_all() < 0, "Cannot init pmd\n");
 	CPE(rte_eal_pci_probe() < 0, "Cannot probe PCI\n");
 
 	nb_ports = rte_eth_dev_count();

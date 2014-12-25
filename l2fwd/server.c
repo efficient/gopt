@@ -50,87 +50,19 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
-void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
-                          struct dir_ipv4_table *ipv4_table,
-                          struct lcore_port_info *lp_info)
-{
-	struct ether_hdr *eth_hdr[BATCH_SIZE];
-	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
-	uint32_t dst_ip[BATCH_SIZE];
-	int dst_port[BATCH_SIZE];
-
-	int I = 0;			// batch index
-	void *batch_rips[BATCH_SIZE];		// goto targets
-	int iMask = 0;		// No packet is done yet
-
-	int temp_index;
-	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&fpp_start;
-	}
-
-fpp_start:
-
-	// Boilerplate for TX pkt
-
-	/** < Must be unsigned */
-
-	if(I != nb_pkts - 1) {
-		rte_prefetch0(pkts[I + 1]->pkt.data);
-	}
-
-	eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
-	ip_hdr[I] = (struct ipv4_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
-
-	if(is_valid_ipv4_pkt(ip_hdr[I], pkts[I]->pkt.pkt_len) < 0) {
-		rte_pktmbuf_free(pkts[I]);
-		goto fpp_end;
-	}
-
-	set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
-
-	ip_hdr[I]->time_to_live --;
-	ip_hdr[I]->hdr_checksum ++;
-
-	/** < DIR-24-8-BASIC */
-	dst_ip[I] = ip_hdr[I]->dst_addr;
-	FPP_PSS(&ipv4_table->tbl_24[dst_ip[I] >> 8], fpp_label_1, nb_pkts);
-fpp_label_1:
-
-	dst_port[I] = ipv4_table->tbl_24[dst_ip[I] >> 8];
-	if(dst_port[I] & 0x8000) {
-		dst_port[I] = ipv4_table->tbl_long[((dst_port[I] & 0x7fff) << 8) |
-			(dst_port[I] & 0xff)];
-		lp_info[0].nb_tbl_24 ++;
-	}
-
-	/** < Use the looked-up port to determine dst MAC */
-	set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[dst_port[I]]);
-
-	send_packet(pkts[I], dst_port[I], lp_info);
-
-fpp_end:
-	batch_rips[I] = &&fpp_end;
-	iMask = FPP_SET(iMask, I); 
-	if(iMask == (1 << nb_pkts) - 1) {
-		return;
-	}
-	I = (I + 1) < nb_pkts ? I + 1 : 0;
-	goto *batch_rips[I];
-
-}
+int batch_index = 0;
 
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
-	struct dir_ipv4_table *ipv4_table, 
+	const struct rte_lpm *lpm, 
 	struct lcore_port_info *lp_info)
 {
-	int batch_index = 0;
-
 	foreach(batch_index, nb_pkts) {
-		// Boilerplate for TX pkt
+
+		/**< Boilerplate for TX pkt */
 		struct ether_hdr *eth_hdr;
 		struct ipv4_hdr *ip_hdr;
 
-		uint32_t dst_ip;		/** < Must be unsigned */
+		uint32_t dst_ip;
 		int dst_port;
 
 		if(batch_index != nb_pkts - 1) {
@@ -150,25 +82,120 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 		ip_hdr->time_to_live --;
 		ip_hdr->hdr_checksum ++;
 		
-		/** < DIR-24-8-BASIC */
 		dst_ip = ip_hdr->dst_addr;
-		FPP_EXPENSIVE(&ipv4_table->tbl_24[dst_ip >> 8]);
 
-		dst_port = ipv4_table->tbl_24[dst_ip >> 8];
-		if(dst_port & 0x8000) {
-			dst_port = ipv4_table->tbl_long[((dst_port & 0x7fff) << 8) | 
-											(dst_port & 0xff)];
-			lp_info[0].nb_tbl_24 ++;		
+		/**< Copied code from DPDK's rte_lpm.h */
+		/**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+		unsigned tbl24_index = (dst_ip >> 8);
+		uint16_t tbl_entry;
+		
+		/**< Copy tbl24 entry */
+		FPP_EXPENSIVE(&lpm->tbl24[tbl24_index]);
+		tbl_entry = *(const uint16_t *) &lpm->tbl24[tbl24_index];
+
+		/**< Copy tbl8 entry (only if needed) */
+		if (unlikely((tbl_entry & RTE_LPM_VALID_EXT_ENTRY_BITMASK) ==
+				RTE_LPM_VALID_EXT_ENTRY_BITMASK)) {
+
+			unsigned tbl8_index = (uint8_t) dst_ip +
+					((uint8_t) tbl_entry * RTE_LPM_TBL8_GROUP_NUM_ENTRIES);
+
+			tbl_entry = *(const uint16_t *)&lpm->tbl8[tbl8_index];
 		}
 
-		/** < Use the looked-up port to determine dst MAC */
+		dst_port = (uint8_t) tbl_entry;
+		/**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
+		/**< Use the looked-up port to determine dst MAC */
 		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
 
 		send_packet(pkts[batch_index], dst_port, lp_info);
 	}
 }
 
-void run_server(struct dir_ipv4_table *ipv4_table)
+void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+                          const struct rte_lpm *lpm,
+                          struct lcore_port_info *lp_info)
+{
+	struct ether_hdr *eth_hdr[BATCH_SIZE];
+	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
+	uint32_t dst_ip[BATCH_SIZE];
+	int dst_port[BATCH_SIZE];
+	unsigned tbl24_index[BATCH_SIZE];
+	uint16_t tbl_entry[BATCH_SIZE];
+	unsigned tbl8_index[BATCH_SIZE];
+
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&fpp_start;
+	}
+
+fpp_start:
+
+        /**< Boilerplate for TX pkt */
+        
+        if(I != nb_pkts - 1) {
+            rte_prefetch0(pkts[I + 1]->pkt.data);
+        }
+        
+        eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
+        ip_hdr[I] = (struct ipv4_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
+        
+        if(is_valid_ipv4_pkt(ip_hdr[I], pkts[I]->pkt.pkt_len) < 0) {
+            rte_pktmbuf_free(pkts[I]);
+            goto fpp_end;
+        }
+        
+        set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
+        
+        ip_hdr[I]->time_to_live --;
+        ip_hdr[I]->hdr_checksum ++;
+        
+        dst_ip[I] = ip_hdr[I]->dst_addr;
+        
+        /**< Copied code from DPDK's rte_lpm.h */
+        /**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+        tbl24_index[I] = (dst_ip[I] >> 8);
+        
+        /**< Copy tbl24 entry */
+        FPP_PSS(&lpm->tbl24[tbl24_index[I]], fpp_label_1, nb_pkts);
+fpp_label_1:
+
+        tbl_entry[I] = *(const uint16_t *) &lpm->tbl24[tbl24_index[I]];
+        
+        /**< Copy tbl8 entry (only if needed) */
+        if (unlikely((tbl_entry[I] & RTE_LPM_VALID_EXT_ENTRY_BITMASK) ==
+                     RTE_LPM_VALID_EXT_ENTRY_BITMASK)) {
+            
+            tbl8_index[I] = (uint8_t) dst_ip[I] +
+            ((uint8_t) tbl_entry[I] * RTE_LPM_TBL8_GROUP_NUM_ENTRIES);
+            
+            tbl_entry[I] = *(const uint16_t *)&lpm->tbl8[tbl8_index[I]];
+        }
+        
+        dst_port[I] = (uint8_t) tbl_entry[I];
+        /**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+        
+        /**< Use the looked-up port to determine dst MAC */
+        set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[dst_port[I]]);
+        
+        send_packet(pkts[I], dst_port[I], lp_info);
+
+fpp_end:
+	batch_rips[I] = &&fpp_end;
+	iMask = FPP_SET(iMask, I); 
+	if(iMask == (1 << nb_pkts) - 1) {
+		return;
+	}
+	I = (I + 1) < nb_pkts ? I + 1 : 0;
+	goto *batch_rips[I];
+}
+
+void run_server(struct rte_lpm *lpm)
 {
 	int i;
 
@@ -201,8 +228,8 @@ void run_server(struct dir_ipv4_table *ipv4_table)
 		int port_id = port_arr[port_index];	// The port to use in this iteration
 		int nb_rx_new = 0, tries = 0;
 		
-		// Lcores *cannot* wait for a particular number of packets from a port.
-		//  If we do this, the port mysteriously runs out of RX descriptors.
+		/**< Lcores *cannot* wait for a fixed number of packets from a port.
+		  * If we do this, the port mysteriously runs out of RX desc */
 		while(nb_rx_new < MAX_SRV_BURST && tries < 5) {
 			nb_rx_new += rte_eth_rx_burst(port_id, queue_id, 
 				&rx_pkts_burst[nb_rx_new], MAX_SRV_BURST - nb_rx_new);
@@ -214,7 +241,7 @@ void run_server(struct dir_ipv4_table *ipv4_table)
 			continue;
 		}
 
-		// Measurements for burst size averaging
+		/**< Measurements for burst size averaging */
 		brst_sz_msr[MSR_SAMPLES] ++;
 		brst_sz_msr[MSR_TOT] += nb_rx_new;
 	
@@ -222,13 +249,13 @@ void run_server(struct dir_ipv4_table *ipv4_table)
 
 #if GOTO == 1
 		process_batch_goto(rx_pkts_burst, nb_rx_new, port_id,
-			ipv4_table, lp_info);
+			lpm, lp_info);
 #else
 		process_batch_nogoto(rx_pkts_burst, nb_rx_new, port_id,
-			ipv4_table, lp_info);
+			lpm, lp_info);
 #endif
 		
-		// STAT PRINTING
+		/**< STAT PRINTING */
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {
 			tput_tsc[1] = rte_rdtsc();
 			double nanoseconds = S_FAC * (tput_tsc[1] - tput_tsc[0]);
