@@ -104,6 +104,12 @@ struct ipv4_prefix *ipv4_amp_prefixes(struct ipv4_prefix *prefix_arr,
 	return new_prefix_arr;
 }
 
+inline uint32_t fastrand(uint64_t* seed)
+{
+    *seed = *seed * 1103515245 + 12345;
+    return (uint32_t)(*seed >> 32);
+}
+
 /**< Generate probe IPv4 addresses from prefixes */
 struct ipv4_addr *ipv4_gen_addrs(int num_addrs,
 	struct ipv4_prefix *prefix_arr, int num_prefixes)
@@ -116,10 +122,16 @@ struct ipv4_addr *ipv4_gen_addrs(int num_addrs,
 	addr_arr = hrd_malloc_socket(PROBE_ADDR_SHM_KEY, addr_mem_size, 0);
 
 	/**< Generate addresses using randomly chosen prefixes */
-	int i;
+	uint64_t seed = 0xdeadbeef;
+	int i, j;
 	for(i = 0; i < num_addrs; i ++) {
 		int prefix_id = rand() % num_prefixes;
 		memcpy(addr_arr[i].bytes, prefix_arr[prefix_id].bytes, IPV4_ADDR_LEN);
+
+		int last_full_byte = (prefix_arr[prefix_id].depth / 8) - 1;
+		for(j = last_full_byte; j < IPV4_ADDR_LEN; j ++) {
+			addr_arr[i].bytes[j] = fastrand(&seed) & 255;
+		}
 	}
 
 	return addr_arr;
