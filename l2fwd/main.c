@@ -1,7 +1,7 @@
 #include "main.h"
 int is_client = -1, client_id;
 
-struct rte_lpm *lpm;
+struct rte_lpm6 *lpm;
 
 // Disable all offload features
 static const struct rte_eth_conf port_conf = {
@@ -71,9 +71,9 @@ main(int argc, char **argv)
 	} else {
 		is_client = 0;
 		/**< Don't move this allocation: must be before EAL's ops */
-		red_printf("Creating IPv4 lpm\n");
-		lpm = ipv4_init(XIA_R2_PORT_MASK);
-		red_printf("\tSetting up ipv4 lookup tables done!\n");
+		red_printf("Creating IPv6 lpm\n");
+		lpm = ipv6_init(XIA_R2_PORT_MASK);
+		red_printf("\tSetting up ipv6 lpm done!\n");
 	}
 
 	ret = rte_eal_init(argc, argv);
