@@ -52,9 +52,9 @@ static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, mac_addrs, l2fwd_pktmbuf_pool);
+		run_client(client_id, name_arr, l2fwd_pktmbuf_pool);
 	} else {
-		run_server(ht_index);
+		run_server(ht);
 	}
 	return 1;
 }
@@ -67,21 +67,21 @@ main(int argc, char **argv)
 	uint8_t port_id;
 	unsigned lcore_id;
 
-	/**< Do this before EAL parsing */
+	/**< Do this before EAL parsing and initialization */
 	if(argc > 5) {
 		is_client = 1;
 		client_id = atoi(argv[6]);
+
+		red_printf("Reading NDN names..\n");
+		name_arr = ndn_get_name_array(NAME_FILE);
+		red_printf("\tReading NDN names done!\n");
 	} else {
 		is_client = 0;
+
+		red_printf("Creating NDN hash index..\n");
+		ndn_init(URL_FILE, XIA_R2_PORT_MASK, &ht);
+		red_printf("\tCreating NDN hash index done!\n");
 	}
-
-	// Don't move this allocation: must be before EAL's ops
-	red_printf("Creating cuckoo index..\n");
-
-	// The cuckoo index will map mac addresses in the "mac_addrs" array to 
-	// port-numbers from the portmask. Clients only need "mac_addrs".
-	cuckoo_init(&mac_addrs, &ht_index, XIA_R2_PORT_MASK);
-	red_printf("\tSetting up cuckoo index done!\n");
 
 	ret = rte_eal_init(argc, argv);
 	CPE(ret < 0, "Invalid EAL arguments\n");
