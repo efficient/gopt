@@ -18,7 +18,7 @@
 
 #include "fpp.h"
 #include "util.h"
-#include "cuckoo.h"
+#include "ndn.h"
 
 #define GOTO 0
 

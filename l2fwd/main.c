@@ -1,10 +1,12 @@
 #include "main.h"
+
 int is_client = -1, client_id;
 
-struct cuckoo_bucket *ht_index;
-unsigned long long *mac_addrs;
+/**< Global NDN data structures */
+struct ndn_bucket *ht;
+struct ndn_name *name_arr;
 
-// Disable all offload features
+/**< Disable all offload features */
 static const struct rte_eth_conf port_conf = {
 	.rxmode = {
 		.split_hdr_size = 0,
@@ -65,7 +67,8 @@ main(int argc, char **argv)
 	uint8_t port_id;
 	unsigned lcore_id;
 
-	if(argc > 5) {		// Do this before eal parsing
+	/**< Do this before EAL parsing */
+	if(argc > 5) {
 		is_client = 1;
 		client_id = atoi(argv[6]);
 	} else {
