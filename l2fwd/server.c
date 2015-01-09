@@ -50,88 +50,6 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
-void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
-                          struct cuckoo_bucket *ht_index,
-                          struct lcore_port_info *lp_info, int port_id)
-{
-	int i[BATCH_SIZE];
-	struct ether_hdr *eth_hdr[BATCH_SIZE];
-	void *dst_mac_ptr[BATCH_SIZE];
-	ULL dst_mac[BATCH_SIZE];
-	int fwd_port[BATCH_SIZE];
-	int bkt_2[BATCH_SIZE];
-	int bkt_1[BATCH_SIZE];
-
-	int I = 0;			// batch index
-	void *batch_rips[BATCH_SIZE];		// goto targets
-	int iMask = 0;		// No packet is done yet
-
-	int temp_index;
-	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&fpp_start;
-	}
-
-fpp_start:
-
-	fwd_port[I] = -1;
-
-	if(I != nb_pkts - 1) {
-		rte_prefetch0(pkts[I + 1]->pkt.data);
-	}
-
-	eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
-
-	dst_mac_ptr[I] = &eth_hdr[I]->d_addr.addr_bytes[0];
-	dst_mac[I] = get_mac(eth_hdr[I]->d_addr.addr_bytes);
-
-	eth_hdr[I]->ether_type = htons(ETHER_TYPE_IPv4);
-
-	bkt_1[I] = CityHash32(dst_mac_ptr[I], 6) & NUM_BKT_;
-	FPP_PSS(&ht_index[bkt_1[I]], fpp_label_1, nb_pkts);
-fpp_label_1:
-
-	for(i[I] = 0; i[I] < 8; i[I] ++) {
-		if(SLOT_TO_MAC(ht_index[bkt_1[I]].slot[i[I]]) == dst_mac[I]) {
-			fwd_port[I] = SLOT_TO_PORT(ht_index[bkt_1[I]].slot[i[I]]);
-			break;
-		}
-	}
-
-	if(fwd_port[I] == -1) {
-		bkt_2[I] = CityHash32((char *) &bkt_1[I], 4) & NUM_BKT_;
-		FPP_PSS(&ht_index[bkt_2[I]], fpp_label_2, nb_pkts);
-fpp_label_2:
-
-		for(i[I] = 0; i[I] < 8; i[I] ++) {
-			if(SLOT_TO_MAC(ht_index[bkt_2[I]].slot[i[I]]) == dst_mac[I]) {
-				fwd_port[I] = SLOT_TO_PORT(ht_index[bkt_2[I]].slot[i[I]]);
-				break;
-			}
-		}
-	}
-
-	if(fwd_port[I] == -1) {
-		lp_info[port_id].nb_tx_fail ++;
-		rte_pktmbuf_free(pkts[I]);
-	} else {
-		set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[fwd_port[I]]);
-		if(eth_hdr[I]->s_addr.addr_bytes[0] == 0xef) {
-			eth_hdr[I]->d_addr.addr_bytes[0] ++;
-		}
-		set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
-		send_packet(pkts[I], fwd_port[I], lp_info);
-	}
-
-fpp_end:
-	batch_rips[I] = &&fpp_end;
-	iMask = FPP_SET(iMask, I); 
-	if(iMask == (1 << nb_pkts) - 1) {
-		return;
-	}
-	I = (I + 1) < nb_pkts ? I + 1 : 0;
-	goto *batch_rips[I];
-}
-
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
 	struct cuckoo_bucket *ht_index,
 	struct lcore_port_info *lp_info, int port_id)
@@ -153,10 +71,10 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
 
 		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
-		/** < We need the dst_mac for comparison with the key in hash-table */
+		/**< We need the dst_mac for comparison with the key in hash-table */
 		dst_mac = get_mac(eth_hdr->d_addr.addr_bytes);
 
-		/** < Compute the 1st bucket using the full mac address */
+		/**< Compute the 1st bucket using the full mac address */
 		bkt_1 = CityHash32(dst_mac_ptr, 6) & NUM_BKT_;
 		FPP_EXPENSIVE(&ht_index[bkt_1]);
 
@@ -167,7 +85,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			}
 		}
 
-		/** < 2nd bucket is computed using the 1st bucket */
+		/**< 2nd bucket is computed using the 1st bucket */
 		if(fwd_port == -1) {
 			bkt_2 = CityHash32((char *) &bkt_1, 4) & NUM_BKT_;
 			FPP_EXPENSIVE(&ht_index[bkt_2]);
@@ -180,15 +98,15 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			}
 		} 
 			
-		/** < Count failed packets and transmit */
+		/**< Count failed packets and transmit */
 		if(fwd_port == -1) {
 			lp_info[port_id].nb_tx_fail ++;
 			rte_pktmbuf_free(pkts[batch_index]);
 		} else {
 			set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[fwd_port]);
 		
-			/** < Reduce RX load on client: If the client sent a bad 
-			 *    src address, garble dst address */
+			/**< Reduce RX load on client: If the client sent a bad 
+			  *  rc address, garble dst address */
 			if(eth_hdr->s_addr.addr_bytes[0] == 0xef) {
 				eth_hdr->d_addr.addr_bytes[0] ++;
 			}
@@ -212,7 +130,7 @@ void run_server(struct cuckoo_bucket *ht_index)
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
 	
-	// Initialize the per-port info for this lcore
+	/**< Initialize the per-port info for this lcore */
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
 	memset(lp_info, 0, RTE_MAX_ETHPORTS * sizeof(struct lcore_port_info));
 	for(i = 0; i < RTE_MAX_ETHPORTS; i ++) {
@@ -222,17 +140,17 @@ void run_server(struct cuckoo_bucket *ht_index)
 	struct rte_mbuf *rx_pkts_burst[MAX_SRV_BURST];
 	int port_index = 0;
 
-	// Init measurement variables
+	/**< Init measurement variables */
 	LL tput_tsc[2], brst_sz_msr[4];
 	tput_tsc[0] = rte_rdtsc();
 	memset(brst_sz_msr, 0, 4 * sizeof(LL));
 
 	while (1) {
-		int port_id = port_arr[port_index];	// The port to use in this iteration
+		int port_id = port_arr[port_index];	/**< Port for this iteration */
 		int nb_rx_new = 0, tries = 0;
 		
-		// Lcores *cannot* wait for a particular number of packets from a port.
-		//  If we do this, the port mysteriously runs out of RX descriptors.
+		/**< Lcores *cannot* wait for a fixed number of packets from a port.
+		  * If we do this, the port mysteriously runs out of RX desc */
 		while(nb_rx_new < MAX_SRV_BURST && tries < 5) {
 			nb_rx_new += rte_eth_rx_burst(port_id, queue_id, 
 				&rx_pkts_burst[nb_rx_new], MAX_SRV_BURST - nb_rx_new);
@@ -244,7 +162,7 @@ void run_server(struct cuckoo_bucket *ht_index)
 			continue;
 		}
 
-		// Measurements for burst size averaging
+		/**< Measurements for burst size averaging */
 		brst_sz_msr[MSR_SAMPLES] ++;
 		brst_sz_msr[MSR_TOT] += nb_rx_new;
 	
@@ -258,7 +176,7 @@ void run_server(struct cuckoo_bucket *ht_index)
 			nb_rx_new, ht_index, lp_info, port_id);
 #endif
 		
-		// STAT PRINTING
+		/**< STAT PRINTING */
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {
 			tput_tsc[1] = rte_rdtsc();
 			double nanoseconds = S_FAC * (tput_tsc[1] - tput_tsc[0]);
