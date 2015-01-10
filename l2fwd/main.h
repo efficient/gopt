@@ -95,7 +95,7 @@ int get_socket_id_from_macaddr(int port_id);
 void check_all_ports_link_status(uint8_t port_num, int portmask);
 
 void run_server(struct ndn_bucket *ht_index);
-void run_client(int client_id, struct ndn_name *name_arr,
+void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 	 struct rte_mempool **l2fwd_pktmbuf_pool);
 
 void micro_sleep(double us, double cycles_to_ns_fac);

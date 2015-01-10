@@ -9,37 +9,6 @@
 #include "ndn.h"
 #include "util.h"
 
-inline uint32_t ndn_crc(const char *str, uint32_t len)
-{
-
-	uint32_t q = len / sizeof(uint32_t);
-	uint32_t r = len % sizeof(uint32_t);
-	uint32_t *p = (uint32_t*) str;
-	uint32_t crc = 0;
-
-	while(q --) {
-		__asm__ __volatile__(
-			".byte 0xf2, 0xf, 0x38, 0xf1, 0xf1;"
-			:"=S" (crc)
-			:"0" (crc), "c" (*p)
-		);
-		p++;
-	}
-
-	str = (char*) p;
-	while(r --) {
-		__asm__ __volatile__(
-			".byte 0xf2, 0xf, 0x38, 0xf0, 0xf1"
-			:"=S" (crc)
-			:"0" (crc), "c" (*str)
-		);
-		str++;
-	}
-
-	return crc;
-
-}
-
 /**< Create a mutable prefix from a URL */
 char *ndn_get_prefix(const char *url, int len)
 {
@@ -57,7 +26,7 @@ char *ndn_get_prefix(const char *url, int len)
   *
   *  DO NOT USE THIS FUNCTION TO SIMPLY CHECK IF A PREFIX IS PRESENT.
   *
-  *  Returns 1 if the prefix was found, and 0 otherwise. */
+  *  Returns 1 if the prefix was found, 0 otherwise. */
 int ndn_contains(const char *prefix, int len,
 	int is_terminal, int dst_port, struct ndn_bucket *ht)
 {
@@ -88,10 +57,11 @@ int ndn_contains(const char *prefix, int len,
 		/**< Now, "slot" points to an ndn_bucket. Find a valid slot with 
 		  *  a matching tag. */
 		for(i = 0; i < NDN_NUM_SLOTS; i ++) {
-			int8_t dst_port = slots[i].dst_port;
+			/**< Underscored variables are per-slot variables */
+			int8_t _dst_port = slots[i].dst_port;
 			uint64_t _hash = slots[i].cityhash;
 
-			if(dst_port >= 0 && _hash == prefix_hash) {
+			if(_dst_port >= 0 && _hash == prefix_hash) {
 				/**< Should we downgrade this prefix to "non-terminal" ? */
 				if(is_terminal == 0) {
 					slots[i].is_terminal = 0;

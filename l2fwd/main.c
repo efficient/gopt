@@ -5,6 +5,7 @@ int is_client = -1, client_id;
 /**< Global NDN data structures */
 struct ndn_bucket *ht;
 struct ndn_name *name_arr;
+int nb_names;
 
 /**< Disable all offload features */
 static const struct rte_eth_conf port_conf = {
@@ -52,7 +53,7 @@ static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, name_arr, l2fwd_pktmbuf_pool);
+		run_client(client_id, name_arr, nb_names, l2fwd_pktmbuf_pool);
 	} else {
 		run_server(ht);
 	}
@@ -72,9 +73,10 @@ main(int argc, char **argv)
 		is_client = 1;
 		client_id = atoi(argv[6]);
 
-		red_printf("Reading NDN names..\n");
+		red_printf("Counting and reading NDN names..\n");
+		nb_names = ndn_get_num_lines(NAME_FILE);
 		name_arr = ndn_get_name_array(NAME_FILE);
-		red_printf("\tReading NDN names done!\n");
+		red_printf("\tReading %d NDN probe names.\n", nb_names);
 	} else {
 		is_client = 0;
 
@@ -86,7 +88,7 @@ main(int argc, char **argv)
 	ret = rte_eal_init(argc, argv);
 	CPE(ret < 0, "Invalid EAL arguments\n");
 
-	CPE(rte_pmd_init_all() < 0, "Cannot init pmd\n");	// Not needed in DPDK 1.7
+	CPE(rte_pmd_init_all() < 0, "Cannot init pmd\n");
 	CPE(rte_eal_pci_probe() < 0, "Cannot probe PCI\n");
 
 	nb_ports = rte_eth_dev_count();
@@ -95,7 +97,7 @@ main(int argc, char **argv)
 
 	printf("\n\n");
 
-	// Create a mempool for each enabled lcore
+	/**< Create a mempool for each enabled lcore */
 	for(lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id ++) {
 		if(rte_lcore_is_enabled(lcore_id)) {
 			char pool_name[20];
@@ -107,7 +109,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	/* Initialise each port */
+	/**< Initialise each port */
 	int portmask = is_client == 1 ? XIA_R0_PORT_MASK : XIA_R2_PORT_MASK;
 	red_printf("\nInitializing ports\n");
 
@@ -120,8 +122,8 @@ main(int argc, char **argv)
 		int my_socket_id = is_client == 1 ? get_socket_id_from_macaddr(port_id) : 
 			rte_eth_dev_socket_id(port_id);
 
-		// XXX: Need to implement logic so that server lcores only access the ports on 
-		// their socket. Until then, restrict to one socket.
+		/**< XXX: Need to implement logic so that server lcores only access the ports on
+		  *  their socket. Until then, restrict to one socket. */
 		if(!is_client) {
 			assert(my_socket_id == 0);
 		}
@@ -159,13 +161,13 @@ main(int argc, char **argv)
 			CPE2(ret < 0, "rte_eth_tx_queue_setup: %d, %u\n", ret, (unsigned) port_id);
 		}
 
-		// Print device mac address and start it
+		/**< Print device mac address and start it */
 		rte_eth_macaddr_get(port_id, &l2fwd_ports_eth_addr[port_id]);
 		printf("Port %d, MAC: ", port_id);
 		print_mac_arr(l2fwd_ports_eth_addr[port_id].addr_bytes);
 		printf("\n");
 
-		// The server acts as an L2 switch: it should accept all dst macs
+		/**< The server acts as an L2 switch: it should accept all dst macs */
 		if(!is_client) {
 			rte_eth_promiscuous_enable(port_id);
 		}
@@ -177,7 +179,7 @@ main(int argc, char **argv)
 
 	check_all_ports_link_status(nb_ports, portmask);
 
-	/* launch per-lcore init on every lcore */
+	/**< Launch per-lcore init() on every lcore */
 	rte_eal_mp_remote_launch(l2fwd_launch_one_lcore, NULL, CALL_MASTER);
 	RTE_LCORE_FOREACH_SLAVE(lcore_id) {
 		if (rte_eal_wait_lcore(lcore_id) < 0)

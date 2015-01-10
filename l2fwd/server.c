@@ -51,7 +51,7 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 }
 
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
-	struct cuckoo_bucket *ht_index,
+	struct ndn_bucket *ht,
 	struct lcore_port_info *lp_info, int port_id)
 {
 	int batch_index = 0;
@@ -60,9 +60,8 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		int i;
 		struct ether_hdr *eth_hdr;
 
-		void *dst_mac_ptr;
 		ULL dst_mac;
-		int bkt_1, bkt_2, fwd_port = -1;
+		int fwd_port = -1;
 
 		if(batch_index != nb_pkts - 1) {
 			rte_prefetch0(pkts[batch_index + 1]->pkt.data);
@@ -70,34 +69,11 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
 
-		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
 		/**< We need the dst_mac for comparison with the key in hash-table */
 		dst_mac = get_mac(eth_hdr->d_addr.addr_bytes);
 
-		/**< Compute the 1st bucket using the full mac address */
-		bkt_1 = CityHash32(dst_mac_ptr, 6) & NUM_BKT_;
-		FPP_EXPENSIVE(&ht_index[bkt_1]);
+		fwd_port = (dst_mac % 4) + 1;
 
-		for(i = 0; i < 8; i ++) {
-			if(SLOT_TO_MAC(ht_index[bkt_1].slot[i]) == dst_mac) {
-				fwd_port = SLOT_TO_PORT(ht_index[bkt_1].slot[i]);
-				break;
-			}
-		}
-
-		/**< 2nd bucket is computed using the 1st bucket */
-		if(fwd_port == -1) {
-			bkt_2 = CityHash32((char *) &bkt_1, 4) & NUM_BKT_;
-			FPP_EXPENSIVE(&ht_index[bkt_2]);
-
-			for(i = 0; i < 8; i ++) {
-				if(SLOT_TO_MAC(ht_index[bkt_2].slot[i]) == dst_mac) {
-					fwd_port = SLOT_TO_PORT(ht_index[bkt_2].slot[i]);
-					break;
-				}
-			}
-		} 
-			
 		/**< Count failed packets and transmit */
 		if(fwd_port == -1) {
 			lp_info[port_id].nb_tx_fail ++;
@@ -116,7 +92,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 	}
 }
 
-void run_server(struct cuckoo_bucket *ht_index)
+void run_server(struct ndn_bucket *ht)
 {
 	int i;
 
@@ -170,10 +146,10 @@ void run_server(struct cuckoo_bucket *ht_index)
 
 #if GOTO == 1
 		process_batch_goto(rx_pkts_burst, 
-			nb_rx_new, ht_index, lp_info, port_id);
+			nb_rx_new, ht, lp_info, port_id);
 #else
 		process_batch_nogoto(rx_pkts_burst,
-			nb_rx_new, ht_index, lp_info, port_id);
+			nb_rx_new, ht, lp_info, port_id);
 #endif
 		
 		/**< STAT PRINTING */
