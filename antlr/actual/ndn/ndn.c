@@ -88,10 +88,11 @@ int ndn_contains(const char *prefix, int len,
 		/**< Now, "slot" points to an ndn_bucket. Find a valid slot with 
 		  *  a matching tag. */
 		for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+			/**< Underscored variables are per-slot variables */
 			int8_t _dst_port = slots[i].dst_port;
 			uint64_t _hash = slots[i].cityhash;
 
-			if(dst_port >= 0 && _hash == prefix_hash) {
+			if(_dst_port >= 0 && _hash == prefix_hash) {
 				/**< Should we downgrade this prefix to "non-terminal" ? */
 				if(is_terminal == 0) {
 					slots[i].is_terminal = 0;
