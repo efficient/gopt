@@ -1,0 +1,7 @@
+fib_1010.lzma
+=============
+	The 10-million URL trace from Tsinghua. It has been reformatted, and IP-address
+	entries have been removed.
+
+	To decompress: lzma -d fib_1010.lzma
+	Fun fact: Text file compression using lzma is *much* better than gzip.
