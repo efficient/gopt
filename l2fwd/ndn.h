@@ -3,11 +3,11 @@
 #define NDN_DEBUG 0
 
 #if NDN_DEBUG == 1
-#define URL_FILE "data/fib_test"
-#define NAME_FILE "data/name_test"
+#define URL_FILE "../data_dump/ndn/fib_test"
+#define NAME_FILE "../data_dump/ndn/name_test"
 #else
-#define URL_FILE "data/fib_1010"
-#define NAME_FILE "data/fib_1010"
+#define URL_FILE "../data_dump/ndn/fib_1010"
+#define NAME_FILE "../data_dump/ndn/fib_1010"
 #endif
 
 #define NDN_SEED 3185
