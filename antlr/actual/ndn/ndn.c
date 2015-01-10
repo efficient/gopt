@@ -88,7 +88,7 @@ int ndn_contains(const char *prefix, int len,
 		/**< Now, "slot" points to an ndn_bucket. Find a valid slot with 
 		  *  a matching tag. */
 		for(i = 0; i < NDN_NUM_SLOTS; i ++) {
-			int8_t dst_port = slots[i].dst_port;
+			int8_t _dst_port = slots[i].dst_port;
 			uint64_t _hash = slots[i].cityhash;
 
 			if(dst_port >= 0 && _hash == prefix_hash) {
