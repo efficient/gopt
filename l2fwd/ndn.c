@@ -294,23 +294,32 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 
 	int shm_flags = IPC_CREAT | 0666 | SHM_HUGETLB;
 
-	int name_sid = shmget(NDN_NAMES_KEY,
-		nb_names * sizeof(struct ndn_name), shm_flags);
+	/**< XXX: On xia-router1, allocating non hugepage-aligned regions causes
+	  *  segfault during memset. Temporary fix. */
+	int alloc_size = 0, req_size = nb_names * sizeof(struct ndn_name);
+	assert(req_size >= 1 && req_size < M_2048 - M_2);
+	while(alloc_size < req_size) {
+		alloc_size += M_2;
+	}
+
+	int name_sid = shmget(NDN_NAMES_KEY, alloc_size, shm_flags);
 	assert(name_sid >= 0);
 	
 	struct ndn_name *name_arr = shmat(name_sid, 0, 0);
+	assert(name_arr != NULL);
+
 	memset(name_arr, 0, nb_names * sizeof(struct ndn_name));
 
-	char temp_name[NDN_MAX_NAME_LENGTH] = {0};
-
-	red_printf("ndn: Reading names from file %s\n", names_file);
+	red_printf("ndn: Reading %d names from file %s\n", nb_names, names_file);
 	FILE *name_fp = fopen(names_file, "r");
 	assert(name_fp != NULL);
 
 	int tot_len = 0;
 
 	for(i = 0; i < nb_names; i ++) {
+		char temp_name[NDN_MAX_NAME_LENGTH] = {0};
 		fscanf(name_fp, "%s", temp_name);
+
 		if(temp_name[0] == 0) {
 			break;
 		}
@@ -321,9 +330,7 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 
 		/**< The file's names should end with a '/' */
 		assert(temp_name[len - 1] == '/');
-
 		memcpy(name_arr[i].name, temp_name, len);
-
 		memset(temp_name, 0, NDN_MAX_NAME_LENGTH);
 	}
 
