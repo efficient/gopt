@@ -46,9 +46,6 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 	LL rx_samples = 0, latency_tot = 0;
 	uint64_t rss_seed = 0xdeadbeef;
 
-	/**< sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for alignment */
-	int hdr_size = 36;
-
 	float sleep_us = 2;
 
 	while (1) {
@@ -87,21 +84,20 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 			/**< Add global core identifier and timestamp */
 			char *data_ptr = rte_pktmbuf_mtod(tx_pkts_burst[i], char *);
 
-			int *magic = (int *) (data_ptr + hdr_size);
+			int *magic = (int *) (data_ptr + HDR_SIZE);
 			magic[0] = client_id * 1000 + lcore_id;	/**< 36 -> 40 */
 			
 			/**< Add client-side timestamp */
-			LL *clt_tsc = (LL *) (data_ptr + hdr_size + sizeof(int));
+			LL *clt_tsc = (LL *) (data_ptr + HDR_SIZE + sizeof(int));
 			clt_tsc[0] = rte_rdtsc();		/**< 40 -> 48 */
 
 			/**< Choose a dst name from the ones inserted in the NDN index */
-			char *name_ptr = (char *) (data_ptr + hdr_size + sizeof(int) +
-				sizeof(long long));
+			char *name_ptr = data_ptr + HDR_SIZE + sizeof(int) + sizeof(LL);
 
 			/** Copy name to pkt. Adds the terminating 0 char. */
 			strcpy(name_ptr, name_arr[name_i + i].name);
 
-			int pkt_size = hdr_size + sizeof(int) + sizeof(long long) +
+			int pkt_size = HDR_SIZE + sizeof(int) + sizeof(long long) +
 				strlen(name_ptr) + 1;	/**< Null-terminated */
 
 			tx_pkts_burst[i]->pkt.nb_segs = 1;
@@ -130,12 +126,12 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 			for(i = 0; i < nb_rx_new; i ++) {
 				/**< Verify the server's response */
 				int *magic = (int *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) + 
-					hdr_size);
+					HDR_SIZE);
 				int tx_magic = magic[0];
 
 				/**< Retrive TX data: timestamp and global lcore ID */
 				LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) +
-					hdr_size + 4);
+					HDR_SIZE + 4);
 				if(client_id * 1000 + lcore_id == tx_magic) {
 					rx_samples ++;
 					LL cur_tsc = rte_rdtsc();

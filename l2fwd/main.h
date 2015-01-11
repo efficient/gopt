@@ -22,6 +22,9 @@
 
 #define GOTO 0
 
+/**< sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for alignment */
+#define HDR_SIZE 36
+
 // sizeof(rte_mbuf) = 64, RTE_PKTMBUF_HEADROOM = 128
 #define MBUF_SIZE (2048 + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)
 #define DEFAULT_PACKET_LENGTH 60

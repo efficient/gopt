@@ -50,17 +50,18 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
+int batch_index = 0;
+
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
 	struct ndn_bucket *ht,
 	struct lcore_port_info *lp_info, int port_id)
 {
-	int batch_index = 0;
 
 	foreach(batch_index, nb_pkts) {
 		int i;
 		struct ether_hdr *eth_hdr;
+		char *data_ptr, *name_ptr;
 
-		ULL dst_mac;
 		int fwd_port = -1;
 
 		if(batch_index != nb_pkts - 1) {
@@ -68,11 +69,12 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		}
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
+		data_ptr = rte_pktmbuf_mtod(pkts[batch_index], char *);
+		name_ptr = data_ptr + HDR_SIZE + sizeof(int) + sizeof(LL);
+		printf("Name = %s\n", name_ptr);
+		usleep(200000);
 
-		/**< We need the dst_mac for comparison with the key in hash-table */
-		dst_mac = get_mac(eth_hdr->d_addr.addr_bytes);
-
-		fwd_port = (dst_mac % 4) + 1;
+		fwd_port = batch_index % 4;
 
 		/**< Count failed packets and transmit */
 		if(fwd_port == -1) {
