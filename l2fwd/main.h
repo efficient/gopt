@@ -20,7 +20,7 @@
 #include "util.h"
 #include "ndn.h"
 
-#define GOTO 0
+#define GOTO 1
 
 /**< sizeof(ether_hdr) + sizeof(ipv4_hdr) is 34 --> 36 for alignment */
 #define HDR_SIZE 36
