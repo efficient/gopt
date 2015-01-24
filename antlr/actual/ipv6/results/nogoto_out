@@ -1,0 +1,429 @@
+[34mRemoving hugepages(B[m
+[34mRunning nogoto with use_random_prefixes = 1(B[m
+rte_lpm6: Allocating 1088 MB (hugepg) on socket 0. SHM key = 1
+main: Added prefixes = 0, total = 200000
+rte_lpm6: next_tbl8 = 2979
+main: Added prefixes = 1000, total = 200000
+rte_lpm6: next_tbl8 = 6966
+main: Added prefixes = 2000, total = 200000
+rte_lpm6: next_tbl8 = 11511
+main: Added prefixes = 3000, total = 200000
+rte_lpm6: next_tbl8 = 15373
+rte_lpm6: next_tbl8 = 15449
+rte_lpm6: next_tbl8 = 17527
+main: Added prefixes = 4000, total = 200000
+rte_lpm6: next_tbl8 = 21960
+main: Added prefixes = 5000, total = 200000
+rte_lpm6: next_tbl8 = 25297
+main: Added prefixes = 6000, total = 200000
+rte_lpm6: next_tbl8 = 26719
+rte_lpm6: next_tbl8 = 29263
+main: Added prefixes = 7000, total = 200000
+main: Added prefixes = 8000, total = 200000
+rte_lpm6: next_tbl8 = 35887
+main: Added prefixes = 9000, total = 200000
+main: Added prefixes = 10000, total = 200000
+main: Added prefixes = 11000, total = 200000
+rte_lpm6: next_tbl8 = 51871
+rte_lpm6: next_tbl8 = 52241
+main: Added prefixes = 12000, total = 200000
+rte_lpm6: next_tbl8 = 54098
+main: Added prefixes = 13000, total = 200000
+rte_lpm6: next_tbl8 = 58363
+main: Added prefixes = 14000, total = 200000
+rte_lpm6: next_tbl8 = 62367
+rte_lpm6: next_tbl8 = 64207
+main: Added prefixes = 15000, total = 200000
+rte_lpm6: next_tbl8 = 68834
+main: Added prefixes = 16000, total = 200000
+rte_lpm6: next_tbl8 = 70662
+rte_lpm6: next_tbl8 = 71071
+rte_lpm6: next_tbl8 = 73985
+main: Added prefixes = 17000, total = 200000
+rte_lpm6: next_tbl8 = 78055
+main: Added prefixes = 18000, total = 200000
+main: Added prefixes = 19000, total = 200000
+rte_lpm6: next_tbl8 = 86365
+main: Added prefixes = 20000, total = 200000
+main: Added prefixes = 21000, total = 200000
+rte_lpm6: next_tbl8 = 96852
+main: Added prefixes = 22000, total = 200000
+main: Added prefixes = 23000, total = 200000
+rte_lpm6: next_tbl8 = 102347
+main: Added prefixes = 24000, total = 200000
+main: Added prefixes = 25000, total = 200000
+rte_lpm6: next_tbl8 = 112900
+main: Added prefixes = 26000, total = 200000
+main: Added prefixes = 27000, total = 200000
+main: Added prefixes = 28000, total = 200000
+main: Added prefixes = 29000, total = 200000
+rte_lpm6: next_tbl8 = 130301
+rte_lpm6: next_tbl8 = 131199
+rte_lpm6: next_tbl8 = 131445
+main: Added prefixes = 30000, total = 200000
+rte_lpm6: next_tbl8 = 134595
+main: Added prefixes = 31000, total = 200000
+rte_lpm6: next_tbl8 = 137424
+rte_lpm6: next_tbl8 = 140758
+main: Added prefixes = 32000, total = 200000
+main: Added prefixes = 33000, total = 200000
+rte_lpm6: next_tbl8 = 147014
+rte_lpm6: next_tbl8 = 148256
+main: Added prefixes = 34000, total = 200000
+main: Added prefixes = 35000, total = 200000
+rte_lpm6: next_tbl8 = 156503
+main: Added prefixes = 36000, total = 200000
+rte_lpm6: next_tbl8 = 161839
+rte_lpm6: next_tbl8 = 163010
+main: Added prefixes = 37000, total = 200000
+main: Added prefixes = 38000, total = 200000
+rte_lpm6: next_tbl8 = 169505
+main: Added prefixes = 39000, total = 200000
+rte_lpm6: next_tbl8 = 172116
+rte_lpm6: next_tbl8 = 172477
+rte_lpm6: next_tbl8 = 173870
+main: Added prefixes = 40000, total = 200000
+rte_lpm6: next_tbl8 = 180022
+main: Added prefixes = 41000, total = 200000
+rte_lpm6: next_tbl8 = 183414
+rte_lpm6: next_tbl8 = 184158
+main: Added prefixes = 42000, total = 200000
+rte_lpm6: next_tbl8 = 185868
+rte_lpm6: next_tbl8 = 187776
+rte_lpm6: next_tbl8 = 189419
+main: Added prefixes = 43000, total = 200000
+rte_lpm6: next_tbl8 = 191403
+main: Added prefixes = 44000, total = 200000
+rte_lpm6: next_tbl8 = 195730
+main: Added prefixes = 45000, total = 200000
+main: Added prefixes = 46000, total = 200000
+rte_lpm6: next_tbl8 = 206566
+main: Added prefixes = 47000, total = 200000
+rte_lpm6: next_tbl8 = 211413
+main: Added prefixes = 48000, total = 200000
+main: Added prefixes = 49000, total = 200000
+rte_lpm6: next_tbl8 = 217015
+rte_lpm6: next_tbl8 = 218253
+main: Added prefixes = 50000, total = 200000
+main: Added prefixes = 51000, total = 200000
+main: Added prefixes = 52000, total = 200000
+main: Added prefixes = 53000, total = 200000
+main: Added prefixes = 54000, total = 200000
+rte_lpm6: next_tbl8 = 239318
+main: Added prefixes = 55000, total = 200000
+rte_lpm6: next_tbl8 = 246766
+main: Added prefixes = 56000, total = 200000
+rte_lpm6: next_tbl8 = 249137
+main: Added prefixes = 57000, total = 200000
+main: Added prefixes = 58000, total = 200000
+rte_lpm6: next_tbl8 = 256624
+rte_lpm6: next_tbl8 = 259313
+main: Added prefixes = 59000, total = 200000
+main: Added prefixes = 60000, total = 200000
+rte_lpm6: next_tbl8 = 264826
+main: Added prefixes = 61000, total = 200000
+main: Added prefixes = 62000, total = 200000
+main: Added prefixes = 63000, total = 200000
+rte_lpm6: next_tbl8 = 278372
+rte_lpm6: next_tbl8 = 280222
+main: Added prefixes = 64000, total = 200000
+rte_lpm6: next_tbl8 = 282897
+rte_lpm6: next_tbl8 = 283123
+main: Added prefixes = 65000, total = 200000
+main: Added prefixes = 66000, total = 200000
+rte_lpm6: next_tbl8 = 291783
+rte_lpm6: next_tbl8 = 293800
+rte_lpm6: next_tbl8 = 294595
+rte_lpm6: next_tbl8 = 294658
+main: Added prefixes = 67000, total = 200000
+main: Added prefixes = 68000, total = 200000
+rte_lpm6: next_tbl8 = 300438
+rte_lpm6: next_tbl8 = 301544
+main: Added prefixes = 69000, total = 200000
+rte_lpm6: next_tbl8 = 308647
+main: Added prefixes = 70000, total = 200000
+main: Added prefixes = 71000, total = 200000
+rte_lpm6: next_tbl8 = 313710
+main: Added prefixes = 72000, total = 200000
+rte_lpm6: next_tbl8 = 320600
+main: Added prefixes = 73000, total = 200000
+main: Added prefixes = 74000, total = 200000
+rte_lpm6: next_tbl8 = 327569
+rte_lpm6: next_tbl8 = 329825
+rte_lpm6: next_tbl8 = 330496
+rte_lpm6: next_tbl8 = 330881
+main: Added prefixes = 75000, total = 200000
+rte_lpm6: next_tbl8 = 332433
+main: Added prefixes = 76000, total = 200000
+main: Added prefixes = 77000, total = 200000
+rte_lpm6: next_tbl8 = 339724
+main: Added prefixes = 78000, total = 200000
+main: Added prefixes = 79000, total = 200000
+main: Added prefixes = 80000, total = 200000
+rte_lpm6: next_tbl8 = 354542
+rte_lpm6: next_tbl8 = 356781
+main: Added prefixes = 81000, total = 200000
+rte_lpm6: next_tbl8 = 358588
+rte_lpm6: next_tbl8 = 359164
+main: Added prefixes = 82000, total = 200000
+main: Added prefixes = 83000, total = 200000
+main: Added prefixes = 84000, total = 200000
+rte_lpm6: next_tbl8 = 371060
+main: Added prefixes = 85000, total = 200000
+rte_lpm6: next_tbl8 = 377846
+main: Added prefixes = 86000, total = 200000
+rte_lpm6: next_tbl8 = 382174
+rte_lpm6: next_tbl8 = 382755
+main: Added prefixes = 87000, total = 200000
+main: Added prefixes = 88000, total = 200000
+main: Added prefixes = 89000, total = 200000
+rte_lpm6: next_tbl8 = 394946
+rte_lpm6: next_tbl8 = 396224
+rte_lpm6: next_tbl8 = 396751
+main: Added prefixes = 90000, total = 200000
+main: Added prefixes = 91000, total = 200000
+main: Added prefixes = 92000, total = 200000
+main: Added prefixes = 93000, total = 200000
+rte_lpm6: next_tbl8 = 411134
+main: Added prefixes = 94000, total = 200000
+main: Added prefixes = 95000, total = 200000
+rte_lpm6: next_tbl8 = 419887
+rte_lpm6: next_tbl8 = 420030
+rte_lpm6: next_tbl8 = 420546
+rte_lpm6: next_tbl8 = 423201
+main: Added prefixes = 96000, total = 200000
+rte_lpm6: next_tbl8 = 424683
+rte_lpm6: next_tbl8 = 426042
+main: Added prefixes = 97000, total = 200000
+rte_lpm6: next_tbl8 = 429307
+main: Added prefixes = 98000, total = 200000
+main: Added prefixes = 99000, total = 200000
+main: Added prefixes = 100000, total = 200000
+main: Added prefixes = 101000, total = 200000
+rte_lpm6: next_tbl8 = 445920
+main: Added prefixes = 102000, total = 200000
+rte_lpm6: next_tbl8 = 449969
+rte_lpm6: next_tbl8 = 452729
+main: Added prefixes = 103000, total = 200000
+rte_lpm6: next_tbl8 = 454765
+rte_lpm6: next_tbl8 = 458131
+main: Added prefixes = 104000, total = 200000
+rte_lpm6: next_tbl8 = 458808
+main: Added prefixes = 105000, total = 200000
+rte_lpm6: next_tbl8 = 463528
+main: Added prefixes = 106000, total = 200000
+rte_lpm6: next_tbl8 = 469270
+main: Added prefixes = 107000, total = 200000
+rte_lpm6: next_tbl8 = 472927
+main: Added prefixes = 108000, total = 200000
+main: Added prefixes = 109000, total = 200000
+rte_lpm6: next_tbl8 = 481459
+rte_lpm6: next_tbl8 = 481556
+rte_lpm6: next_tbl8 = 482267
+main: Added prefixes = 110000, total = 200000
+main: Added prefixes = 111000, total = 200000
+rte_lpm6: next_tbl8 = 491311
+main: Added prefixes = 112000, total = 200000
+rte_lpm6: next_tbl8 = 494406
+rte_lpm6: next_tbl8 = 496606
+main: Added prefixes = 113000, total = 200000
+rte_lpm6: next_tbl8 = 498746
+rte_lpm6: next_tbl8 = 500007
+rte_lpm6: next_tbl8 = 500755
+rte_lpm6: next_tbl8 = 500858
+main: Added prefixes = 114000, total = 200000
+main: Added prefixes = 115000, total = 200000
+rte_lpm6: next_tbl8 = 509351
+rte_lpm6: next_tbl8 = 510252
+rte_lpm6: next_tbl8 = 510458
+main: Added prefixes = 116000, total = 200000
+main: Added prefixes = 117000, total = 200000
+rte_lpm6: next_tbl8 = 518545
+rte_lpm6: next_tbl8 = 519519
+main: Added prefixes = 118000, total = 200000
+rte_lpm6: next_tbl8 = 521886
+main: Added prefixes = 119000, total = 200000
+main: Added prefixes = 120000, total = 200000
+rte_lpm6: next_tbl8 = 530320
+main: Added prefixes = 121000, total = 200000
+rte_lpm6: next_tbl8 = 536400
+main: Added prefixes = 122000, total = 200000
+main: Added prefixes = 123000, total = 200000
+main: Added prefixes = 124000, total = 200000
+main: Added prefixes = 125000, total = 200000
+rte_lpm6: next_tbl8 = 552764
+main: Added prefixes = 126000, total = 200000
+main: Added prefixes = 127000, total = 200000
+rte_lpm6: next_tbl8 = 560467
+rte_lpm6: next_tbl8 = 561858
+main: Added prefixes = 128000, total = 200000
+rte_lpm6: next_tbl8 = 567386
+main: Added prefixes = 129000, total = 200000
+rte_lpm6: next_tbl8 = 569669
+rte_lpm6: next_tbl8 = 573292
+main: Added prefixes = 130000, total = 200000
+rte_lpm6: next_tbl8 = 576992
+main: Added prefixes = 131000, total = 200000
+rte_lpm6: next_tbl8 = 579618
+rte_lpm6: next_tbl8 = 580434
+main: Added prefixes = 132000, total = 200000
+main: Added prefixes = 133000, total = 200000
+main: Added prefixes = 134000, total = 200000
+rte_lpm6: next_tbl8 = 591770
+main: Added prefixes = 135000, total = 200000
+main: Added prefixes = 136000, total = 200000
+main: Added prefixes = 137000, total = 200000
+rte_lpm6: next_tbl8 = 604817
+rte_lpm6: next_tbl8 = 605041
+rte_lpm6: next_tbl8 = 607664
+rte_lpm6: next_tbl8 = 607945
+rte_lpm6: next_tbl8 = 608069
+main: Added prefixes = 138000, total = 200000
+rte_lpm6: next_tbl8 = 609470
+main: Added prefixes = 139000, total = 200000
+rte_lpm6: next_tbl8 = 615548
+main: Added prefixes = 140000, total = 200000
+rte_lpm6: next_tbl8 = 617582
+rte_lpm6: next_tbl8 = 620070
+main: Added prefixes = 141000, total = 200000
+rte_lpm6: next_tbl8 = 622290
+rte_lpm6: next_tbl8 = 622615
+rte_lpm6: next_tbl8 = 624087
+main: Added prefixes = 142000, total = 200000
+rte_lpm6: next_tbl8 = 627670
+main: Added prefixes = 143000, total = 200000
+rte_lpm6: next_tbl8 = 633581
+main: Added prefixes = 144000, total = 200000
+rte_lpm6: next_tbl8 = 638700
+main: Added prefixes = 145000, total = 200000
+rte_lpm6: next_tbl8 = 639962
+rte_lpm6: next_tbl8 = 641251
+rte_lpm6: next_tbl8 = 642939
+main: Added prefixes = 146000, total = 200000
+main: Added prefixes = 147000, total = 200000
+main: Added prefixes = 148000, total = 200000
+main: Added prefixes = 149000, total = 200000
+rte_lpm6: next_tbl8 = 659595
+rte_lpm6: next_tbl8 = 660637
+main: Added prefixes = 150000, total = 200000
+rte_lpm6: next_tbl8 = 664100
+main: Added prefixes = 151000, total = 200000
+rte_lpm6: next_tbl8 = 668322
+main: Added prefixes = 152000, total = 200000
+main: Added prefixes = 153000, total = 200000
+rte_lpm6: next_tbl8 = 678074
+main: Added prefixes = 154000, total = 200000
+rte_lpm6: next_tbl8 = 680286
+main: Added prefixes = 155000, total = 200000
+rte_lpm6: next_tbl8 = 683750
+rte_lpm6: next_tbl8 = 685429
+main: Added prefixes = 156000, total = 200000
+rte_lpm6: next_tbl8 = 690483
+main: Added prefixes = 157000, total = 200000
+rte_lpm6: next_tbl8 = 694437
+rte_lpm6: next_tbl8 = 696141
+main: Added prefixes = 158000, total = 200000
+rte_lpm6: next_tbl8 = 698551
+main: Added prefixes = 159000, total = 200000
+main: Added prefixes = 160000, total = 200000
+rte_lpm6: next_tbl8 = 706980
+rte_lpm6: next_tbl8 = 708293
+main: Added prefixes = 161000, total = 200000
+rte_lpm6: next_tbl8 = 710387
+main: Added prefixes = 162000, total = 200000
+rte_lpm6: next_tbl8 = 717920
+rte_lpm6: next_tbl8 = 718115
+rte_lpm6: next_tbl8 = 718392
+main: Added prefixes = 163000, total = 200000
+main: Added prefixes = 164000, total = 200000
+rte_lpm6: next_tbl8 = 726117
+rte_lpm6: next_tbl8 = 726347
+main: Added prefixes = 165000, total = 200000
+main: Added prefixes = 166000, total = 200000
+main: Added prefixes = 167000, total = 200000
+rte_lpm6: next_tbl8 = 736498
+rte_lpm6: next_tbl8 = 738335
+rte_lpm6: next_tbl8 = 740016
+main: Added prefixes = 168000, total = 200000
+rte_lpm6: next_tbl8 = 743349
+rte_lpm6: next_tbl8 = 744696
+main: Added prefixes = 169000, total = 200000
+rte_lpm6: next_tbl8 = 745911
+rte_lpm6: next_tbl8 = 746018
+rte_lpm6: next_tbl8 = 747612
+main: Added prefixes = 170000, total = 200000
+main: Added prefixes = 171000, total = 200000
+rte_lpm6: next_tbl8 = 754079
+rte_lpm6: next_tbl8 = 756630
+main: Added prefixes = 172000, total = 200000
+rte_lpm6: next_tbl8 = 760727
+main: Added prefixes = 173000, total = 200000
+main: Added prefixes = 174000, total = 200000
+main: Added prefixes = 175000, total = 200000
+rte_lpm6: next_tbl8 = 773842
+main: Added prefixes = 176000, total = 200000
+main: Added prefixes = 177000, total = 200000
+rte_lpm6: next_tbl8 = 783541
+main: Added prefixes = 178000, total = 200000
+rte_lpm6: next_tbl8 = 788286
+main: Added prefixes = 179000, total = 200000
+rte_lpm6: next_tbl8 = 790152
+rte_lpm6: next_tbl8 = 790919
+main: Added prefixes = 180000, total = 200000
+rte_lpm6: next_tbl8 = 796546
+main: Added prefixes = 181000, total = 200000
+main: Added prefixes = 182000, total = 200000
+rte_lpm6: next_tbl8 = 804390
+rte_lpm6: next_tbl8 = 804744
+main: Added prefixes = 183000, total = 200000
+rte_lpm6: next_tbl8 = 808588
+rte_lpm6: next_tbl8 = 809704
+rte_lpm6: next_tbl8 = 810310
+rte_lpm6: next_tbl8 = 811082
+main: Added prefixes = 184000, total = 200000
+rte_lpm6: next_tbl8 = 812565
+rte_lpm6: next_tbl8 = 813268
+rte_lpm6: next_tbl8 = 813753
+rte_lpm6: next_tbl8 = 814649
+main: Added prefixes = 185000, total = 200000
+rte_lpm6: next_tbl8 = 819262
+rte_lpm6: next_tbl8 = 819312
+main: Added prefixes = 186000, total = 200000
+rte_lpm6: next_tbl8 = 820923
+main: Added prefixes = 187000, total = 200000
+rte_lpm6: next_tbl8 = 828229
+rte_lpm6: next_tbl8 = 828263
+rte_lpm6: next_tbl8 = 828510
+main: Added prefixes = 188000, total = 200000
+main: Added prefixes = 189000, total = 200000
+rte_lpm6: next_tbl8 = 834280
+rte_lpm6: next_tbl8 = 835142
+rte_lpm6: next_tbl8 = 836123
+rte_lpm6: next_tbl8 = 836533
+main: Added prefixes = 190000, total = 200000
+main: Added prefixes = 191000, total = 200000
+rte_lpm6: next_tbl8 = 843142
+rte_lpm6: next_tbl8 = 845305
+main: Added prefixes = 192000, total = 200000
+main: Added prefixes = 193000, total = 200000
+main: Added prefixes = 194000, total = 200000
+rte_lpm6: next_tbl8 = 856163
+rte_lpm6: next_tbl8 = 857794
+rte_lpm6: next_tbl8 = 859257
+rte_lpm6: next_tbl8 = 859576
+main: Added prefixes = 195000, total = 200000
+rte_lpm6: next_tbl8 = 861930
+main: Added prefixes = 196000, total = 200000
+rte_lpm6: next_tbl8 = 867562
+rte_lpm6: next_tbl8 = 868039
+main: Added prefixes = 197000, total = 200000
+rte_lpm6: next_tbl8 = 869024
+main: Added prefixes = 198000, total = 200000
+rte_lpm6: next_tbl8 = 877228
+main: Added prefixes = 199000, total = 200000
+	main: Done inserting prefixes
+main: Generating 67108864 IPv6 addresses
+rte_lpm6: Allocating 1024 MB (hugepg) on socket 0. SHM key = 2
+main: Starting lookups
+Time = 11.3086 s, Lookup rate = 5.93 M/s | dst_port_sum = -1814124261
+Instructions = 5808377136, IPC = 0.190844
