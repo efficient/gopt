@@ -1,10 +1,9 @@
 Directory structure:
-	antlr:
-		ANTLR code to transform code using goto optimization.
-	antlr/actual:
-		Sample applications for benchmarking the transformation.
-	antlr/results/microbenchmarks:
-		Graphs for the sample applications in antlr/actual
 
 	l2fwd:
-		DPDK code for forwarding b/w xia-router2 and xia-router1
+	=====
+		DPDK code for IPv6 forwarding b/w xia-router2 and xia-router1/0
+
+	data_dump:
+	==========
+		Real-world IPv6 prefixes
