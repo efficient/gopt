@@ -1,9 +1,10 @@
 #include "main.h"
+
 int is_client = -1, client_id;
 
 struct rte_lpm6 *lpm;
 
-// Disable all offload features
+/**< Disable all offload features */
 static const struct rte_eth_conf port_conf = {
 	.rxmode = {
 		.split_hdr_size = 0,
@@ -64,8 +65,8 @@ main(int argc, char **argv)
 	uint8_t port_id;
 	unsigned lcore_id;
 
-
-	if(argc > 5) {		/**< Do this before eal parsing */
+	/**< Do this before eal parsing */
+	if(argc > 5) {
 		is_client = 1;
 		client_id = atoi(argv[6]);
 	} else {
@@ -88,15 +89,17 @@ main(int argc, char **argv)
 
 	printf("\n\n");
 
-	// Create a mempool for each enabled lcore
+	/**< Create a mempool for each enabled lcore */
 	for(lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id ++) {
 		if(rte_lcore_is_enabled(lcore_id)) {
 			char pool_name[20];
 			sprintf(pool_name, "pool_%d", lcore_id);
-			red_printf("Lcore %d is enabled. Creating mempool for it on socket %d\n", 
+
+			red_printf("Lcore %d is enabled. Creating mempool on socket %d\n",
 				lcore_id, LCORE_TO_SOCKET(lcore_id));
-			l2fwd_pktmbuf_pool[lcore_id] = mempool_init(pool_name, LCORE_TO_SOCKET(lcore_id));
-			CPE(l2fwd_pktmbuf_pool[lcore_id] == NULL, "Cannot init mbuf pool\n");
+			l2fwd_pktmbuf_pool[lcore_id] = mempool_init(pool_name,
+				LCORE_TO_SOCKET(lcore_id));
+			CPE(l2fwd_pktmbuf_pool[lcore_id] == NULL, "Cannot init mempool\n");
 		}
 	}
 
@@ -104,22 +107,25 @@ main(int argc, char **argv)
 	int portmask = is_client == 1 ? XIA_R0_PORT_MASK : XIA_R2_PORT_MASK;
 	red_printf("\nInitializing ports\n");
 
-	for (port_id = 0; port_id < nb_ports; port_id++) {
+	for (port_id = 0; port_id < nb_ports; port_id ++) {
 		if (!ISSET(portmask, port_id)) {
 			continue;
 		}
 
-		// xia-router0/1 use an IO-Hub for PCIe devices, so NICs don't have a NUMA-socket.
-		int my_socket_id = is_client == 1 ? get_socket_id_from_macaddr(port_id) : 
+		/**< xia-router0/1 use an IO-Hub for PCIe devices, so NICs don't have
+		  *  a NUMA-socket. */
+		int my_socket_id = is_client == 1 ?
+			get_socket_id_from_macaddr(port_id) :
 			rte_eth_dev_socket_id(port_id);
 
-		// XXX: Need to implement logic so that server lcores only access the ports on 
-		// their socket. Until then, restrict to one socket.
+		/**< XXX: Need to implement logic so that server lcores only access
+		  *  the ports on their socket. Until then, restrict to one socket */
 		if(!is_client) {
 			assert(my_socket_id == 0);
 		}
 
-		int num_queues = is_client == 1 ? 3 : count_active_lcores_on_socket(my_socket_id);
+		int num_queues = is_client == 1 ? 3 :
+			count_active_lcores_on_socket(my_socket_id);
 
 		printf("Initializing port %u on socket %d with %d queues \n", 
 			(unsigned) port_id, my_socket_id, num_queues);
@@ -143,12 +149,15 @@ main(int argc, char **argv)
 			}
 
 			struct rte_mempool *mp = l2fwd_pktmbuf_pool[my_lcore_id];
-			printf("\tSetting up queue %d using lcore %d's mempool\n", queue_id, my_lcore_id);
+			printf("\tSetting up queue %d using lcore %d's mempool\n",
+				queue_id, my_lcore_id);
 
-			ret = rte_eth_rx_queue_setup(port_id, queue_id, NUM_RX_DESC, my_socket_id, &rx_conf, mp);
+			ret = rte_eth_rx_queue_setup(port_id,
+				queue_id, NUM_RX_DESC, my_socket_id, &rx_conf, mp);
 			CPE2(ret < 0, "rte_eth_rx_queue_setup: %d, %u\n", ret, (unsigned) port_id);
 	
-			ret = rte_eth_tx_queue_setup(port_id, queue_id, NUM_TX_DESC, my_socket_id, &tx_conf);
+			ret = rte_eth_tx_queue_setup(port_id,
+				queue_id, NUM_TX_DESC, my_socket_id, &tx_conf);
 			CPE2(ret < 0, "rte_eth_tx_queue_setup: %d, %u\n", ret, (unsigned) port_id);
 		}
 

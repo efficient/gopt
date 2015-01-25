@@ -50,12 +50,12 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
-int batch_index = 0;
-
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	const struct rte_lpm6 *lpm, 
 	struct lcore_port_info *lp_info)
 {
+	int batch_index = 0;
+
 	foreach(batch_index, nb_pkts) {
 
 		/**< Boilerplate for TX pkt */
@@ -91,89 +91,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	}
 }
 
-void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
-                          const struct rte_lpm *lpm,
-                          struct lcore_port_info *lp_info)
-{
-	struct ether_hdr *eth_hdr[BATCH_SIZE];
-	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
-	uint32_t dst_ip[BATCH_SIZE];
-	int dst_port[BATCH_SIZE];
-	unsigned tbl24_index[BATCH_SIZE];
-	uint16_t tbl_entry[BATCH_SIZE];
-	unsigned tbl8_index[BATCH_SIZE];
-
-	int I = 0;			// batch index
-	void *batch_rips[BATCH_SIZE];		// goto targets
-	int iMask = 0;		// No packet is done yet
-
-	int temp_index;
-	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
-		batch_rips[temp_index] = &&fpp_start;
-	}
-
-fpp_start:
-
-        /**< Boilerplate for TX pkt */
-        
-        if(I != nb_pkts - 1) {
-            rte_prefetch0(pkts[I + 1]->pkt.data);
-        }
-        
-        eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
-        ip_hdr[I] = (struct ipv4_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
-        
-        if(is_valid_ipv4_pkt(ip_hdr[I], pkts[I]->pkt.pkt_len) < 0) {
-            rte_pktmbuf_free(pkts[I]);
-            goto fpp_end;
-        }
-        
-        set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
-        
-        ip_hdr[I]->time_to_live --;
-        ip_hdr[I]->hdr_checksum ++;
-        
-        dst_ip[I] = ip_hdr[I]->dst_addr;
-        
-        /**< Copied code from DPDK's rte_lpm.h */
-        /**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
-        tbl24_index[I] = (dst_ip[I] >> 8);
-        
-        /**< Copy tbl24 entry */
-        FPP_PSS(&lpm->tbl24[tbl24_index[I]], fpp_label_1, nb_pkts);
-fpp_label_1:
-
-        tbl_entry[I] = *(const uint16_t *) &lpm->tbl24[tbl24_index[I]];
-        
-        /**< Copy tbl8 entry (only if needed) */
-        if (unlikely((tbl_entry[I] & RTE_LPM_VALID_EXT_ENTRY_BITMASK) ==
-                     RTE_LPM_VALID_EXT_ENTRY_BITMASK)) {
-            
-            tbl8_index[I] = (uint8_t) dst_ip[I] +
-            ((uint8_t) tbl_entry[I] * RTE_LPM_TBL8_GROUP_NUM_ENTRIES);
-            
-            tbl_entry[I] = *(const uint16_t *)&lpm->tbl8[tbl8_index[I]];
-        }
-        
-        dst_port[I] = (uint8_t) tbl_entry[I];
-        /**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
-        
-        /**< Use the looked-up port to determine dst MAC */
-        set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[dst_port[I]]);
-        
-        send_packet(pkts[I], dst_port[I], lp_info);
-
-fpp_end:
-	batch_rips[I] = &&fpp_end;
-	iMask = FPP_SET(iMask, I); 
-	if(iMask == (1 << nb_pkts) - 1) {
-		return;
-	}
-	I = (I + 1) < nb_pkts ? I + 1 : 0;
-	goto *batch_rips[I];
-}
-
-void run_server(struct rte_lpm *lpm)
+void run_server(struct rte_lpm6 *lpm)
 {
 	int i;
 

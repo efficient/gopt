@@ -4,8 +4,46 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "rte_lpm6.h"
 #include "ipv6.h"
+#include "util.h"
+
+/**< Generate an LPM6 struct with prefixes mapped to ports from portmask */
+struct rte_lpm6 *ipv6_init(int portmask)
+{
+	int i;
+
+	/**< Create the lmp6 struct */
+	struct rte_lpm6_config ipv6_config;
+	ipv6_config.max_rules = 1000000;
+	ipv6_config.number_tbl8s = 1024 * 1024;
+	struct rte_lpm6 *lpm = rte_lpm6_create(0, &ipv6_config);
+
+	struct ipv6_prefix *prefix_arr;
+	int num_prefixes;
+
+	num_prefixes = IPV6_NUM_RAND_PREFIXES;
+	prefix_arr = ipv6_gen_rand_prefixes(num_prefixes);
+
+	assert(num_prefixes < (int) ipv6_config.max_rules);
+
+	for(i = 0; i < num_prefixes; i ++) {
+		int add_status = rte_lpm6_add(lpm,
+			prefix_arr[i].bytes, prefix_arr[i].depth, prefix_arr[i].dst_port);
+
+		if(add_status < 0) {
+			printf("ipv6: Failed to add IPv6 prefix %d. Status = %d\n",
+				i, add_status);
+			exit(-1);
+		}
+
+		if(i % 1000 == 0) {
+			printf("ipv6: Added prefixes = %d, total = %d\n", i, num_prefixes);
+		}
+	}
+
+	printf("\tipv6: Done inserting prefixes\n");
+	return lpm;
+}
 
 /**< Read IPv6 prefixes from a file */
 struct ipv6_prefix *ipv6_read_prefixes(const char *prefixes_file,
@@ -99,12 +137,6 @@ struct ipv6_prefix *ipv6_amp_prefixes(struct ipv6_prefix *prefix_arr,
 	}
 
 	return new_prefix_arr;
-}
-
-inline uint32_t fastrand(uint64_t* seed)
-{
-    *seed = *seed * 1103515245 + 12345;
-    return (uint32_t)(*seed >> 32);
 }
 
 /**< Generate probe IPv6 addresses from prefixes */

@@ -3,6 +3,9 @@
 #define IPV6_ADDR_LEN 16
 #define PROBE_ADDR_SHM_KEY 2
 
+#define IPV6_NUM_IPS (64 * 1024 * 1024)
+#define IPV6_NUM_RAND_PREFIXES 20000
+
 struct ipv6_prefix {
 	int depth;	/**< Number of bits required to match exactly */
 	uint8_t bytes[IPV6_ADDR_LEN];
