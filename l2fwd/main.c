@@ -3,6 +3,7 @@
 int is_client = -1, client_id;
 
 struct rte_lpm6 *lpm;
+struct ipv6_prefix *prefix_arr;
 
 /**< Disable all offload features */
 static const struct rte_eth_conf port_conf = {
@@ -65,16 +66,21 @@ main(int argc, char **argv)
 	uint8_t port_id;
 	unsigned lcore_id;
 
-	/**< Do this before eal parsing */
+	/**< Do args parsing before EAL's args parsing.
+	  *  Do all data-structure hugepage allocations before EAL's init(). */
 	if(argc > 5) {
 		is_client = 1;
+		red_printf("Getting IPv6 probe prefixes..\n");
+		lpm = ipv6_init(-1, &prefix_arr, 0);
 		client_id = atoi(argv[6]);
+		assert(lpm == NULL && prefix_arr != NULL);
+		red_printf("\tGenerating IPv6 probe prefixes done!\n");
 	} else {
 		is_client = 0;
-		/**< Don't move this allocation: must be before EAL's ops */
-		red_printf("Creating IPv6 lpm\n");
-		lpm = ipv6_init(XIA_R2_PORT_MASK);
-		red_printf("\tSetting up ipv6 lpm done!\n");
+		red_printf("Creating IPv6 lpm. Inserting prefixes...\n");
+		lpm = ipv6_init(XIA_R2_PORT_MASK, &prefix_arr, 1);
+		assert(lpm != NULL && prefix_arr == NULL);
+		red_printf("\tInserting prefixes done!\n");
 	}
 
 	ret = rte_eal_init(argc, argv);
@@ -130,8 +136,10 @@ main(int argc, char **argv)
 		printf("Initializing port %u on socket %d with %d queues \n", 
 			(unsigned) port_id, my_socket_id, num_queues);
 
-		ret = rte_eth_dev_configure(port_id, num_queues, num_queues, &port_conf);
-		CPE2(ret < 0, "Cannot configure device: %d, %u\n", ret, (unsigned) port_id);
+		ret = rte_eth_dev_configure(port_id,
+			num_queues, num_queues, &port_conf);
+		CPE2(ret < 0, "Cannot configure device: %d, %u\n",
+			ret, (unsigned) port_id);
 
 		int queue_id = 0;
 		for(queue_id = 0; queue_id < num_queues; queue_id ++) {
@@ -143,7 +151,7 @@ main(int argc, char **argv)
 			}
 	
 			if(rte_lcore_is_enabled(my_lcore_id) == 0) {
-				red_printf("\tQueue %d on port %d wants disabled lcore %d! Exiting!\n", 
+				red_printf("\tQueue %d on port %d wants disabled lcore %d!\n",
 					queue_id, port_id, my_lcore_id);
 				exit(-1);
 			}
@@ -154,14 +162,16 @@ main(int argc, char **argv)
 
 			ret = rte_eth_rx_queue_setup(port_id,
 				queue_id, NUM_RX_DESC, my_socket_id, &rx_conf, mp);
-			CPE2(ret < 0, "rte_eth_rx_queue_setup: %d, %u\n", ret, (unsigned) port_id);
+			CPE2(ret < 0, "rte_eth_rx_queue_setup: %d, %u\n",
+				ret, (unsigned) port_id);
 	
 			ret = rte_eth_tx_queue_setup(port_id,
 				queue_id, NUM_TX_DESC, my_socket_id, &tx_conf);
-			CPE2(ret < 0, "rte_eth_tx_queue_setup: %d, %u\n", ret, (unsigned) port_id);
+			CPE2(ret < 0, "rte_eth_tx_queue_setup: %d, %u\n",
+				ret, (unsigned) port_id);
 		}
 
-		// Print device mac address and start it
+		/**< Print this port's MAC address and start it. */
 		rte_eth_macaddr_get(port_id, &l2fwd_ports_eth_addr[port_id]);
 		printf("Port %d, MAC: ", port_id);
 		print_mac_arr(l2fwd_ports_eth_addr[port_id].addr_bytes);
@@ -174,7 +184,7 @@ main(int argc, char **argv)
 
 	check_all_ports_link_status(nb_ports, portmask);
 
-	/* launch per-lcore init on every lcore */
+	/**< Launch per-lcore init on every lcore */
 	rte_eal_mp_remote_launch(l2fwd_launch_one_lcore, NULL, CALL_MASTER);
 	RTE_LCORE_FOREACH_SLAVE(lcore_id) {
 		if (rte_eal_wait_lcore(lcore_id) < 0)

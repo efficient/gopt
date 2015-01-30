@@ -4,7 +4,8 @@
 #define PROBE_ADDR_SHM_KEY 2
 
 #define IPV6_NUM_IPS (64 * 1024 * 1024)
-#define IPV6_NUM_RAND_PREFIXES 20000
+#define IPV6_NUM_RAND_PREFIXES 20000	/**< 20000, 200000 */
+#define IPV6_RAND_PREFIXES_SEED 3185
 
 struct ipv6_prefix {
 	int depth;	/**< Number of bits required to match exactly */
@@ -20,14 +21,15 @@ struct ipv6_perm {
 	uint8_t P[256];
 };
 
-struct rte_lpm6 *ipv6_init(int portmask);
+struct rte_lpm6 *ipv6_init(int portmask,
+	struct ipv6_prefix **prefix_arr, int add_prefixes);
 
 /**< Read IPv6 prefixes from a file */
 struct ipv6_prefix *ipv6_read_prefixes(const char *prefixes_file,
 	int *num_prefixes);
 
 /**< Generate IPv6 prefixes randomly */
-struct ipv6_prefix *ipv6_gen_rand_prefixes(int num_prefixes);
+struct ipv6_prefix *ipv6_gen_rand_prefixes(int num_prefixes, int portmask);
 
 /**< Increase the number of prefixes in prefix_arr. Returns a new
   *  array with num_prefixes * amp_factor prefixes */

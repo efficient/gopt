@@ -7,42 +7,58 @@
 #include "ipv6.h"
 #include "util.h"
 
-/**< Generate an LPM6 struct with prefixes mapped to ports from portmask */
-struct rte_lpm6 *ipv6_init(int portmask)
+/**< Generate an LPM6 struct with prefixes mapped to ports from portmask.
+  *
+  *  o The server calls this function with add_prefixes = 1 to get a
+  *  populated lpm6 struct.
+  * 
+  *  o A client calls with add_prefixes = 0 to get the random prefixes. These
+  *  can be later extended to generate the probe IPv6 addresses.
+  * 
+  *  o ipv6_gen_rand_prefixes() seeds rand() so same prefixes are used always.
+  */
+struct rte_lpm6 *ipv6_init(int portmask,
+	struct ipv6_prefix **prefix_arr, int add_prefixes)
 {
 	int i;
 
-	/**< Create the lmp6 struct */
-	struct rte_lpm6_config ipv6_config;
-	ipv6_config.max_rules = 1000000;
-	ipv6_config.number_tbl8s = 1024 * 1024;
-	struct rte_lpm6 *lpm = rte_lpm6_create(0, &ipv6_config);
+	/**< Get random prefixes */
+	int num_prefixes = IPV6_NUM_RAND_PREFIXES;
+	*prefix_arr = ipv6_gen_rand_prefixes(num_prefixes, portmask);
 
-	struct ipv6_prefix *prefix_arr;
-	int num_prefixes;
+	if(add_prefixes == 1) {
+		struct rte_lpm6_config ipv6_config;
+		ipv6_config.max_rules = 1000000;
+		ipv6_config.number_tbl8s = 1024 * 1024;
+		assert(num_prefixes < (int) ipv6_config.max_rules);
 
-	num_prefixes = IPV6_NUM_RAND_PREFIXES;
-	prefix_arr = ipv6_gen_rand_prefixes(num_prefixes);
+		struct rte_lpm6 *lpm = rte_lpm6_create(0, &ipv6_config);
 
-	assert(num_prefixes < (int) ipv6_config.max_rules);
+		for(i = 0; i < num_prefixes; i ++) {
+			/**< Add this prefix to LPM6 */
+			struct ipv6_prefix cur_prfx = *prefix_arr[i];
 
-	for(i = 0; i < num_prefixes; i ++) {
-		int add_status = rte_lpm6_add(lpm,
-			prefix_arr[i].bytes, prefix_arr[i].depth, prefix_arr[i].dst_port);
+			int add_status = rte_lpm6_add(lpm,
+				cur_prfx.bytes, cur_prfx.depth, cur_prfx.dst_port);
 
-		if(add_status < 0) {
-			printf("ipv6: Failed to add IPv6 prefix %d. Status = %d\n",
-				i, add_status);
-			exit(-1);
+			if(add_status < 0) {
+				printf("ipv6: Failed to add IPv6 prefix %d. Status = %d\n",
+					i, add_status);
+				exit(-1);
+			}
+
+			if(i % 1000 == 0) {
+				printf("ipv6: Added prefixes = %d, total = %d\n",
+					i, num_prefixes);
+			}
 		}
 
-		if(i % 1000 == 0) {
-			printf("ipv6: Added prefixes = %d, total = %d\n", i, num_prefixes);
-		}
+		printf("\tipv6: Done inserting prefixes\n");
+		*prefix_arr = NULL;	/**< Server doesn't need the prefixes anymore */
+		return lpm;
+	} else {
+		return NULL;
 	}
-
-	printf("\tipv6: Done inserting prefixes\n");
-	return lpm;
 }
 
 /**< Read IPv6 prefixes from a file */
@@ -81,10 +97,17 @@ struct ipv6_prefix *ipv6_read_prefixes(const char *prefixes_file,
 	return prefix_arr;	
 }
 
-/**< Generate IPv6 prefixes randomly */
-struct ipv6_prefix *ipv6_gen_rand_prefixes(int num_prefixes)
+/**< Generate IPv6 prefixes with random content and depth b/w 48-64. The dst
+  *  ports are chosen from portmask. */
+struct ipv6_prefix *ipv6_gen_rand_prefixes(int num_prefixes, int portmask)
 {
 	assert(num_prefixes > 0);
+	int num_active_ports = bitcount(portmask);
+	int *port_arr = get_active_bits(portmask);
+	
+	/**< Seed rand() before generating prefixes so that server and clients
+	  *  generate the same set of prefixes. */
+	srand(IPV6_RAND_PREFIXES_SEED);
 
 	int prefix_mem_size = num_prefixes * sizeof(struct ipv6_prefix);
 	struct ipv6_prefix *prefix_arr = malloc(prefix_mem_size);
@@ -100,7 +123,8 @@ struct ipv6_prefix *ipv6_gen_rand_prefixes(int num_prefixes)
 			prefix_arr[i].bytes[j] = rand() % 256;
 		}
 
-		prefix_arr[i].dst_port = rand() % 256;
+		/**< Select the dst port from active ports */
+		prefix_arr[i].dst_port = port_arr[rand() % num_active_ports];
 	}
 
 	return prefix_arr;
