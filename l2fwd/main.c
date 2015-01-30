@@ -1,9 +1,13 @@
 #include "main.h"
 
+/**< Structures for this app */
 int is_client = -1, client_id;
-
 struct rte_lpm6 *lpm;
 struct ipv6_prefix *prefix_arr;
+
+/**< Structures for DPDK */
+static struct ether_addr l2fwd_ports_eth_addr[RTE_MAX_ETHPORTS]; /**< MACs */
+struct rte_mempool *l2fwd_pktmbuf_pool[RTE_MAX_LCORE];	/**< Per lcore mempools */
 
 /**< Disable all offload features */
 static const struct rte_eth_conf port_conf = {
@@ -31,7 +35,7 @@ static const struct rte_eth_rxconf rx_conf = {
 		.wthresh = RX_WTHRESH,
 	},
 	.rx_free_thresh = DEFAULT_NIC_RX_FREE_THRESH,
-	.rx_drop_en = 0		// No idea what this is..
+	.rx_drop_en = 0		/**< No idea what this is */
 };
 
 static const struct rte_eth_txconf tx_conf = {
@@ -44,14 +48,11 @@ static const struct rte_eth_txconf tx_conf = {
 	.tx_rs_thresh = 0, /* Use PMD default values */
 };
 
-static struct ether_addr l2fwd_ports_eth_addr[RTE_MAX_ETHPORTS];	// MAC addr
-struct rte_mempool *l2fwd_pktmbuf_pool[RTE_MAX_LCORE];		// Per lcore mempools
-
 static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, l2fwd_pktmbuf_pool);
+		run_client(client_id, l2fwd_pktmbuf_pool, prefix_arr);
 	} else {
 		run_server(lpm);
 	}
@@ -71,7 +72,8 @@ main(int argc, char **argv)
 	if(argc > 5) {
 		is_client = 1;
 		red_printf("Getting IPv6 probe prefixes..\n");
-		lpm = ipv6_init(-1, &prefix_arr, 0);
+		/**< Use a valid portmask for prefix generation */
+		lpm = ipv6_init(1, &prefix_arr, 0);
 		client_id = atoi(argv[6]);
 		assert(lpm == NULL && prefix_arr != NULL);
 		red_printf("\tGenerating IPv6 probe prefixes done!\n");

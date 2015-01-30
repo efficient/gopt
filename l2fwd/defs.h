@@ -82,7 +82,7 @@ struct ether_addr {
 } __attribute__((__packed__));
 
 /*
- * IPv4 Header
+ * IPv4 Header: size = 20 bytes
  */
 struct ipv4_hdr {
     uint8_t  version_ihl;       /**< version and header length */
@@ -95,5 +95,17 @@ struct ipv4_hdr {
     uint16_t hdr_checksum;      /**< header checksum */
     uint32_t src_addr;      /**< source address */
     uint32_t dst_addr;      /**< destination address */
+} __attribute__((__packed__));
+
+/**
+ * IPv6 Header: size = 40 bits
+ */
+struct ipv6_hdr {
+    uint32_t vtc_flow;     /**< IP version, traffic class & flow label. */
+    uint16_t payload_len;  /**< IP packet length - includes sizeof(ip_header). */
+    uint8_t  proto;        /**< Protocol, next header. */
+    uint8_t  hop_limits;   /**< Hop limits. */
+    uint8_t  src_addr[16]; /**< IP address of source host. */
+    uint8_t  dst_addr[16]; /**< IP address of destination host(s). */
 } __attribute__((__packed__));
 

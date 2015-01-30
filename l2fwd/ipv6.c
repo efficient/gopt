@@ -36,7 +36,7 @@ struct rte_lpm6 *ipv6_init(int portmask,
 
 		for(i = 0; i < num_prefixes; i ++) {
 			/**< Add this prefix to LPM6 */
-			struct ipv6_prefix cur_prfx = *prefix_arr[i];
+			struct ipv6_prefix cur_prfx = (*prefix_arr)[i];
 
 			int add_status = rte_lpm6_add(lpm,
 				cur_prfx.bytes, cur_prfx.depth, cur_prfx.dst_port);
@@ -102,6 +102,7 @@ struct ipv6_prefix *ipv6_read_prefixes(const char *prefixes_file,
 struct ipv6_prefix *ipv6_gen_rand_prefixes(int num_prefixes, int portmask)
 {
 	assert(num_prefixes > 0);
+	printf("ipv6: Generating %d random prefixes\n", num_prefixes);
 	int num_active_ports = bitcount(portmask);
 	int *port_arr = get_active_bits(portmask);
 	
