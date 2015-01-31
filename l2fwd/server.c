@@ -220,6 +220,36 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	}
 }
 
+/**< Forward packets on a random port without performing IPv6 lookups.
+  *  Enabled by setting PASSTHROUGH = 1 in main.h */
+void process_batch_passthrough(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+	struct lcore_port_info *lp_info)
+{
+	int batch_index = 0;
+
+	foreach(batch_index, nb_pkts) {
+
+		/**< TX boilerplate */
+		struct ether_hdr *eth_hdr;
+		struct ipv6_hdr *ip6_hdr;
+		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
+		ip6_hdr = (struct ipv6_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
+
+		if(batch_index != nb_pkts - 1) {
+			rte_prefetch0(pkts[batch_index + 1]->pkt.data);
+		}
+
+		/**< XXX: Assumes ports 0-3 are enabled */
+		int next_hop = ip6_hdr->src_addr[0] & 3;
+
+		/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
+		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[next_hop]);
+		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[next_hop]);
+
+		send_packet(pkts[batch_index], next_hop, lp_info);
+	}
+}
+
 void run_server(struct rte_lpm6 *lpm)
 {
 	int i;
@@ -272,12 +302,17 @@ void run_server(struct rte_lpm6 *lpm)
 	
 		lp_info[port_id].nb_rx += nb_rx_new;
 
-#if GOTO == 1
+#if PASSTHROUGH == 1
+		process_batch_passthrough(rx_pkts_burst, nb_rx_new, port_id,
+			lp_info);
+#else
+	#if GOTO == 1
 		process_batch_goto(rx_pkts_burst, nb_rx_new, port_id,
 			lpm, lp_info);
-#else
+	#else
 		process_batch_nogoto(rx_pkts_burst, nb_rx_new, port_id,
 			lpm, lp_info);
+	#endif
 #endif
 		
 		/**< STAT PRINTING */
