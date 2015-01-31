@@ -1,8 +1,8 @@
 fpp_end:
-    batch_rips[I] = &&fpp_end;
-    iMask = FPP_SET(iMask, I); 
-    if(iMask == (1 << BATCH_SIZE) - 1) {
-        return;
-    }
-    I = (I + 1) & BATCH_SIZE_;
-    goto *batch_rips[I];
+	batch_rips[I] = &&fpp_end;
+	iMask = FPP_SET(iMask, I); 
+	if(iMask == (1 << nb_pkts) - 1) {
+		return;
+	}
+	I = (I + 1) < nb_pkts ? I + 1 : 0;
+	goto *batch_rips[I];

@@ -12,16 +12,16 @@ import org.antlr.v4.runtime.TokenStreamRewriter;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 
 public class Main {
-	static String gotoFilePath = "/Users/akalia/Documents/workspace/fastpp/test/synthetic-divergence/nogoto.c";
+	static String gotoFilePath = "/Users/akalia/Documents/workspace/fastpp/test/dpdk-ipv6/nogoto.c";
 	static Debug util;
 	
 	public static void main(String args[]) throws FileNotFoundException {
 		util = new Debug();
 		
 		String code = getCode(gotoFilePath);
-		
+
 		checkLocalVariableReuse(code);
-		
+
 		LinkedList<VariableDecl> localVars = extractLocalVariables(code);
 		code = trimDeclarations(code);
 		code = cleanup(code);
@@ -91,7 +91,7 @@ public class Main {
 	}
 
 	private static void checkLocalVariableReuse(String code) {
-		System.out.println("\n\nChecking if input code uses my variable names");
+		System.out.println("Checking if input code uses my variable names");
 
 		CharStream charStream = new ANTLRInputStream(code);		
 		CLexer lexer = new CLexer(charStream);

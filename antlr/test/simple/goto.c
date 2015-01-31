@@ -23,14 +23,4 @@ label_1:
 
         sum += ht_log[mem_addr[I]];
     
-end:
-    batch_rips[I] = &&end;
-    iMask = FPP_SET(iMask, I); 
-    if(iMask == (1 << BATCH_SIZE) - 1) {
-        return;
-    }
-    I = (I + 1) & BATCH_SIZE_;
-    goto *batch_rips[I];
-
-}
-
+    

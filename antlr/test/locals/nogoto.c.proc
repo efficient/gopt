@@ -1,0 +1,74 @@
+#include "fpp.h"
+int process_pkts_in_batch(int *pkt_lo)
+{
+	int a_1[BATCH_SIZE];
+	int a_2[BATCH_SIZE];
+	int a_3[BATCH_SIZE];
+	int a_4[BATCH_SIZE];
+	int a_5[BATCH_SIZE];
+	int a_6[BATCH_SIZE];
+	int a_7[BATCH_SIZE];
+	int a_8[BATCH_SIZE];
+	int a_9[BATCH_SIZE];
+	int a_10[BATCH_SIZE];
+	int a_11[BATCH_SIZE];
+	int a_12[BATCH_SIZE];
+	int a_13[BATCH_SIZE];
+	int a_14[BATCH_SIZE];
+	int a_15[BATCH_SIZE];
+	int a_16[BATCH_SIZE];
+	int a_17[BATCH_SIZE];
+	int a_18[BATCH_SIZE];
+	int a_19[BATCH_SIZE];
+	int a_20[BATCH_SIZE];
+
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&fpp_start;
+	}
+
+fpp_start:
+
+    // Like a foreach loop
+    
+        a_1[I] = hash(pkt_lo[I]) & LOG_CAP_;
+        a_2[I] = hash(a_1[I]) & LOG_CAP_;
+        a_3[I] = hash(a_2[I]) & LOG_CAP_;
+        a_4[I] = hash(a_3[I]) & LOG_CAP_;
+        a_5[I] = hash(a_4[I]) & LOG_CAP_;
+        a_6[I] = hash(a_5[I]) & LOG_CAP_;
+        a_7[I] = hash(a_6[I]) & LOG_CAP_;
+        a_8[I] = hash(a_7[I]) & LOG_CAP_;
+        a_9[I] = hash(a_8[I]) & LOG_CAP_;
+        a_10[I] = hash(a_9[I]) & LOG_CAP_;
+        a_11[I] = hash(a_10[I]) & LOG_CAP_;
+        a_12[I] = hash(a_11[I]) & LOG_CAP_;
+        a_13[I] = hash(a_12[I]) & LOG_CAP_;
+        a_14[I] = hash(a_13[I]) & LOG_CAP_;
+        a_15[I] = hash(a_14[I]) & LOG_CAP_;
+        a_16[I] = hash(a_15[I]) & LOG_CAP_;
+        a_17[I] = hash(a_16[I]) & LOG_CAP_;
+        a_18[I] = hash(a_17[I]) & LOG_CAP_;
+        a_19[I] = hash(a_18[I]) & LOG_CAP_;
+        a_20[I] = hash(a_19[I]) & LOG_CAP_;
+        
+        FPP_PSS(&ht_log[a_20[I]], fpp_label_1);
+fpp_label_1:
+
+        sum += ht_log[a_20[I]];
+       
+fpp_end:
+    batch_rips[I] = &&fpp_end;
+    iMask = FPP_SET(iMask, I); 
+    if(iMask == (1 << BATCH_SIZE) - 1) {
+        return;
+    }
+    I = (I + 1) & BATCH_SIZE_;
+    goto *batch_rips[I];
+
+}
+

@@ -1,0 +1,43 @@
+#include "fpp.h"
+void process_batch(struct aho_state *dfa, struct pkt *test_pkts)
+{
+	int j[BATCH_SIZE];
+	int state[BATCH_SIZE];
+	int inp[BATCH_SIZE];
+
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&fpp_start;
+	}
+
+fpp_start:
+
+        state[I] = 0;
+        
+        for(j[I] = 0; j[I] < PKT_SIZE; j[I] ++) {
+            inp[I] = test_pkts[I].content[j[I]];
+            state[I] = dfa[state[I]].G[inp[I]];
+            if(j[I] != PKT_SIZE - 1) {
+                FPP_PSS(&dfa[state[I]].content[test_pkts[j[I] + 1]], fpp_label_1);
+fpp_label_1:
+
+            }
+        }
+        
+        final_state_sum += state[I];
+       
+fpp_end:
+    batch_rips[I] = &&fpp_end;
+    iMask = FPP_SET(iMask, I); 
+    if(iMask == (1 << nb_pkts) - 1) {
+        return;
+    }
+    I = (I + 1) < nb_pkts ? I + 1 : 0;
+    goto *batch_rips[I];
+
+}
+
