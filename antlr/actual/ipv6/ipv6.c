@@ -120,21 +120,12 @@ struct ipv6_addr *ipv6_gen_addrs(int num_addrs,
 
 	/**< Generate addresses using randomly chosen prefixes */
 	int i, j;
-	uint64_t seed = 0xdeadbeef;
 
 	for(i = 0; i < num_addrs; i ++) {
 		int prefix_id = rand() % num_prefixes;
-		int prefix_depth = prefix_arr[prefix_id].depth;
-		int last_full_byte = (prefix_depth / 8) - 1;
-		assert(last_full_byte >= 0 && last_full_byte < IPV6_ADDR_LEN);
 
 		for(j = 0; j < IPV6_ADDR_LEN; j ++) {
 			addr_arr[i].bytes[j] = prefix_arr[prefix_id].bytes[j];
-		}
-
-		for(j = last_full_byte + 1; j < IPV6_ADDR_LEN; j ++) {
-			addr_arr[i].bytes[j] += fastrand(&seed) % 128;
-			addr_arr[i].bytes[j] %= 256;
 		}
 	}
 

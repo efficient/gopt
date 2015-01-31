@@ -425,5 +425,5 @@ main: Added prefixes = 199000, total = 200000
 main: Generating 67108864 IPv6 addresses
 rte_lpm6: Allocating 1024 MB (hugepg) on socket 0. SHM key = 2
 main: Starting lookups
-Time = 5.5818 s, Lookup rate = 12.02 M/s | dst_port_sum = -1814124261
-Instructions = 13342307608, IPC = 0.889365
+Time = 5.3277 s, Lookup rate = 12.60 M/s | dst_port_sum = -35529497
+Instructions = 13342307552, IPC = 0.933178

@@ -2,10 +2,13 @@ rm -rf results
 mkdir results
 
 echo "Running nogoto"
-./nogoto.sh
+./nogoto.sh > results/nogoto_out
+#./nogoto.sh
 
 echo "Running goto"
-./goto.sh
+./goto.sh > results/goto_out
+#./goto.sh
 
 echo "Running handopt"
-./handopt.sh
+./handopt.sh > results/handopt_out
+#./handopt.sh
