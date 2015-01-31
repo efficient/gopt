@@ -83,8 +83,88 @@ lookup_step(const struct rte_lpm6 *lpm, const struct rte_lpm6_tbl_entry *tbl,
 }
 
 /**< Process a batch of IPv6 packets. Unlike IPv4, we don't do a packet
-  *  validity check here (similar to simple_ipv6_fwd_4pkts() in l3fwd */
+ *  validity check here (similar to simple_ipv6_fwd_4pkts() in l3fwd */
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+                          const struct rte_lpm6 *lpm,
+                          struct lcore_port_info *lp_info)
+{
+	struct ether_hdr *eth_hdr[BATCH_SIZE];
+	struct ipv6_hdr *ip6_hdr[BATCH_SIZE];
+	const struct rte_lpm6_tbl_entry *tbl[BATCH_SIZE];
+	const struct rte_lpm6_tbl_entry *tbl_next[BATCH_SIZE];
+	uint32_t tbl24_index[BATCH_SIZE];
+	uint8_t next_hop[BATCH_SIZE];
+	uint8_t first_byte[BATCH_SIZE];
+	int status[BATCH_SIZE];
+	uint8_t *dst_addr[BATCH_SIZE];
+
+	int I = 0;			// batch index
+	void *batch_rips[BATCH_SIZE];		// goto targets
+	int iMask = 0;		// No packet is done yet
+
+	int temp_index;
+	for(temp_index = 0; temp_index < BATCH_SIZE; temp_index ++) {
+		batch_rips[temp_index] = &&fpp_start;
+	}
+
+fpp_start:
+
+        /**< TX boilerplate */
+        
+        eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
+        ip6_hdr[I] = (struct ipv6_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
+        
+        if(I != nb_pkts - 1) {
+            rte_prefetch0(pkts[I + 1]->pkt.data);
+        }
+        
+        /**< %%% Code for IPv6 lookup: from rte_lpm6_lookup_nogoto() %%% */
+        
+        dst_addr[I] = ip6_hdr[I]->dst_addr;
+        first_byte[I] = LOOKUP_FIRST_BYTE;
+        tbl24_index[I] = (dst_addr[I][0] << BYTES2_SIZE) |
+        (dst_addr[I][1] << BYTE_SIZE) | dst_addr[I][2];
+        
+        /**< Calculate pointer to the first entry to be inspected */
+        tbl[I] = &lpm->tbl24[tbl24_index[I]];
+        
+        do {
+            FPP_PSS(tbl[I], fpp_label_1, nb_pkts);
+fpp_label_1:
+
+            /**< Continue inspecting next levels until success or failure */
+            status[I] = lookup_step(lpm,
+                                 tbl[I], &tbl_next[I], dst_addr[I], first_byte[I] ++, &next_hop[I]);
+            tbl[I] = tbl_next[I];
+        } while (status[I] == 1);
+        
+        /**< %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
+        
+        if(unlikely(status[I] < 0)) {
+            rte_pktmbuf_free(pkts[I]);
+            lp_info[0].nb_lookup_fail_all_ports ++;
+        } else {
+            /**< TX boilerplate: use the computed next_hop for L2 src and dst. */
+            set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[next_hop[I]]);
+            set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[next_hop[I]]);
+            
+            send_packet(pkts[I], next_hop[I], lp_info);
+        }
+    
+fpp_end:
+	batch_rips[I] = &&fpp_end;
+	iMask = FPP_SET(iMask, I); 
+	if(iMask == (1 << nb_pkts) - 1) {
+		return;
+	}
+	I = (I + 1) < nb_pkts ? I + 1 : 0;
+	goto *batch_rips[I];
+
+}
+
+/**< Process a batch of IPv6 packets. Unlike IPv4, we don't do a packet
+  *  validity check here (similar to simple_ipv6_fwd_4pkts() in l3fwd */
+void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	const struct rte_lpm6 *lpm, 
 	struct lcore_port_info *lp_info)
 {
