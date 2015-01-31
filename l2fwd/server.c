@@ -84,7 +84,7 @@ lookup_step(const struct rte_lpm6 *lpm, const struct rte_lpm6_tbl_entry *tbl,
 
 /**< Process a batch of IPv6 packets. Unlike IPv4, we don't do a packet
  *  validity check here (similar to simple_ipv6_fwd_4pkts() in l3fwd */
-void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
                           const struct rte_lpm6 *lpm,
                           struct lcore_port_info *lp_info)
 {
@@ -164,7 +164,7 @@ fpp_end:
 
 /**< Process a batch of IPv6 packets. Unlike IPv4, we don't do a packet
   *  validity check here (similar to simple_ipv6_fwd_4pkts() in l3fwd */
-void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	const struct rte_lpm6 *lpm, 
 	struct lcore_port_info *lp_info)
 {

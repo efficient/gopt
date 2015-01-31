@@ -21,7 +21,7 @@
 #include "util.h"
 #include "ipv6.h"
 
-#define GOTO 0
+#define GOTO 1
 
 #define LL long long
 
