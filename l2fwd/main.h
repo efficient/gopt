@@ -70,21 +70,19 @@
 
 /**
  * Per-lcore, per-port statistics:
- * The server process on each lcore creates a separate instance of
- * lcore_port_info for each port. The total number of packets transmitted
- * is collected in the nb_tx_all_ports field for port #0 (this does not
- * require that port #0 is enabled.
+ * The server process on each lcore creates an array of lcore_port_info,
+ * one per port. Some statistics are collected across all ports - they are
+ * collected in the 0th element of this array.
  */
 struct lcore_port_info {
 	struct rte_mbuf *mbufs[MAX_SRV_BURST];
-	int nb_buf;
-	int nb_tx;
-	int nb_tx_fail;		// Port not found for a dst IP
-	int nb_tbl_24;		// Number of packets that required touching tbl_24
-	int nb_rx;
+	int nb_buf;		/**< Number of packets buffered for TX on this port */
+	int nb_tx;		/**< Number of packets transmitted on this port */
+	int nb_rx;		/**< Number of packets received on this port */
 
-	int nb_tx_all_ports;
-	int queue_id;
+	int nb_lookup_fail_all_ports;	/**< Total failed lookups, all ports */
+	int nb_tx_all_ports;	/**< Total packets transmitted on all ports */
+	int queue_id;	/**< Queue used by this lcore on this port */
 };
 
 struct rte_mempool *mempool_init(char *name, int socket_id);

@@ -1,11 +1,12 @@
 #include "main.h"
 
-// Only immutable information should be global
-// xia-router2 xge0,1,2,3,4,5,6,7
+/**< Only immutable information should be global
+  *  xia-router2 xge0,1,2,3,4,5,6,7 */
 LL src_mac_arr[8] = {0x6c10bb211b00, 0x6d10bb211b00, 0x64d2bd211b00, 0x65d2bd211b00,
 					 0xc8a610ca0568, 0xc9a610ca0568, 0xa2a610ca0568, 0xa3a610ca0568};
 
-// xia-router0 xge0,1    xia-router1 xge0,1    xia-router0 xge2,3    xia-router1 xge2,3
+/**< xia-router0 xge0,1    xia-router1 xge0,1
+  *  xia-router0 xge2,3    xia-router1 xge2,3 */
 LL dst_mac_arr[8] = {0x36d3bd211b00, 0x37d3bd211b00, 0x44d7a3211b00, 0x45d7a3211b00,
 					 0xa8d6a3211b00, 0xa9d6a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00};
 
@@ -50,6 +51,39 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
+/**< Takes a pointer to a table entry and inspect one level.
+  *  The function returns 0 on lookup success, ENOENT if no match was found
+  *  or 1 if the process needs to be continued by calling this again. */
+static inline int
+lookup_step(const struct rte_lpm6 *lpm, const struct rte_lpm6_tbl_entry *tbl,
+		const struct rte_lpm6_tbl_entry **tbl_next, uint8_t *ip,
+		uint8_t first_byte, uint8_t *next_hop)
+{
+	uint32_t tbl8_index, tbl_entry;
+	
+	/* Take the integer value from the pointer. */
+	tbl_entry = *(const uint32_t *) tbl;
+	
+	/* If it is valid and extended we calculate the new pointer to return. */
+	if ((tbl_entry & RTE_LPM6_VALID_EXT_ENTRY_BITMASK) ==
+			RTE_LPM6_VALID_EXT_ENTRY_BITMASK) {
+
+		tbl8_index = ip[first_byte - 1] +
+				((tbl_entry & RTE_LPM6_TBL8_BITMASK) *
+				RTE_LPM6_TBL8_GROUP_NUM_ENTRIES);
+
+		*tbl_next = &lpm->tbl8[tbl8_index];
+
+		return 1;
+	} else {
+		/* If not extended then we can have a match. */
+		*next_hop = (uint8_t)tbl_entry;
+		return (tbl_entry & RTE_LPM6_LOOKUP_SUCCESS) ? 0 : -ENOENT;
+	}
+}
+
+/**< Process a batch of IPv6 packets. Unlike IPv4, we don't do a packet
+  *  validity check here (similar to simple_ipv6_fwd_4pkts() in l3fwd */
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	const struct rte_lpm6 *lpm, 
 	struct lcore_port_info *lp_info)
@@ -58,36 +92,51 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 
 	foreach(batch_index, nb_pkts) {
 
-		/**< Boilerplate for TX pkt */
+		/**< TX boilerplate */
 		struct ether_hdr *eth_hdr;
-		struct ipv4_hdr *ip_hdr;
-
-		int dst_port;
+		struct ipv6_hdr *ip6_hdr;
+		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
+		ip6_hdr = (struct ipv6_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 
 		if(batch_index != nb_pkts - 1) {
 			rte_prefetch0(pkts[batch_index + 1]->pkt.data);
 		}
 
-		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
-		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
+		/**< %%% Code for IPv6 lookup: from rte_lpm6_lookup_nogoto() %%% */
+		const struct rte_lpm6_tbl_entry *tbl;
+		const struct rte_lpm6_tbl_entry *tbl_next;
+		uint32_t tbl24_index;
+		uint8_t first_byte, next_hop;
+		int status;
 
-		/*if(is_valid_ipv4_pkt(ip_hdr, pkts[batch_index]->pkt.pkt_len) < 0) {
+		uint8_t *dst_addr = ip6_hdr->dst_addr;
+		first_byte = LOOKUP_FIRST_BYTE;
+		tbl24_index = (dst_addr[0] << BYTES2_SIZE) |
+				(dst_addr[1] << BYTE_SIZE) | dst_addr[2];
+
+		/**< Calculate pointer to the first entry to be inspected */
+		tbl = &lpm->tbl24[tbl24_index];
+
+		do {
+			FPP_EXPENSIVE(tbl);
+			/**< Continue inspecting next levels until success or failure */
+			status = lookup_step(lpm,
+					tbl, &tbl_next, dst_addr, first_byte ++, &next_hop);
+			tbl = tbl_next;
+		} while (status == 1);
+
+		/**< %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
+
+		if(unlikely(status < 0)) {
 			rte_pktmbuf_free(pkts[batch_index]);
-			continue;
-		}*/	
+			lp_info[0].nb_lookup_fail_all_ports ++;
+		} else {
+			/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
+			set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[next_hop]);
+			set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[next_hop]);
 
-		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[port_id]);
-
-		ip_hdr->time_to_live --;
-		ip_hdr->hdr_checksum ++;
-		
-		dst_port = (uint8_t) 1;
-		/**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
-
-		/**< Use the looked-up port to determine dst MAC */
-		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
-
-		send_packet(pkts[batch_index], dst_port, lp_info);
+			send_packet(pkts[batch_index], next_hop, lp_info);
+		}
 	}
 }
 
@@ -158,22 +207,23 @@ void run_server(struct rte_lpm6 *lpm)
 			double seconds = nanoseconds / GHZ_CPS;
 			tput_tsc[0] = tput_tsc[1];
 
-			red_printf("Lcore %d, total: %f, tbl_24: %f%\n", lcore_id, 
+			red_printf("Lcore %d, total: %f, fail: %d\n", lcore_id, 
 				lp_info[0].nb_tx_all_ports / seconds,
-				(lp_info[0].nb_tbl_24 * 100.0) / lp_info[0].nb_tx_all_ports);
+				lp_info[0].nb_lookup_fail_all_ports);
 
+			/**< Reset all-port stats in case port 0 is disabled */
+			lp_info[0].nb_tx_all_ports = 0;
+			lp_info[0].nb_lookup_fail_all_ports = 0;
+			
 			for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
 				if(ISSET(XIA_R2_PORT_MASK, i)) {
 					printf("\tLcore: %d, port: %d: %f\n", lcore_id, i, 
 						lp_info[i].nb_tx / seconds);
 				}
 
-				// Do not reset the nb_buf counter
+				/**< Do not reset the nb_buf counter */
 				lp_info[i].nb_tx = 0;
 				lp_info[i].nb_rx = 0;
-	
-				lp_info[i].nb_tbl_24 = 0;
-				lp_info[i].nb_tx_all_ports = 0;
 			}
 
 			printf("\tLcore %d, Average TX burst size: %lld\n", lcore_id, 

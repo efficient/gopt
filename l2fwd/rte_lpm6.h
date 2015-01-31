@@ -36,14 +36,67 @@
 /** Max number of characters in LPM name. */
 #define RTE_LPM6_NAMESIZE                 32
 
+#define RTE_LPM6_TBL24_NUM_ENTRIES        (1 << 24)
+#define RTE_LPM6_TBL8_GROUP_NUM_ENTRIES         256
+#define RTE_LPM6_TBL8_MAX_NUM_GROUPS      (1 << 21)
+
+#define RTE_LPM6_VALID_EXT_ENTRY_BITMASK 0xA0000000
+#define RTE_LPM6_LOOKUP_SUCCESS          0x20000000
+#define RTE_LPM6_TBL8_BITMASK            0x001FFFFF
+
+#define ADD_FIRST_BYTE                            3
+#define LOOKUP_FIRST_BYTE                         4
+#define BYTE_SIZE                                 8
+#define BYTES2_SIZE                              16
+
+#define lpm6_tbl8_gindex next_hop
+
 /**< Added to avoid DPDK dependencies */
 #define CACHE_LINE_SIZE 64
 #define __rte_cache_aligned __attribute__((__aligned__(CACHE_LINE_SIZE)))
 
 #define RTE_LPM6_SHM_KEY 1
 
-/** LPM structure. */
-struct rte_lpm6;
+/** Flags for setting an entry as valid/invalid. */
+enum valid_flag {
+	INVALID = 0,
+	VALID
+};
+
+/** Tbl entry structure. It is the same for both tbl24 and tbl8 */
+struct rte_lpm6_tbl_entry {
+	uint32_t next_hop:	21;  /**< Next hop / next table to be checked. */
+	uint32_t depth	:8;      /**< Rule depth. */
+	
+	/* Flags. */
+	uint32_t valid     :1;   /**< Validation flag. */
+	uint32_t valid_group :1; /**< Group validation flag. */
+	uint32_t ext_entry :1;   /**< External entry. */
+};
+
+/** Rules tbl entry structure. */
+struct rte_lpm6_rule {
+	uint8_t ip[RTE_LPM6_IPV6_ADDR_SIZE]; /**< Rule IP address. */
+	uint8_t next_hop; /**< Rule next hop. */
+	uint8_t depth; /**< Rule depth. */
+};
+
+/** LPM6 structure. */
+struct rte_lpm6 {
+	/* LPM metadata. */
+	char name[RTE_LPM6_NAMESIZE];    /**< Name of the lpm. */
+	uint32_t max_rules;              /**< Max number of rules. */
+	uint32_t used_rules;             /**< Used rules so far. */
+	uint32_t number_tbl8s;           /**< Number of tbl8s to allocate. */
+	uint32_t next_tbl8;              /**< Next tbl8 to be used. */
+
+	/* LPM Tables. */
+	struct rte_lpm6_rule *rules_tbl; /**< LPM rules. */
+	struct rte_lpm6_tbl_entry tbl24[RTE_LPM6_TBL24_NUM_ENTRIES]
+			__rte_cache_aligned; /**< LPM tbl24 table. */
+	struct rte_lpm6_tbl_entry tbl8[0]
+			__rte_cache_aligned; /**< LPM tbl8 table. */
+};
 
 /** LPM configuration structure. */
 struct rte_lpm6_config {
@@ -94,3 +147,4 @@ void rte_lpm6_lookup_handopt(const struct rte_lpm6 *lpm,
 	uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE], int16_t *next_hops, int n);
 
 void *hrd_malloc_socket(int shm_key, int size, int socket_id);
+
