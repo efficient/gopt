@@ -30,13 +30,13 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	lp_info[port_id].mbufs[tot_buffered] = pkt;
 	tot_buffered ++;
 
-	// TX when a sufficient number of packets are buffered
+	/**< TX when a sufficient number of packets are buffered */
 	if(unlikely(tot_buffered == MAX_SRV_BURST)) {
 		int queue_id = lp_info[port_id].queue_id;
 		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, 
 			lp_info[port_id].mbufs, MAX_SRV_BURST);
 
-		// Free unsent packets
+		/**< Free unsent packets */
 		for(i = nb_tx_new; i < MAX_SRV_BURST; i ++) {
 			rte_pktmbuf_free(lp_info[port_id].mbufs[i]);
 		}
@@ -79,7 +79,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
 
 		/**< Send out the packet based on the value of resp */
-		send_packet(pkts[batch_index], resp & 3, lp_info);
+		send_packet(pkts[batch_index], dst_port, lp_info);
 	}
 }
 
