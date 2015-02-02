@@ -549,8 +549,7 @@ void rte_lpm6_lookup_nogoto(const struct rte_lpm6 *lpm,
 }
 
 void rte_lpm6_lookup_handopt(const struct rte_lpm6 *lpm,
-		uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE],
-		int16_t *next_hops, int n)
+		uint8_t ips[][RTE_LPM6_IPV6_ADDR_SIZE], int16_t *next_hops)
 {
 	const struct rte_lpm6_tbl_entry *tbl[BATCH_SIZE];
 	const struct rte_lpm6_tbl_entry *tbl_next[BATCH_SIZE] = {NULL};

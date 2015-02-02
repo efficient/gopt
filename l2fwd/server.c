@@ -84,7 +84,7 @@ lookup_step(const struct rte_lpm6 *lpm, const struct rte_lpm6_tbl_entry *tbl,
 
 /**< Process a batch of IPv6 packets. Unlike IPv4, we don't do a packet
  *  validity check here (similar to simple_ipv6_fwd_4pkts() in l3fwd */
-void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
                           const struct rte_lpm6 *lpm,
                           struct lcore_port_info *lp_info)
 {
@@ -164,7 +164,7 @@ fpp_end:
 
 /**< Process a batch of IPv6 packets. Unlike IPv4, we don't do a packet
   *  validity check here (similar to simple_ipv6_fwd_4pkts() in l3fwd */
-void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 	const struct rte_lpm6 *lpm, 
 	struct lcore_port_info *lp_info)
 {
@@ -222,7 +222,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 
 /**< Forward packets on a random port without performing IPv6 lookups.
   *  Enabled by setting PASSTHROUGH = 1 in main.h */
-void process_batch_passthrough(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+void process_batch_passthrough(struct rte_mbuf **pkts, int nb_pkts,
 	struct lcore_port_info *lp_info)
 {
 	int batch_index = 0;
@@ -303,15 +303,12 @@ void run_server(struct rte_lpm6 *lpm)
 		lp_info[port_id].nb_rx += nb_rx_new;
 
 #if PASSTHROUGH == 1
-		process_batch_passthrough(rx_pkts_burst, nb_rx_new, port_id,
-			lp_info);
+		process_batch_passthrough(rx_pkts_burst, nb_rx_new, lp_info);
 #else
 	#if GOTO == 1
-		process_batch_goto(rx_pkts_burst, nb_rx_new, port_id,
-			lpm, lp_info);
+		process_batch_goto(rx_pkts_burst, nb_rx_new, lpm, lp_info);
 	#else
-		process_batch_nogoto(rx_pkts_burst, nb_rx_new, port_id,
-			lpm, lp_info);
+		process_batch_nogoto(rx_pkts_burst, nb_rx_new, lpm, lp_info);
 	#endif
 #endif
 		
