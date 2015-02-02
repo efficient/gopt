@@ -13,7 +13,6 @@
 
 #define MAX_IPV4_RULES (2 * 1024 * 1024)
 #define PREFIX_FILE "../../../data_dump/ipv4/ipv4_java_out"
-#define IP_FILE "java/ip_file"
 
 #define NUM_IPS (64 * 1024 * 1024)
 
