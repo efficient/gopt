@@ -247,7 +247,7 @@ int main(int argc, char **argv)
 
 	/**< Create the IPv4 cache and copy it over */
 	blue_printf("\tGPU master: creating rte_lpm lookup table\n");
-	lpm = ipv4_init(IPv4_PORT_MASK);
+	lpm = ipv4_init(IPv4_XIA_R2_PORT_MASK);
 
 	/**< rte_lpm_tbl24_entry ~ rte_lpm_tbl8_entry ~ uint16_t */
 	int entry_sz = sizeof(struct rte_lpm_tbl24_entry);

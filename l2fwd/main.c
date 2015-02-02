@@ -1,6 +1,6 @@
 #include "main.h"
 int is_client = -1, client_id;
-volatile struct wm_queue *wmq;
+volatile struct wm_queue *wmq = NULL;
 
 struct rte_lpm *lpm;
 static struct ether_addr l2fwd_ports_eth_addr[RTE_MAX_ETHPORTS]; /**< MACs */
@@ -82,6 +82,7 @@ main(int argc, char **argv)
 			wm_queue_bytes / M_2);
 
 		wmq = shm_map(WM_QUEUE_KEY, wm_queue_bytes);
+		assert(wmq != NULL);
 		red_printf("\tDPDK main: Mapping worker-master queues done\n");
 	}
 

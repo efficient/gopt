@@ -109,13 +109,15 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 	}
 
 	/**< Snapshot the tail into a local variable */
-	int tail = lc_wmq->tail;
+	long long tail = lc_wmq->tail;
 	while(lc_wmq->sent != tail) {
 		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		/**< Offset in queue */
 		struct rte_mbuf *send_mbuf = lc_wmq->mbufs[q_i];
+		int dst_port = (uint8_t) lc_wmq->resps[q_i];
 		
-		/**< Measure latency added by GPU for stamped packets.
-		  *  Use the destination address here because of swap_mac */
+		// TODO: Make doing this optional to check if it has impact on performance
+		/**< Measure latency added by GPU for stamped packets. Use the
+		  *  destination address here because of swap_mac. */
 		eth_hdr = (struct ether_hdr *) send_mbuf->pkt.data;
 		if(eth_hdr->d_addr.addr_bytes[0] != 0xef) {
 			srv_tsc = (LL *) (rte_pktmbuf_mtod(send_mbuf, char *) +
@@ -125,7 +127,7 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		}
 		
 		/**< Use the GPU's response to determine the output port */
-		send_packet(send_mbuf, lc_wmq->resps[q_i], lp_info);
+		send_packet(send_mbuf, dst_port, lp_info);
 
 		lc_wmq->sent ++;
 	}
