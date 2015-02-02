@@ -51,7 +51,7 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
-void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 	const struct rte_lpm *lpm, 
 	struct lcore_port_info *lp_info)
 {
@@ -76,8 +76,6 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 			rte_pktmbuf_free(pkts[batch_index]);
 			continue;
 		}	
-
-		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[port_id]);
 
 		ip_hdr->time_to_live --;
 		ip_hdr->hdr_checksum ++;
@@ -107,19 +105,21 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 		  *  of packets. This needs to be fixed, but probably won't affect perf
 		  *  much because the failure is detected on accessing tbl24 (tbl8s are
 		  *  still not being accessed).
-		  *  assert((tbl_entry & RTE_LPM_LOOKUP_SUCCESS) == 0); */
+		  *  Check success: assert((tbl_entry & RTE_LPM_LOOKUP_SUCCESS) == 0);
+		  *  XXX: Hack - make dst_port random by using randomness from dst_ip*/
 
-		dst_port = (uint8_t) tbl_entry;
+		dst_port = (uint8_t) (tbl_entry + dst_ip) & 3;
 		/**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
-		/**< Use the looked-up port to determine dst MAC */
+		/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
+		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[dst_port]);
 		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
 
 		send_packet(pkts[batch_index], dst_port, lp_info);
 	}
 }
 
-void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
+void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
                           const struct rte_lpm *lpm,
                           struct lcore_port_info *lp_info)
 {
@@ -156,8 +156,6 @@ fpp_start:
             goto fpp_end;
         }
         
-        set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
-        
         ip_hdr[I]->time_to_live --;
         ip_hdr[I]->hdr_checksum ++;
         
@@ -183,10 +181,11 @@ fpp_label_1:
             tbl_entry[I] = *(const uint16_t *)&lpm->tbl8[tbl8_index[I]];
         }
         
-        dst_port[I] = (uint8_t) tbl_entry[I];
+        dst_port[I] = (uint8_t) (tbl_entry[I] + dst_ip[I]) & 3;
         /**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
         
-        /**< Use the looked-up port to determine dst MAC */
+		/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
+        set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[dst_port[I]]);
         set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[dst_port[I]]);
         
         send_packet(pkts[I], dst_port[I], lp_info);
@@ -254,11 +253,9 @@ void run_server(struct rte_lpm *lpm)
 		lp_info[port_id].nb_rx += nb_rx_new;
 
 #if GOTO == 1
-		process_batch_goto(rx_pkts_burst, nb_rx_new, port_id,
-			lpm, lp_info);
+		process_batch_goto(rx_pkts_burst, nb_rx_new, lpm, lp_info);
 #else
-		process_batch_nogoto(rx_pkts_burst, nb_rx_new, port_id,
-			lpm, lp_info);
+		process_batch_nogoto(rx_pkts_burst, nb_rx_new, lpm, lp_info);
 #endif
 		
 		/**< STAT PRINTING */
