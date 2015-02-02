@@ -6,9 +6,12 @@
 
 #define IPV4_PREFIX_FILE "../data_dump/ipv4/ipv4_java_out"
 
-/**< Don't want to include rte header */
+/**< Don't want to include DPDK headers */
 #define IPv4_MAX_ETHPORTS 16
 #define IPv4_ISSET(a, i) (a & (1 << i))
+
+/**< Don't want to include main.h for XIA_R2_PORT_MASK */
+#define IPv4_XIA_R2_PORT_MASK 0xf
 
 struct ipv4_prefix {
 	int depth;	/**< Number of bits required to match exactly */

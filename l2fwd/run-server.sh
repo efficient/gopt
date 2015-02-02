@@ -11,7 +11,7 @@ blue "Killing existing GPU-master processes"
 sudo killall master
 
 blue "Re-compiling master's CUDA code"
-nvcc -O3 -o master util.c ipv4.c master.cu -lrt
+nvcc -O3 -o master util.c ipv4.c rte_lpm.c master.cu -lrt -lnuma
 
 blue "Re-compiling DPDK code"
 make clean

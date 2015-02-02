@@ -99,7 +99,6 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		lc_wmq->reqs[head & WM_QUEUE_CAP_] = dst_ip;
 		lc_wmq->mbufs[head & WM_QUEUE_CAP_] = (void *) pkts[batch_index];
 
-
 		head ++;
 	}
 

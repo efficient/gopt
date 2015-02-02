@@ -80,7 +80,7 @@
 #define __rte_cache_aligned __attribute__((__aligned__(CACHE_LINE_SIZE)))
 #define unlikely(x)  __builtin_expect((x),0)
 
-#define RTE_LPM4_SHM_KEY 1
+#define RTE_LPM4_SHM_KEY 2
 
 /** @internal Tbl24 entry structure. */
 struct rte_lpm_tbl24_entry {
