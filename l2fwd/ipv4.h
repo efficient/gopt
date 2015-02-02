@@ -1,21 +1,50 @@
-#include <stdio.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <assert.h>
+#include "rte_lpm.h"
 
-#include "city.h"
-#include "util.h"
+#define IPV4_ADDR_LEN 4
+#define PROBE_ADDR_SHM_KEY 2
+#define IPV4_MAX_RULES (2 * 1024 * 1024)
 
-#define IPv4_TABLE_24_KEY 2
-#define IPv4_TABLE_LONG_KEY 3
+#define IPV4_PREFIX_FILE "../data_dump/ipv4/ipv4_java_out"
 
-#define IPv4_TABLE_LONG_CAP (64 * 1024 * 1024)		// 256 MB
+/**< Don't want to include rte header */
+#define IPv4_MAX_ETHPORTS 16
+#define IPv4_ISSET(a, i) (a & (1 << i))
 
-#define IPv4_PORT_MASK 0xf
-
-struct dir_ipv4_table {
-	int *tbl_24;
-	int *tbl_long;
+struct ipv4_prefix {
+	int depth;	/**< Number of bits required to match exactly */
+	uint8_t bytes[IPV4_ADDR_LEN];
+	int dst_port;
 };
 
-void dir_ipv4_init(struct dir_ipv4_table *ipv4_table, int portmask);
+struct ipv4_addr {
+	uint8_t bytes[IPV4_ADDR_LEN];
+};
+
+struct ipv4_perm {
+	uint8_t P[256];
+};
+
+/**< Initialize the LPM tables for IPv4 */
+struct rte_lpm *ipv4_init(int portmask);
+
+/**< Read IPv4 prefixes from a file */
+struct ipv4_prefix *ipv4_read_prefixes(const char *prefixes_file,
+	int *num_prefixes);
+
+/**< Generate IPv4 prefixes randomly */
+struct ipv4_prefix *ipv4_gen_rand_prefixes(int num_prefixes);
+
+/**< Increase the number of prefixes in prefix_arr. Returns a new
+  *  array with num_prefixes * amp_factor prefixes */
+struct ipv4_prefix *ipv4_amp_prefixes(struct ipv4_prefix *prefix_arr,
+	int num_prefixes, int amp_factor);
+
+/**< Generate probe IPv4 addresses from prefixes */
+struct ipv4_addr *ipv4_gen_addrs(int num_addrs,
+	struct ipv4_prefix *prefix_arr, int num_prefixes);
+
+/**< Generate N different permutations of 0, ..., 255 */
+struct ipv4_perm *ipv4_gen_perms(int N);
+
+void ipv4_print_prefix(struct ipv4_prefix *prefix);
+void ipv4_print_addr(struct ipv4_addr *addr);

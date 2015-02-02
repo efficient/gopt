@@ -1,11 +1,12 @@
 #include "main.h"
 
-// Only immutable information should be global
-// xia-router2 xge0,1,2,3,4,5,6,7
+/**< Only immutable information should be global
+  *  xia-router2 xge0,1,2,3,4,5,6,7 */
 LL src_mac_arr[8] = {0x6c10bb211b00, 0x6d10bb211b00, 0x64d2bd211b00, 0x65d2bd211b00,
 					 0xc8a610ca0568, 0xc9a610ca0568, 0xa2a610ca0568, 0xa3a610ca0568};
 
-// xia-router0 xge0,1    xia-router1 xge0,1    xia-router0 xge2,3    xia-router1 xge2,3
+/**< xia-router0 xge0,1    xia-router1 xge0,1
+  *  xia-router0 xge2,3    xia-router1 xge2,3 */
 LL dst_mac_arr[8] = {0x36d3bd211b00, 0x37d3bd211b00, 0x44d7a3211b00, 0x45d7a3211b00,
 					 0xa8d6a3211b00, 0xa9d6a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00};
 
@@ -29,13 +30,13 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	lp_info[port_id].mbufs[tot_buffered] = pkt;
 	tot_buffered ++;
 
-	// TX when a sufficient number of packets are buffered
+	/**< TX when a sufficient number of packets are buffered */
 	if(unlikely(tot_buffered == MAX_SRV_BURST)) {
 		int queue_id = lp_info[port_id].queue_id;
 		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, 
 			lp_info[port_id].mbufs, MAX_SRV_BURST);
 
-		// Free unsent packets
+		/**< Free unsent packets */
 		for(i = nb_tx_new; i < MAX_SRV_BURST; i ++) {
 			rte_pktmbuf_free(lp_info[port_id].mbufs[i]);
 		}
@@ -81,9 +82,8 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 			continue;
 		}	
 
-		/** < Timestamp some pkts before putting on work queue 
-		  *   This works because the src mac address for most packets
-		  *   is 0xdeadbeef */
+		/**< Timestamp some pkts before putting on work queue. This works
+		  *  because the src mac address for most packets is 0xdeadbeef. */
 		if(eth_hdr->s_addr.addr_bytes[0] != 0xef) {
 			srv_tsc = (LL *) (rte_pktmbuf_mtod(pkts[batch_index], char *) +
 				hdr_size + 12);
@@ -103,20 +103,20 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		head ++;
 	}
 
-	// Update the shared head to enque the entire batch	
+	/**< Update the shared head to enque the entire batch */
 	lc_wmq->head = head;
 	while(lc_wmq->head - lc_wmq->tail >= WM_QUEUE_THRESH) {
-		// Do nothing
+		/**< Do nothing */
 	}
 
-	// Snapshot the tail into a local variable
+	/**< Snapshot the tail into a local variable */
 	int tail = lc_wmq->tail;
 	while(lc_wmq->sent != tail) {
-		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		// Offset in queue
+		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		/**< Offset in queue */
 		struct rte_mbuf *send_mbuf = lc_wmq->mbufs[q_i];
 		
-		/** < Measure latency added by GPU for stamped packets.
-		  *   Use the destination address here because of swap_mac */
+		/**< Measure latency added by GPU for stamped packets.
+		  *  Use the destination address here because of swap_mac */
 		eth_hdr = (struct ether_hdr *) send_mbuf->pkt.data;
 		if(eth_hdr->d_addr.addr_bytes[0] != 0xef) {
 			srv_tsc = (LL *) (rte_pktmbuf_mtod(send_mbuf, char *) +
@@ -125,7 +125,7 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 			lp_info[0].gpu_added_latency_samples += 1;
 		}
 		
-		/** < Use the GPU's response to determine the output port */
+		/**< Use the GPU's response to determine the output port */
 		send_packet(send_mbuf, lc_wmq->resps[q_i], lp_info);
 
 		lc_wmq->sent ++;
@@ -149,7 +149,7 @@ void run_server(volatile struct wm_queue *wmq)
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
 	
-	// Initialize the per-port info for this lcore
+	/**< Initialize the per-port info for this lcore */
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
 	memset(lp_info, 0, RTE_MAX_ETHPORTS * sizeof(struct lcore_port_info));
 	for(i = 0; i < RTE_MAX_ETHPORTS; i ++) {
@@ -169,8 +169,8 @@ void run_server(volatile struct wm_queue *wmq)
 		int port_id = port_arr[port_index];	// The port to use in this iteration
 		int nb_rx_new = 0, tries = 0;
 		
-		// Lcores *cannot* wait for a particular number of packets from a port.
-		//  If we do this, the port mysteriously runs out of RX descriptors.
+		/**< Lcores *cannot* wait for a fixed number of packets from a port.
+		  *  If we do this, the port mysteriously runs out of RX desc */
 		while(nb_rx_new < MAX_SRV_BURST && tries < 5) {
 			nb_rx_new += rte_eth_rx_burst(port_id, queue_id, 
 				&rx_pkts_burst[nb_rx_new], MAX_SRV_BURST - nb_rx_new);
@@ -182,7 +182,7 @@ void run_server(volatile struct wm_queue *wmq)
 			continue;
 		}
 
-		// Measurements for burst size averaging
+		/**< Measurements for burst size averaging */
 		brst_sz_msr[MSR_SAMPLES] ++;
 		brst_sz_msr[MSR_TOT] += nb_rx_new;
 	
@@ -190,7 +190,7 @@ void run_server(volatile struct wm_queue *wmq)
 
 		process_batch_gpu(rx_pkts_burst, nb_rx_new, lp_info, lc_wmq);
 		
-		// STAT PRINTING
+		/**< STAT PRINTING */
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {
 			tput_tsc[1] = rte_rdtsc();
 			double nanoseconds = S_FAC * (tput_tsc[1] - tput_tsc[0]);
@@ -205,19 +205,20 @@ void run_server(volatile struct wm_queue *wmq)
 				lp_info[0].nb_tx_all_ports / seconds,
 				gpu_added_us / lp_info[0].gpu_added_latency_samples);
 
+			/**< Reset all-port stats in case port 0 is disabled */
+			lp_info[0].nb_tx_all_ports = 0;
+			lp_info[0].gpu_added_latency = 0;
+			lp_info[0].gpu_added_latency_samples = 0;
+
 			for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
 				if(ISSET(XIA_R2_PORT_MASK, i)) {
 					printf("\tLcore: %d, port: %d: %f\n", lcore_id, i, 
 						lp_info[i].nb_tx / seconds);
 				}
 
-				// Do not reset the nb_buf counter
+				/**< Do not reset the nb_buf counter */
 				lp_info[i].nb_tx = 0;
 				lp_info[i].nb_rx = 0;
-	
-				lp_info[i].nb_tx_all_ports = 0;
-				lp_info[i].gpu_added_latency = 0;
-				lp_info[i].gpu_added_latency_samples = 0;
 			}
 
 			printf("\tLcore %d, Average TX burst size: %lld\n", lcore_id, 
