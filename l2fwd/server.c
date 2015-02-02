@@ -103,6 +103,12 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 			tbl_entry = *(const uint16_t *)&lpm->tbl8[tbl8_index];
 		}
 
+		/**< TODO: Using totally random prefixes causes the LPM to fail for 50%
+		  *  of packets. This needs to be fixed, but probably won't affect perf
+		  *  much because the failure is detected on accessing tbl24 (tbl8s are
+		  *  still not being accessed).
+		  *  assert((tbl_entry & RTE_LPM_LOOKUP_SUCCESS) == 0); */
+
 		dst_port = (uint8_t) tbl_entry;
 		/**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
