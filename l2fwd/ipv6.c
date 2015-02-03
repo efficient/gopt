@@ -29,7 +29,7 @@ struct rte_lpm6 *ipv6_init(int portmask,
 	if(add_prefixes == 1) {
 		struct rte_lpm6_config ipv6_config;
 		ipv6_config.max_rules = 1000000;
-		ipv6_config.number_tbl8s = 1024 * 1024;
+		ipv6_config.number_tbl8s = IPV6_NUM_TBL8;
 		assert(num_prefixes < (int) ipv6_config.max_rules);
 
 		struct rte_lpm6 *lpm = rte_lpm6_create(0, &ipv6_config);

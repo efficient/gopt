@@ -30,13 +30,13 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	lp_info[port_id].mbufs[tot_buffered] = pkt;
 	tot_buffered ++;
 
-	// TX when a sufficient number of packets are buffered
+	/**< TX when a sufficient number of packets are buffered */
 	if(unlikely(tot_buffered == MAX_SRV_BURST)) {
 		int queue_id = lp_info[port_id].queue_id;
 		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, 
 			lp_info[port_id].mbufs, MAX_SRV_BURST);
 
-		// Free unsent packets
+		/**< Free unsent packets */
 		for(i = nb_tx_new; i < MAX_SRV_BURST; i ++) {
 			rte_pktmbuf_free(lp_info[port_id].mbufs[i]);
 		}
@@ -264,7 +264,7 @@ void run_server(struct rte_lpm6 *lpm)
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
 	
-	// Initialize the per-port info for this lcore
+	/**< Initialize the per-port info for this lcore */
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
 	memset(lp_info, 0, RTE_MAX_ETHPORTS * sizeof(struct lcore_port_info));
 	for(i = 0; i < RTE_MAX_ETHPORTS; i ++) {
@@ -284,7 +284,7 @@ void run_server(struct rte_lpm6 *lpm)
 		int nb_rx_new = 0, tries = 0;
 		
 		/**< Lcores *cannot* wait for a fixed number of packets from a port.
-		  * If we do this, the port mysteriously runs out of RX desc */
+		  *  If we do this, the port mysteriously runs out of RX desc */
 		while(nb_rx_new < MAX_SRV_BURST && tries < 5) {
 			nb_rx_new += rte_eth_rx_burst(port_id, queue_id, 
 				&rx_pkts_burst[nb_rx_new], MAX_SRV_BURST - nb_rx_new);

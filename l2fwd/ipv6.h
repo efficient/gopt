@@ -7,6 +7,8 @@
 #define IPV6_NUM_RAND_PREFIXES 200000
 #define IPV6_RAND_PREFIXES_SEED 3185
 
+/**< Number of tbl8s to request from DPDK lpm6 */
+#define IPV6_NUM_TBL8 (1024 * 1024)
 struct ipv6_prefix {
 	int depth;	/**< Number of bits required to match exactly */
 	uint8_t bytes[IPV6_ADDR_LEN];

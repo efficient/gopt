@@ -32,8 +32,11 @@ void run_client(int client_id,
 
 	/**< This is a valid queue_id because all client ports have 3 queues */
 	int queue_id = lcore_id % 3;
-	red_printf("Client: lcore: %d, port: %d, queue: %d\n", 
-		lcore_id, port_id, queue_id);
+	srand((int) rte_rdtsc());
+	int prefix_arr_i = rand() % IPV6_NUM_RAND_PREFIXES;
+
+	red_printf("Client: lcore = %d, port = %d, queue = %d, prfx_arr_i = %d \n",
+		lcore_id, port_id, queue_id, prefix_arr_i);
 
 	LL prev_tsc = 0, cur_tsc = 0;
 	prev_tsc = rte_rdtsc();
@@ -51,7 +54,6 @@ void run_client(int client_id,
 	int hdr_size = 56;
 
 	float sleep_us = 2;
-	int prefix_arr_i = 0;
 	
 	while (1) {
 
@@ -66,6 +68,7 @@ void run_client(int client_id,
 			/**< Initialize Ethernet header */
 			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
 			if((fastrand(&rss_seed) & 0xff) == 0) {
+				/**< STAMP: This pkt is used for GPU latency measurement. */
 				set_mac(src_mac_ptr, src_mac_arr[client_id][port_id]);
 			} else {
 				set_mac(src_mac_ptr, 0xdeadbeef);
