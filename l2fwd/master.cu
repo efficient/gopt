@@ -14,14 +14,41 @@ extern "C" {
 }
 
 __global__ void
-ipv6Gpu(struct ipv6_addr *req, uint16_t *resp, 
-	uint16_t *tbl24, uint16_t *tbl8,
+ipv6Gpu(struct ipv6_addr *req, uint32_t *resp, 
+	uint32_t *tbl24, uint32_t *tbl8,
 	int num_reqs)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
+	int status;
+	uint8_t first_byte;
+	uint32_t tbl24_index, tbl8_index, tbl_entry;
+	uint8_t *ip;
+
 	if (i < num_reqs) {
-		resp[i] = i & 3;
+		ip = req[i].bytes;
+
+		first_byte = LOOKUP_FIRST_BYTE;
+		tbl24_index = (ip[0] << BYTES2_SIZE) | (ip[1] << BYTE_SIZE) | ip[2];
+
+		tbl_entry = tbl24[tbl24_index];
+		
+		do {
+			if ((tbl_entry & RTE_LPM6_VALID_EXT_ENTRY_BITMASK) ==
+				RTE_LPM6_VALID_EXT_ENTRY_BITMASK) {
+				
+				tbl8_index = ip[first_byte - 1] +
+					((tbl_entry & RTE_LPM6_TBL8_BITMASK) *
+					RTE_LPM6_TBL8_GROUP_NUM_ENTRIES);
+
+				tbl_entry = tbl8[tbl8_index];
+				first_byte ++;
+				status = 1;
+			} else {
+				resp[i] = tbl_entry;
+				status = 0;
+			}
+		} while (status == 1);
 	}
 }
 
@@ -29,8 +56,8 @@ ipv6Gpu(struct ipv6_addr *req, uint16_t *resp,
   *  active worker. */
 void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 	struct ipv6_addr *h_reqs, struct ipv6_addr *d_reqs,	/**< Kernel inputs */
-	uint16_t *h_resps, uint16_t *d_resps,	/**< Kernel outputs */
-	uint16_t *d_tbl24, uint16_t *d_tbl8,	/**< IPv8 lookup tables */
+	uint32_t *h_resps, uint32_t *d_resps,	/**< Outputs, tbl_entry ~ 4B */
+	uint32_t *d_tbl24, uint32_t *d_tbl8,	/**< IPv6 lookup tables */
 	int num_workers, int *worker_lcores)
 {
 	assert(num_workers != 0);
@@ -107,7 +134,7 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		CPE(err != cudaSuccess, "Failed to launch ipv6Gpu kernel\n");
 
 		/**< Copy responses from device */
-		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(uint16_t),
+		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(uint32_t),
 			cudaMemcpyDeviceToHost, my_stream);
 		CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
 
@@ -165,8 +192,8 @@ int main(int argc, char **argv)
 
 	/**< CUDA buffers */
 	struct ipv6_addr *h_reqs, *d_reqs;
-	uint16_t *h_resps, *d_resps;	
-	uint16_t *d_tbl24, *d_tbl8;	/**< No need for host pinned memory */
+	uint32_t *h_resps, *d_resps;	
+	uint32_t *d_tbl24, *d_tbl8;	/**< No need for host pinned memory */
 
 	struct rte_lpm6 *lpm;
 	struct ipv6_prefix *prefix_arr;
@@ -223,7 +250,7 @@ int main(int argc, char **argv)
 
 	/**< Allocate buffers for responses for all workers */
 	blue_printf("\tGPU master: creating buffers for responses\n");
-	int resps_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint16_t);
+	int resps_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint32_t);
 	err = cudaMallocHost((void **) &h_resps, resps_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMallocHost resp buffers\n");
 	err = cudaMalloc((void **) &d_resps, resps_buf_size);
