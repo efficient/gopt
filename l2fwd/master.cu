@@ -249,6 +249,18 @@ int main(int argc, char **argv)
 	blue_printf("\tGPU master: creating rte_lpm lookup table\n");
 	lpm = ipv4_init(IPv4_XIA_R2_PORT_MASK);
 
+	/**< XXX: HACK - Failed lookups should choose a random port. This hack
+	  *  overdoes it and directs *all* lookups to a random ports. */
+	for(i = 0; i < RTE_LPM_TBL24_NUM_ENTRIES; i ++) {
+		uint16_t *tbl24_entry = (uint16_t *) &(lpm->tbl24[i]);
+
+		/**< If this entry does not point to a tbl8, randomize it. */
+		if((*tbl24_entry & RTE_LPM_VALID_EXT_ENTRY_BITMASK) !=
+				RTE_LPM_VALID_EXT_ENTRY_BITMASK) {
+			*tbl24_entry = i & 3;
+		}
+	}
+
 	/**< rte_lpm_tbl24_entry ~ rte_lpm_tbl8_entry ~ uint16_t */
 	int entry_sz = sizeof(struct rte_lpm_tbl24_entry);
 	int tbl24_bytes = RTE_LPM_TBL24_NUM_ENTRIES * entry_sz;

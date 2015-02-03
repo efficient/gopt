@@ -61,7 +61,6 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 	int batch_index = 0, hdr_size = 36;
 
 	struct ether_hdr *eth_hdr;
-	void *dst_mac_ptr, *src_mac_ptr;
 	struct ipv4_hdr *ip_hdr;
 	uint32_t dst_ip;
 
@@ -75,24 +74,20 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		}
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
-		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
+		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr +
+			sizeof(struct ether_hdr));
 
 		if(is_valid_ipv4_pkt(ip_hdr, pkts[batch_index]->pkt.pkt_len) < 0) {
 			rte_pktmbuf_free(pkts[batch_index]);
 			continue;
 		}	
 
-		/**< Timestamp some pkts before putting on work queue. This works
-		  *  because the src mac address for most packets is 0xdeadbeef. */
-		if(eth_hdr->s_addr.addr_bytes[0] != 0xef) {
+		/**< Timestamp (client) STAMPed pkts before putting on work queue */
+		if(unlikely(eth_hdr->s_addr.addr_bytes[0] != 0xef)) {
 			srv_tsc = (LL *) (rte_pktmbuf_mtod(pkts[batch_index], char *) +
 				hdr_size + 12);
 			srv_tsc[0] = rte_rdtsc();
 		}
-
-		src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
-		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
-		swap_mac(src_mac_ptr, dst_mac_ptr);
 
 		dst_ip = ip_hdr->src_addr;
 
@@ -112,26 +107,31 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 	long long tail = lc_wmq->tail;
 	while(lc_wmq->sent != tail) {
 		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		/**< Offset in queue */
-		struct rte_mbuf *send_mbuf = lc_wmq->mbufs[q_i];
+		struct rte_mbuf *send_pkt = lc_wmq->mbufs[q_i];
+
+		eth_hdr = (struct ether_hdr *) send_pkt->pkt.data;
+
+		/**< TODO FIX: Uses randomness from src_addr to balance port load */
 		int dst_port = (uint8_t) lc_wmq->resps[q_i];
-		
-		// TODO: Make doing this optional to check if it has impact on performance
-		/**< Measure latency added by GPU for stamped packets. Use the
-		  *  destination address here because of swap_mac. */
-		eth_hdr = (struct ether_hdr *) send_mbuf->pkt.data;
-		if(eth_hdr->d_addr.addr_bytes[0] != 0xef) {
-			srv_tsc = (LL *) (rte_pktmbuf_mtod(send_mbuf, char *) +
+
+		/**< Measure latency added by GPU for STAMPed packets */
+		eth_hdr = (struct ether_hdr *) send_pkt->pkt.data;
+		if(unlikely(eth_hdr->s_addr.addr_bytes[0] != 0xef)) {
+			srv_tsc = (LL *) (rte_pktmbuf_mtod(send_pkt, char *) +
 				hdr_size + 12);
 			lp_info[0].gpu_added_latency += rte_rdtsc() - srv_tsc[0];
 			lp_info[0].gpu_added_latency_samples += 1;
 		}
+
+		/**< Modify L2 header: Do this after checking src mac for STAMP */
+		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[dst_port]);
+		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
 		
 		/**< Use the GPU's response to determine the output port */
-		send_packet(send_mbuf, dst_port, lp_info);
+		send_packet(send_pkt, dst_port, lp_info);
 
 		lc_wmq->sent ++;
 	}
-	
 }
 
 void run_server(volatile struct wm_queue *wmq)
