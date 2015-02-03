@@ -8,46 +8,29 @@
 /**< NVCC assumes that all header files are C++ files. Tell it that these are
   *  C header files. */
 extern "C" {
-#include "ipv4.h"
+#include "ipv6.h"
 #include "worker-master.h"
 #include "util.h"
 }
 
 __global__ void
-ipv4Gpu(uint32_t *req, uint16_t *resp, 
+ipv6Gpu(struct ipv6_addr *req, uint16_t *resp, 
 	uint16_t *tbl24, uint16_t *tbl8,
 	int num_reqs)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < num_reqs) {
-		uint32_t ip = req[i];
-		uint32_t tbl24_index = (ip >> 8);
-		uint16_t tbl_entry;
-
-		/* Copy tbl24 entry */
-		tbl_entry = tbl24[tbl24_index];
-
-		/* Copy tbl8 entry (only if needed) */
-		if((tbl_entry & RTE_LPM_VALID_EXT_ENTRY_BITMASK) ==
-				RTE_LPM_VALID_EXT_ENTRY_BITMASK) {
-
-			unsigned tbl8_index = (uint8_t) ip +
-					((uint8_t) tbl_entry * RTE_LPM_TBL8_GROUP_NUM_ENTRIES);
-
-			tbl_entry = tbl8[tbl8_index];
-		}
-
-		resp[i] = tbl_entry;
+		resp[i] = i & 3;
 	}
 }
 
 /**< wmq: the worker/master queue for all lcores. Non-NULL iff the lcore is an
   *  active worker. */
 void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
-	uint32_t *h_reqs, uint32_t *d_reqs,	/**< Kernel inputs */
+	struct ipv6_addr *h_reqs, struct ipv6_addr *d_reqs,	/**< Kernel inputs */
 	uint16_t *h_resps, uint16_t *d_resps,	/**< Kernel outputs */
-	uint16_t *d_tbl24, uint16_t *d_tbl8,	/**< IPv4 lookup tables */
+	uint16_t *d_tbl24, uint16_t *d_tbl8,	/**< IPv8 lookup tables */
 	int num_workers, int *worker_lcores)
 {
 	assert(num_workers != 0);
@@ -95,12 +78,12 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 			/**< Record the beginning of the GPU req. buffer for this lcore */
 			req_lo[w_lid] = nb_req;
 
-			/**< Add the new packets from this lcore to the request buffer */
+			/**< Add the new requests from this worker to the GPU req. buffer */
 			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
 				int q_i = i & WM_QUEUE_CAP_;	/**< Queues are circular */
-				uint32_t req = lc_wmq->reqs[q_i];
 
-				h_reqs[nb_req] = req;
+				ipv6_mov16((uint8_t *) &h_reqs[nb_req],
+					(uint8_t *) lc_wmq->reqs[q_i].bytes);
 				nb_req ++;
 			}
 		}
@@ -118,10 +101,10 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		int threadsPerBlock = 256;
 		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
 	
-		ipv4Gpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
+		ipv6Gpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
 			d_resps, d_tbl24, d_tbl8, nb_req);
 		err = cudaGetLastError();
-		CPE(err != cudaSuccess, "Failed to launch ipv4Gpu kernel\n");
+		CPE(err != cudaSuccess, "Failed to launch ipv6Gpu kernel\n");
 
 		/**< Copy responses from device */
 		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(uint16_t),
@@ -181,11 +164,12 @@ int main(int argc, char **argv)
 	volatile struct wm_queue *wmq;
 
 	/**< CUDA buffers */
-	uint32_t *h_reqs, *d_reqs;
+	struct ipv6_addr *h_reqs, *d_reqs;
 	uint16_t *h_resps, *d_resps;	
 	uint16_t *d_tbl24, *d_tbl8;	/**< No need for host pinned memory */
 
-	struct rte_lpm *lpm;
+	struct rte_lpm6 *lpm;
+	struct ipv6_prefix *prefix_arr;
 
 	/**< Get the worker lcore mask */
 	while ((c = getopt (argc, argv, "c:")) != -1) {
@@ -245,26 +229,14 @@ int main(int argc, char **argv)
 	err = cudaMalloc((void **) &d_resps, resps_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMalloc resp buffers\n");
 
-	/**< Create the IPv4 cache and copy it over */
+	/**< Create the IPv6 LPM structure and copy it over */
 	blue_printf("\tGPU master: creating rte_lpm lookup table\n");
-	lpm = ipv4_init(IPv4_XIA_R2_PORT_MASK);
+	lpm = ipv6_init(IPV6_XIA_R2_PORT_MASK, &prefix_arr, 1);
 
-	/**< XXX: HACK - Failed lookups should choose a random port. This hack
-	  *  overdoes it and directs *all* lookups to a random ports. */
-	for(i = 0; i < RTE_LPM_TBL24_NUM_ENTRIES; i ++) {
-		uint16_t *tbl24_entry = (uint16_t *) &(lpm->tbl24[i]);
-
-		/**< If this entry does not point to a tbl8, randomize it. */
-		if((*tbl24_entry & RTE_LPM_VALID_EXT_ENTRY_BITMASK) !=
-				RTE_LPM_VALID_EXT_ENTRY_BITMASK) {
-			*tbl24_entry = i & 3;
-		}
-	}
-
-	/**< rte_lpm_tbl24_entry ~ rte_lpm_tbl8_entry ~ uint16_t */
-	int entry_sz = sizeof(struct rte_lpm_tbl24_entry);
-	int tbl24_bytes = RTE_LPM_TBL24_NUM_ENTRIES * entry_sz;
-	int tbl8_bytes = RTE_LPM_TBL8_NUM_ENTRIES * entry_sz;
+	/**< rte_lpm6_tbl_entry is 4 bytes */
+	int entry_sz = sizeof(struct rte_lpm6_tbl_entry);
+	int tbl24_bytes = RTE_LPM6_TBL24_NUM_ENTRIES * entry_sz;
+	int tbl8_bytes = IPV6_NUM_TBL8 * RTE_LPM6_TBL8_GROUP_NUM_ENTRIES;
 	
 	/**< Alloc and copy tbl24 and tbl8 arrays to GPU memory */
 	blue_printf("\tGPU master: alloc tbl24 (size = %d bytes) on device\n",

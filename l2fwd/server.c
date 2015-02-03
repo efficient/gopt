@@ -58,11 +58,10 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 	 struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq)
 {
-	int batch_index = 0, hdr_size = 36;
+	int batch_index = 0, hdr_size = 56;
 
 	struct ether_hdr *eth_hdr;
-	struct ipv4_hdr *ip_hdr;
-	uint32_t dst_ip;
+	struct ipv6_hdr *ip6_hdr;
 
 	int head = lc_wmq->head;
 	LL *srv_tsc;
@@ -74,13 +73,8 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		}
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
-		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr +
+		ip6_hdr = (struct ipv6_hdr *) ((char *) eth_hdr +
 			sizeof(struct ether_hdr));
-
-		if(is_valid_ipv4_pkt(ip_hdr, pkts[batch_index]->pkt.pkt_len) < 0) {
-			rte_pktmbuf_free(pkts[batch_index]);
-			continue;
-		}	
 
 		/**< Timestamp (client) STAMPed pkts before putting on work queue */
 		if(unlikely(eth_hdr->s_addr.addr_bytes[0] != 0xef)) {
@@ -89,10 +83,11 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 			srv_tsc[0] = rte_rdtsc();
 		}
 
-		dst_ip = ip_hdr->src_addr;
-
-		lc_wmq->reqs[head & WM_QUEUE_CAP_] = dst_ip;
 		lc_wmq->mbufs[head & WM_QUEUE_CAP_] = (void *) pkts[batch_index];
+
+		/**< Copy the IPv6 address to the worker-master queue */
+		rte_mov16((uint8_t *) &(lc_wmq->reqs[head & WM_QUEUE_CAP_].bytes),
+			ip6_hdr->dst_addr);
 
 		head ++;
 	}

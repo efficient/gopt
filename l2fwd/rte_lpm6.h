@@ -31,6 +31,11 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <errno.h>
+#include <sys/queue.h>
+#include <stdint.h>
+#include <stdlib.h>
+
 #define RTE_LPM6_MAX_DEPTH               128
 #define RTE_LPM6_IPV6_ADDR_SIZE           16
 /** Max number of characters in LPM name. */
@@ -55,7 +60,7 @@
 #define CACHE_LINE_SIZE 64
 #define __rte_cache_aligned __attribute__((__aligned__(CACHE_LINE_SIZE)))
 
-#define RTE_LPM6_SHM_KEY 1
+#define RTE_LPM6_SHM_KEY 2
 
 /** Flags for setting an entry as valid/invalid. */
 enum valid_flag {

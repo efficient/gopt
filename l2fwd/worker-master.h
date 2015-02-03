@@ -9,6 +9,10 @@
 /**< Maximum worker lcores supported by the master */
 #define WM_MAX_LCORE 16
 
+struct wm_ipv6_addr {
+	uint8_t bytes[16];
+};
+
 /**
  * A shared circular queue between a worker and a master.
  * The mbufs are actually pointers to rte_mbuf structs, but we use void 
@@ -17,8 +21,8 @@
 struct wm_queue
 {
 	void *mbufs[WM_QUEUE_CAP];	/**< Book keeping by worker thread */
-	uint32_t reqs[WM_QUEUE_CAP];	/**< Input by worker thread (or host) */
-	uint16_t resps[WM_QUEUE_CAP];	/**< Output by master thread (or device) */
+	struct wm_ipv6_addr reqs[WM_QUEUE_CAP];	/**< Input by worker thread/host */
+	uint16_t resps[WM_QUEUE_CAP];	/**< Output by master thread/device */
 
 	/**< All counters should be on separate cachelines */
 	long long head;		/**< Total number of packets ever queued by worker */

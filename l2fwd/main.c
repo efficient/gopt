@@ -1,8 +1,13 @@
 #include "main.h"
+
+/**< Structures for this app */
 int is_client = -1, client_id;
+struct rte_lpm6 *lpm;		/**< Used by clients for probe addresses */
+struct ipv6_prefix *prefix_arr;
+
 volatile struct wm_queue *wmq = NULL;
 
-struct rte_lpm *lpm;
+/**< Structures for DPDK */
 static struct ether_addr l2fwd_ports_eth_addr[RTE_MAX_ETHPORTS]; /**< MACs */
 struct rte_mempool *l2fwd_pktmbuf_pool[RTE_MAX_LCORE];	/**< Per lcore mempools */
 
@@ -49,7 +54,7 @@ static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, l2fwd_pktmbuf_pool);
+		run_client(client_id, l2fwd_pktmbuf_pool, prefix_arr);
 	} else {
 		run_server(wmq);
 	}
@@ -68,7 +73,12 @@ main(int argc, char **argv)
 	  *  Do all data-structure hugepage allocations before EAL's init(). */
 	if(argc > 5) {
 		is_client = 1;
+		red_printf("Getting IPv6 probe prefixes..\n");
+		/**< Use a valid portmask for prefix generation */
+		lpm = ipv6_init(1, &prefix_arr, 0);
 		client_id = atoi(argv[6]);
+		assert(lpm == NULL && prefix_arr != NULL);
+		red_printf("\tGenerating IPv6 probe prefixes done!\n");
 	} else {
 		is_client = 0;
 

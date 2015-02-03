@@ -20,8 +20,7 @@
 #include "fpp.h"
 #include "worker-master.h"
 #include "util.h"
-#include "ipv4.h"
-
+#include "ipv6.h"
 
 // sizeof(rte_mbuf) = 64, RTE_PKTMBUF_HEADROOM = 128
 #define MBUF_SIZE (2048 + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)
@@ -78,6 +77,7 @@ struct lcore_port_info {
 	int nb_tx;		/**< Number of packets transmitted on this port */
 	int nb_rx;		/**< Number of packets received on this port */
 
+	int nb_lookup_fail_all_ports;	/**< Total failed lookups, all ports */
 	int nb_tx_all_ports;	/**< Total packets transmitted on all ports */
 
 	/**< For measuring latency added by the GPU */
@@ -101,7 +101,8 @@ int get_socket_id_from_macaddr(int port_id);
 void check_all_ports_link_status(uint8_t port_num, int portmask);
 
 void run_server(volatile struct wm_queue *wmq);
-void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool);
+void run_client(int client_id,
+	struct rte_mempool **l2fwd_pktmbuf_pool, struct ipv6_prefix *prefix_arr);
 
 void micro_sleep(double us, double cycles_to_ns_fac);
 

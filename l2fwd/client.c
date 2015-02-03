@@ -2,7 +2,8 @@
 #define MAX_CLT_TX_BURST 16
 #define MAX_CLT_RX_BURST 16
 
-void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
+void run_client(int client_id,
+	struct rte_mempool **l2fwd_pktmbuf_pool, struct ipv6_prefix *prefix_arr)
 {
 	/**< [xia-router0 - xge0,1,2,3], [xia-router1 - xge0,1,2,3] */
 	LL src_mac_arr[2][4] = {{0x36d3bd211b00, 0x37d3bd211b00, 0xa8d6a3211b00, 0xa9d6a3211b00},
@@ -39,16 +40,18 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 
 	LL nb_tx = 0, nb_rx = 0;
 	struct ether_hdr *eth_hdr;
-	struct ipv4_hdr *ip_hdr;
+	struct ipv6_hdr *ip6_hdr;
+	struct ipv4_hdr *ip4_hdr;
 	uint8_t *src_mac_ptr, *dst_mac_ptr;
 
 	LL rx_samples = 0, latency_tot = 0;
 	uint64_t rss_seed = 0xdeadbeef;
 
 	/**< sizeof(ether_hdr) + sizeof(ipv6_hdr) is 54 --> 56 for 4 byte align */
-	int hdr_size = 36;
+	int hdr_size = 56;
 
 	float sleep_us = 2;
+	int prefix_arr_i = 0;
 	
 	while (1) {
 
@@ -57,8 +60,10 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			CPE(tx_pkts_burst[i] == NULL, "tx_alloc failed\n");
 			
 			eth_hdr = rte_pktmbuf_mtod(tx_pkts_burst[i], struct ether_hdr *);
-			ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
+			ip6_hdr = (struct ipv6_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
+			ip4_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 		
+			/**< Initialize Ethernet header */
 			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
 			if((fastrand(&rss_seed) & 0xff) == 0) {
 				/**< STAMP: This pkt is used for GPU latency measurement. */
@@ -70,27 +75,43 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 			dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
 			set_mac(dst_mac_ptr, dst_mac_arr[client_id][port_id]);
 
+			/**< XXX HACK: Couldn't get IPv6 RSS working. */
 			eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
-	
-			/**< These 3 fields of ip_hdr are required for RSS */
-			ip_hdr->src_addr = fastrand(&rss_seed);
-			ip_hdr->dst_addr = fastrand(&rss_seed);
-			ip_hdr->version_ihl = 0x40 | 0x05;
-			ip_hdr->total_length = 60 - sizeof(struct ether_hdr);
 
+			/**< Initialize IPv6 header */
+			ip6_hdr->vtc_flow = 0;
+			/**< 2B of padding after the v6 header, then TSC and magic */
+			ip6_hdr->payload_len = 2 + sizeof(int) + sizeof(LL);
+			ip6_hdr->proto = IPPROTO_IPV6;
+			ip6_hdr->hop_limits = 64;
+
+			/**< XXX HACK: Couldn't get IPv6 RSS working. */
+			ip4_hdr->version_ihl = 0x40 | 0x05;
+			
+			/**< Put in the IPv6 addresses */
+			rte_memcpy(ip6_hdr->dst_addr,
+				prefix_arr[prefix_arr_i].bytes, IPV6_ADDR_LEN);
+			rte_memcpy(ip6_hdr->src_addr,
+				prefix_arr[prefix_arr_i].bytes, IPV6_ADDR_LEN);
+			prefix_arr_i ++;
+			if(prefix_arr_i == IPV6_NUM_RAND_PREFIXES) {
+				prefix_arr_i = 0;
+			}
+			
 			tx_pkts_burst[i]->pkt.nb_segs = 1;
-			tx_pkts_burst[i]->pkt.pkt_len = 60;
-			tx_pkts_burst[i]->pkt.data_len = 60;
+			tx_pkts_burst[i]->pkt.pkt_len = hdr_size + ip6_hdr->payload_len;
+			tx_pkts_burst[i]->pkt.data_len = hdr_size + ip6_hdr->payload_len;
+
+			/**< Add client tsc */
+			LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) +
+				hdr_size);
+			clt_tsc[0] = rte_rdtsc();	/**< 56 -> 64 */
 
 			/**< Add global core-identifier, and timestamp */
 			int *magic = (int *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) + 
-				hdr_size);
-			magic[0] = client_id * 1000 + lcore_id;		/**< 36 -> 40 */
+				hdr_size + sizeof(LL));
+			magic[0] = client_id * 1000 + lcore_id;		/**< 64 -> 68 */
 			
-			/**< Add client tsc */
-			LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(tx_pkts_burst[i], char *) +
-				hdr_size + 4);
-			clt_tsc[0] = rte_rdtsc();	/**< 40 -> 48 */
 		}
 
 		int nb_tx_new = rte_eth_tx_burst(port_id, 
@@ -112,14 +133,15 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 
 			nb_rx += nb_rx_new;
 			for(i = 0; i < nb_rx_new; i ++) {
-				/**< Verify the server's response */
-				int *magic = (int *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) + 
-					hdr_size);
-				int tx_magic = magic[0];
-
 				/**< Retrive send-TSC and lcore from which this pkt was sent */
 				LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) +
-					hdr_size + 4);
+					hdr_size);
+
+				/**< Verify the server's response */
+				int *magic = (int *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) + 
+					hdr_size + sizeof(LL));
+				int tx_magic = magic[0];
+
 				if(client_id * 1000 + lcore_id == tx_magic) {
 					rx_samples ++;
 					LL cur_tsc = rte_rdtsc();
