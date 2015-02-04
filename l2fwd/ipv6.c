@@ -54,7 +54,6 @@ struct rte_lpm6 *ipv6_init(int portmask,
 		}
 
 		printf("\tipv6: Done inserting prefixes\n");
-		*prefix_arr = NULL;	/**< Server doesn't need the prefixes anymore */
 		return lpm;
 	} else {
 		return NULL;

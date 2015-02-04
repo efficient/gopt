@@ -13,6 +13,8 @@ extern "C" {
 #include "util.h"
 }
 
+#define MASTER_TEST_GPU 1
+
 __global__ void
 ipv6Gpu(struct ipv6_addr *req, uint32_t *resp, 
 	uint32_t *tbl24, uint32_t *tbl8,
@@ -88,6 +90,8 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 
 	clock_gettime(CLOCK_REALTIME, &msr_start);
 
+	int req_gathering_tries = 0;
+
 	while(1) {
 
 		/**< Copy all the requests supplied by workers into the contiguous 
@@ -116,13 +120,22 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		}
 
 		if(nb_req == 0) {	/**< No new packets from any worker? */
+			req_gathering_tries ++;
+			if(req_gathering_tries >= 100000000) {
+				printf("master: Waiting for requests..., new_head = %lld\n",
+					new_head[0]);
+				req_gathering_tries = 0;
+			}
 			continue;
 		}
 
+		req_gathering_tries = 0;
+
 		/**< Copy requests to device */
-		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(uint32_t), 
+		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(struct ipv6_addr), 
 			cudaMemcpyHostToDevice, my_stream);
-		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
+		CPE1(err != cudaSuccess, "Failed to copy requests h2d. nb_req = %d\n",
+			nb_req);
 
 		/**< Kernel launch */
 		int threadsPerBlock = 256;
@@ -180,6 +193,64 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		}
 
 		nb_req = 0;
+	}
+}
+
+/**< Test the CUDA kernel by comparing prefix matching outputs with DPDK's
+  *  outputs. Enabled by setting MASTER_TEST_GPU = 1 */
+void test_ipv6_gpu(struct rte_lpm6 *lpm, cudaStream_t my_stream,
+	struct ipv6_prefix *prefix_arr,
+	struct ipv6_addr *h_reqs, struct ipv6_addr *d_reqs,	/**< Kernel inputs */
+	uint32_t *h_resps, uint32_t *d_resps,	/**< Outputs, tbl_entry ~ 4B */
+	uint32_t *d_tbl24, uint32_t *d_tbl8)	/**< IPv6 lookup tables */
+{
+			
+	int i, err;
+	/**< Issue enough IPv6 probes to fill all worker queues */
+	int nb_req = WM_QUEUE_CAP * WM_MAX_LCORE;
+	assert(prefix_arr != NULL);
+
+	/**< Choose random probe addresses from inserted prefixes */
+	for(i = 0; i < nb_req; i ++) {
+		int prefix_arr_i = rand() % IPV6_NUM_RAND_PREFIXES;
+		memcpy(h_reqs[i].bytes, prefix_arr[prefix_arr_i].bytes, IPV6_ADDR_LEN);
+	}
+	
+	/**< Copy requests to device */
+	err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * IPV6_ADDR_LEN, 
+		cudaMemcpyHostToDevice, my_stream);
+	CPE1(err != cudaSuccess, "Failed to copy requests h2d. nb_req = %d\n",
+		nb_req);
+
+	/**< Kernel launch */
+	int threadsPerBlock = 256;
+	int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
+
+	ipv6Gpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
+		d_resps, d_tbl24, d_tbl8, nb_req);
+	err = cudaGetLastError();
+	CPE(err != cudaSuccess, "Failed to launch ipv6Gpu kernel\n");
+
+	/**< Copy responses from device */
+	err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(uint32_t),
+		cudaMemcpyDeviceToHost, my_stream);
+	CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
+
+	/**< Synchronize all CUDA operations */
+	cudaStreamSynchronize(my_stream);
+
+	for(i = 0; i < nb_req; i ++) {
+		uint8_t exp_next_hop;
+		rte_lpm6_lookup(lpm, h_reqs[i].bytes, &exp_next_hop);
+
+		/**< Compare DPDK's output with kernel output */
+		if((uint8_t) exp_next_hop == (uint8_t) h_resps[i]) {
+			printf("Probe %d passed!\n", i);
+		} else{
+			printf("Probe %d failed! DPDK: %d, CUDA: %d\n",
+				i, exp_next_hop, (uint8_t) h_resps[i]);
+			exit(-1);
+		}
 	}
 }
 
@@ -242,7 +313,7 @@ int main(int argc, char **argv)
 
 	/**< Allocate buffers for requests from all workers*/
 	blue_printf("\tGPU master: creating buffers for requests\n");
-	int reqs_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint32_t);
+	int reqs_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(struct ipv6_addr);
 	err = cudaMallocHost((void **) &h_reqs, reqs_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMallocHost req buffer\n");
 	err = cudaMalloc((void **) &d_reqs, reqs_buf_size);
@@ -282,11 +353,19 @@ int main(int argc, char **argv)
 	int *worker_lcores = get_active_bits(lcore_mask);
 	
 	/**< Launch the GPU master */
-	blue_printf("\tGPU master: launching GPU code\n");
+#if MASTER_TEST_GPU == 1
+	blue_printf("\tGPU master: launching GPU test code\n");
+	test_ipv6_gpu(lpm, my_stream,
+		prefix_arr,
+		h_reqs, d_reqs, 
+		h_resps, d_resps, 
+		d_tbl24, d_tbl8);
+#else
+	blue_printf("\tGPU master: launching GPU real code\n");
 	master_gpu(wmq, my_stream,
 		h_reqs, d_reqs, 
 		h_resps, d_resps, 
 		d_tbl24, d_tbl8,
 		num_workers, worker_lcores);
-	
+#endif
 }
