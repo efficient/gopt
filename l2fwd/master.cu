@@ -13,7 +13,7 @@ extern "C" {
 #include "util.h"
 }
 
-#define MASTER_TEST_GPU 1
+#define MASTER_TEST_GPU 0
 
 __global__ void
 ipv6Gpu(struct ipv6_addr *req, uint32_t *resp, 
@@ -82,7 +82,7 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 	  *  fits all WM_MAX_LCORE. */
 	int nb_req = 0;
 
-	/**<  Value of the queue-head from an lcore during the last iteration*/
+	/**< Value of the queue-head from an lcore during the last iteration*/
 	long long prev_head[WM_MAX_LCORE] = {0}, new_head[WM_MAX_LCORE] = {0};
 	
 	int w_i, w_lid;		/**< A worker-iterator and the worker's lcore-id */

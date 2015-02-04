@@ -106,11 +106,9 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 
 		eth_hdr = (struct ether_hdr *) send_pkt->pkt.data;
 
-		/**< TODO FIX: Uses randomness from src_addr to balance port load */
 		int dst_port = (uint8_t) lc_wmq->resps[q_i];
 
 		/**< Measure latency added by GPU for STAMPed packets */
-		eth_hdr = (struct ether_hdr *) send_pkt->pkt.data;
 		if(unlikely(eth_hdr->s_addr.addr_bytes[0] != 0xef)) {
 			srv_tsc = (LL *) (rte_pktmbuf_mtod(send_pkt, char *) +
 				hdr_size + 12);

@@ -102,6 +102,7 @@ struct ipv6_prefix *ipv6_gen_rand_prefixes(int num_prefixes, int portmask)
 {
 	assert(num_prefixes > 0);
 	printf("ipv6: Generating %d random prefixes\n", num_prefixes);
+
 	int num_active_ports = bitcount(portmask);
 	int *port_arr = get_active_bits(portmask);
 	
