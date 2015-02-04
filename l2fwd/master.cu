@@ -334,7 +334,8 @@ int main(int argc, char **argv)
 	/**< rte_lpm6_tbl_entry is 4 bytes */
 	int entry_sz = sizeof(struct rte_lpm6_tbl_entry);
 	int tbl24_bytes = RTE_LPM6_TBL24_NUM_ENTRIES * entry_sz;
-	int tbl8_bytes = IPV6_NUM_TBL8 * RTE_LPM6_TBL8_GROUP_NUM_ENTRIES;
+	int tbl8_bytes = (IPV6_NUM_TBL8 * RTE_LPM6_TBL8_GROUP_NUM_ENTRIES) *
+		entry_sz;
 	
 	/**< Alloc and copy tbl24 and tbl8 arrays to GPU memory */
 	blue_printf("\tGPU master: alloc tbl24 (size = %d bytes) on device\n",

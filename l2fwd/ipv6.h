@@ -5,7 +5,7 @@
 #define PROBE_ADDR_SHM_KEY 2
 
 #define IPV6_NUM_IPS (64 * 1024 * 1024)
-#define IPV6_NUM_RAND_PREFIXES 40000
+#define IPV6_NUM_RAND_PREFIXES 200000
 #define IPV6_RAND_PREFIXES_SEED 3185
 
 /**< Number of tbl8s to request from DPDK lpm6 */
