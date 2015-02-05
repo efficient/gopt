@@ -13,7 +13,7 @@ extern "C" {
 #include "util.h"
 }
 
-#define MASTER_TEST_GPU 0
+#define MASTER_TEST_GPU 1
 
 __global__ void
 ipv6Gpu(struct ipv6_addr *req, uint32_t *resp, 
@@ -222,6 +222,9 @@ void test_ipv6_gpu(struct rte_lpm6 *lpm, cudaStream_t my_stream,
 	CPE1(err != cudaSuccess, "Failed to copy requests h2d. nb_req = %d\n",
 		nb_req);
 
+	struct timespec start, end;
+	clock_gettime(CLOCK_REALTIME, &start);
+
 	/**< Kernel launch */
 	int threadsPerBlock = 256;
 	int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
@@ -239,19 +242,25 @@ void test_ipv6_gpu(struct rte_lpm6 *lpm, cudaStream_t my_stream,
 	/**< Synchronize all CUDA operations */
 	cudaStreamSynchronize(my_stream);
 
+	clock_gettime(CLOCK_REALTIME, &end);
+
 	for(i = 0; i < nb_req; i ++) {
 		uint8_t exp_next_hop;
 		rte_lpm6_lookup(lpm, h_reqs[i].bytes, &exp_next_hop);
 
 		/**< Compare DPDK's output with kernel output */
-		if((uint8_t) exp_next_hop == (uint8_t) h_resps[i]) {
-			printf("Probe %d passed!\n", i);
-		} else{
+		if((uint8_t) exp_next_hop != (uint8_t) h_resps[i]) {
 			printf("Probe %d failed! DPDK: %d, CUDA: %d\n",
 				i, exp_next_hop, (uint8_t) h_resps[i]);
 			exit(-1);
 		}
 	}
+
+	red_printf("GPU IPv6 tests passed (total = %d)\n", nb_req);
+
+	double seconds = ((double) (end.tv_nsec - start.tv_nsec)) / 1000000000.0 +
+		(end.tv_sec - start.tv_sec);
+	red_printf("GPU IPv6 rate = %.1f M/s\n", (nb_req / seconds) / 1000000);
 }
 
 int main(int argc, char **argv)
@@ -356,7 +365,13 @@ int main(int argc, char **argv)
 	/**< Launch the GPU master */
 #if MASTER_TEST_GPU == 1
 	blue_printf("\tGPU master: launching GPU test code\n");
-	test_ipv6_gpu(lpm, my_stream,
+	test_ipv6_gpu(lpm, my_stream,		/**< Warmup */
+		prefix_arr,
+		h_reqs, d_reqs, 
+		h_resps, d_resps, 
+		d_tbl24, d_tbl8);
+
+	test_ipv6_gpu(lpm, my_stream,		/**< Run again after warmup */
 		prefix_arr,
 		h_reqs, d_reqs, 
 		h_resps, d_resps, 
