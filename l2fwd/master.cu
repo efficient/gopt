@@ -70,7 +70,7 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 	  *  fits all WM_MAX_LCORE. */
 	int nb_req = 0;
 
-	/**<  Value of the queue-head from an lcore during the last iteration*/
+	/**< Value of the queue-head from an lcore during the last iteration*/
 	long long prev_head[WM_MAX_LCORE] = {0}, new_head[WM_MAX_LCORE] = {0};
 	
 	int w_i, w_lid;		/**< A worker-iterator and the worker's lcore-id */
@@ -95,7 +95,7 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 			/**< Record the beginning of the GPU req. buffer for this lcore */
 			req_lo[w_lid] = nb_req;
 
-			/**< Add the new packets from this lcore to the request buffer */
+			/**< Add the new requests from this worker to the GPU req. buffer */
 			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
 				int q_i = i & WM_QUEUE_CAP_;	/**< Queues are circular */
 				uint32_t req = lc_wmq->reqs[q_i];
@@ -289,5 +289,5 @@ int main(int argc, char **argv)
 		h_resps, d_resps, 
 		d_tbl24, d_tbl8,
 		num_workers, worker_lcores);
-	
+
 }
