@@ -105,6 +105,8 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		struct rte_mbuf *send_pkt = lc_wmq->mbufs[q_i];
 
 		eth_hdr = (struct ether_hdr *) send_pkt->pkt.data;
+		ip6_hdr = (struct ipv6_hdr *) ((char *) eth_hdr +
+			sizeof(struct ether_hdr));
 
 		int dst_port = (uint8_t) lc_wmq->resps[q_i];
 
@@ -119,6 +121,10 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		/**< Modify L2 header: Do this after checking src mac for STAMP */
 		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[dst_port]);
 		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
+
+		/**< Garble dst MAC to reduce RX load on clients. Uses randomness from
+		  *  the IPv6 dst addresses offered by clients. */
+		eth_hdr->d_addr.addr_bytes[0] += ip6_hdr->dst_addr[0];
 		
 		/**< Use the GPU's response to determine the output port */
 		send_packet(send_pkt, dst_port, lp_info);

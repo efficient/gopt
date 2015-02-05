@@ -13,7 +13,7 @@ extern "C" {
 #include "util.h"
 }
 
-#define MASTER_TEST_GPU 1
+#define MASTER_TEST_GPU 0
 
 __global__ void
 ipv6Gpu(struct ipv6_addr *req, uint32_t *resp, 
