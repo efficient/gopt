@@ -254,6 +254,10 @@ void process_batch_passthrough(struct rte_mbuf **pkts, int nb_pkts,
 		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[next_hop]);
 		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[next_hop]);
 
+		/**< Garble dst MAC to reduce RX load on clients. Uses randomness from
+		  *  the IPv6 dst addresses offered by clients. */
+		eth_hdr->d_addr.addr_bytes[0] += ip6_hdr->dst_addr[0];
+
 		send_packet(pkts[batch_index], next_hop, lp_info);
 	}
 }
