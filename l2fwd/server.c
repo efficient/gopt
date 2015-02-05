@@ -147,6 +147,10 @@ fpp_label_1:
             /**< TX boilerplate: use the computed next_hop for L2 src and dst. */
             set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[next_hop[I]]);
             set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[next_hop[I]]);
+
+			/**< Garble dst MAC to reduce RX load on clients. Uses randomness from
+			  *  the IPv6 dst addresses offered by clients. */
+			eth_hdr[I]->d_addr.addr_bytes[0] += dst_addr[I][0];
             
             send_packet(pkts[I], next_hop[I], lp_info);
         }
@@ -214,6 +218,10 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
 			set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[next_hop]);
 			set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[next_hop]);
+
+			/**< Garble dst MAC to reduce RX load on clients. Uses randomness from
+			  *  the IPv6 dst addresses offered by clients. */
+			eth_hdr->d_addr.addr_bytes[0] += dst_addr[0];
 
 			send_packet(pkts[batch_index], next_hop, lp_info);
 		}
