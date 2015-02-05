@@ -198,7 +198,8 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 
 /**< Test the CUDA kernel by comparing prefix matching outputs with DPDK's
   *  outputs. Enabled by setting MASTER_TEST_GPU = 1 */
-void test_ipv6_gpu(struct rte_lpm6 *lpm, cudaStream_t my_stream,
+void test_ipv6_gpu(struct rte_lpm6 *lpm, int nb_req,
+	cudaStream_t my_stream,
 	struct ipv6_prefix *prefix_arr,
 	struct ipv6_addr *h_reqs, struct ipv6_addr *d_reqs,	/**< Kernel inputs */
 	uint32_t *h_resps, uint32_t *d_resps,	/**< Outputs, tbl_entry ~ 4B */
@@ -206,9 +207,10 @@ void test_ipv6_gpu(struct rte_lpm6 *lpm, cudaStream_t my_stream,
 {
 			
 	int i, err;
-	/**< Issue enough IPv6 probes to fill all worker queues */
-	int nb_req = WM_QUEUE_CAP * WM_MAX_LCORE;
 	assert(prefix_arr != NULL);
+
+	/**< Ensure that requests will fit in the allocated worker-master queues */
+	assert(nb_req <= WM_MAX_LCORE * WM_QUEUE_CAP);
 
 	/**< Choose random probe addresses from inserted prefixes */
 	for(i = 0; i < nb_req; i ++) {
@@ -365,17 +367,16 @@ int main(int argc, char **argv)
 	/**< Launch the GPU master */
 #if MASTER_TEST_GPU == 1
 	blue_printf("\tGPU master: launching GPU test code\n");
-	test_ipv6_gpu(lpm, my_stream,		/**< Warmup */
-		prefix_arr,
-		h_reqs, d_reqs, 
-		h_resps, d_resps, 
-		d_tbl24, d_tbl8);
+	int nb_req = 32;
+	for(; nb_req <= WM_MAX_LCORE * WM_QUEUE_CAP; nb_req *= 2) {
+		test_ipv6_gpu(lpm, nb_req,
+			my_stream,
+			prefix_arr,
+			h_reqs, d_reqs, 
+			h_resps, d_resps, 
+			d_tbl24, d_tbl8);
+	}
 
-	test_ipv6_gpu(lpm, my_stream,		/**< Run again after warmup */
-		prefix_arr,
-		h_reqs, d_reqs, 
-		h_resps, d_resps, 
-		d_tbl24, d_tbl8);
 #else
 	blue_printf("\tGPU master: launching GPU real code\n");
 	master_gpu(wmq, my_stream,
