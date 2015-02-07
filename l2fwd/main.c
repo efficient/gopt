@@ -81,7 +81,7 @@ main(int argc, char **argv)
 		is_client = 0;
 		red_printf("Creating IPv6 lpm. Inserting prefixes...\n");
 		lpm = ipv6_init(XIA_R2_PORT_MASK, &prefix_arr, 1);
-		assert(lpm != NULL && prefix_arr == NULL);
+		assert(lpm != NULL);
 		red_printf("\tInserting prefixes done!\n");
 	}
 

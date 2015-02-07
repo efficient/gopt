@@ -54,7 +54,6 @@ struct rte_lpm6 *ipv6_init(int portmask,
 		}
 
 		printf("\tipv6: Done inserting prefixes\n");
-		*prefix_arr = NULL;	/**< Server doesn't need the prefixes anymore */
 		return lpm;
 	} else {
 		return NULL;
@@ -103,6 +102,7 @@ struct ipv6_prefix *ipv6_gen_rand_prefixes(int num_prefixes, int portmask)
 {
 	assert(num_prefixes > 0);
 	printf("ipv6: Generating %d random prefixes\n", num_prefixes);
+
 	int num_active_ports = bitcount(portmask);
 	int *port_arr = get_active_bits(portmask);
 	
