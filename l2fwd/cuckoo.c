@@ -1,6 +1,6 @@
 #include "cuckoo.h"
 
-// Don't want to include rte header for RTE_MAX_ETHPORTS
+/**< Don't want to include rte header for RTE_MAX_ETHPORTS */
 #define CUCKOO_MAX_ETHPORTS 16
 #define CUCKOO_ISSET(a, i) (a & (1 << i))
 
@@ -33,7 +33,7 @@ void cuckoo_init(ULL **mac_addrs,
 
 	srand(2);
 
-	// Allocate the packets and put them into the hash index randomly
+	/**< Allocate the packets and put them into the hash index randomly */
 	printf("Putting active ports into hash index randomly\n");
 	*mac_addrs = malloc(NUM_MAC * sizeof(ULL));
 
@@ -43,13 +43,13 @@ void cuckoo_init(ULL **mac_addrs,
 		mac_48 = (ULL) (rand_1 ^ (rand_2 << 16));
 		assert(mac_48 <= 0xffffffffffffL && mac_48 > 0);
 
-		// Store the mac so that the client can use it in its workload later
+		/**< Store the mac so that the client can use it for probes later */
 		(*mac_addrs)[i] = mac_48;
 
-		// Put the mac into a byte-array for hash computation
+		/**< Put the mac into a byte-array for hash computation */
 		set_mac(__mac_48, mac_48);
 
-		// Choose one of the two candidate buckets randomly
+		/**< Choose one of the two candidate buckets randomly */
 		bkt = CityHash32((char *) __mac_48, 6) & NUM_BKT_;
 		if(rand() % 2 != 0) {
 			bkt = CityHash32((char *) &bkt, 4) & NUM_BKT_;
@@ -57,7 +57,7 @@ void cuckoo_init(ULL **mac_addrs,
 
 		int success = 0;
 		for(slot_i = 0; slot_i < 8; slot_i ++) {
-			// Find an empty slot
+			/**< Find an empty slot */
 			if(SLOT_TO_MAC((*ht_index)[bkt].slot[slot_i]) == 0) {
 				ULL port = port_arr[rand() % num_active_ports];
 				(*ht_index)[bkt].slot[slot_i] = (port << 48) + mac_48;
@@ -67,7 +67,7 @@ void cuckoo_init(ULL **mac_addrs,
 		}
 
 		if(success == 0) {
-			// Failed to find an empty slot
+			/**< Failed to find an empty slot */
 			slot_i = rand() % 8;
 			ULL port = port_arr[rand() % num_active_ports];
 			(*ht_index)[bkt].slot[slot_i] = (port << 48) + mac_48;
