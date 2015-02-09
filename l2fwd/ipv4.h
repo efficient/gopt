@@ -4,6 +4,9 @@
 #define PROBE_ADDR_SHM_KEY 2
 #define IPV4_MAX_RULES (2 * 1024 * 1024)
 
+#define IPV4_NUM_ADDRS (128 * 1024 * 1024)
+#define IPV4_NUM_ADDRS_ (IPV4_NUM_ADDRS - 1)
+
 #define IPV4_PREFIX_FILE "../data_dump/ipv4/ipv4_java_out"
 
 /**< Don't want to include rte header */
@@ -40,8 +43,7 @@ struct ipv4_prefix *ipv4_amp_prefixes(struct ipv4_prefix *prefix_arr,
 	int num_prefixes, int amp_factor);
 
 /**< Generate probe IPv4 addresses from prefixes */
-struct ipv4_addr *ipv4_gen_addrs(int num_addrs,
-	struct ipv4_prefix *prefix_arr, int num_prefixes);
+uint32_t *ipv4_gen_addrs(int lcore_id, struct rte_lpm *lpm);
 
 /**< Generate N different permutations of 0, ..., 255 */
 struct ipv4_perm *ipv4_gen_perms(int N);

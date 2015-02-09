@@ -115,6 +115,9 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[dst_port]);
 		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
 
+		/**< Garble dst port to reduce RX load on clients */
+		eth_hdr->d_addr.addr_bytes[0] += (dst_ip & 0xff);
+
 		send_packet(pkts[batch_index], dst_port, lp_info);
 	}
 }

@@ -866,16 +866,25 @@ rte_lpm_delete_all(struct rte_lpm *lpm)
 /**< Allocate size bytes in hugepages on this socket */
 void *hrd_malloc_socket(int shm_key, int size, int socket_id)
 {
-	printf("rte_lpm6: Allocating %d MB (hugepg) on socket %d. SHM key = %d\n",
-		size / (1024 * 1024), socket_id, shm_key);
-	int shmid = shmget(shm_key, size, IPC_CREAT | 0666 | SHM_HUGETLB);
+	assert(size <= 1024 * 1024 * 1024);
+
+	/**< Allocate a multiple of 2 MB */
+	int alloc_size = 2 * 1024 * 1024;
+	while(alloc_size < size) {
+		alloc_size += 2 * 1024 * 1024;
+	}
+	printf("rte_lpm6: Allocating %d MB (hugepg) on socket %d. Key = %d\n",
+		alloc_size, socket_id, shm_key);
+
+	int shmid = shmget(shm_key, alloc_size, IPC_CREAT | 0666 | SHM_HUGETLB);
 	assert(shmid >= 0);
 	void *buf = shmat(shmid, 0, 0);
 	assert(buf != NULL);
 
 	/**< Bind the buffer to this socket */
 	const unsigned long nodemask = (1 << socket_id);
-	mbind(buf, size, MPOL_BIND, &nodemask, 32, 0);
+	int ret = mbind(buf, size, MPOL_BIND, &nodemask, 32, 0);
+	assert(ret == 0);
 
 	return buf;
 }
