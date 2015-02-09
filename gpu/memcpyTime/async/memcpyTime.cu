@@ -54,7 +54,7 @@ void gpu_run(int *h_A, int *d_A, int num_pkts, cudaStream_t my_stream)
 	struct timespec d2h_start[ITERS], d2h_end[ITERS];
 	struct timespec sync_start[ITERS], sync_end[ITERS];
 
-	/** < Microseconds */
+	/**< Microseconds */
 	double h2d_diff[ITERS], kernel_diff[ITERS], d2h_diff[ITERS], sync_diff[ITERS];
 	double h2d_tot = 0, kernel_tot = 0, d2h_tot = 0, sync_tot = 0;
 	
@@ -62,24 +62,24 @@ void gpu_run(int *h_A, int *d_A, int num_pkts, cudaStream_t my_stream)
 	int threadsPerBlock = 256;
 	int blocksPerGrid = (num_pkts + threadsPerBlock - 1) / threadsPerBlock;
 
-	/** < Do a dummy run for warmup */
+	/**< Do a dummy run for warmup */
 	dummy_run(h_A, d_A, num_pkts, my_stream);
 
-	/** < Run several iterations */
+	/**< Run several iterations */
 	for(i = 0; i < ITERS; i ++) {
 
 		for(j = 0; j < num_pkts; j++)	{
 			h_A[j] = i;
 		}
 
-		/** < Host-to-device memcpy */
+		/**< Host-to-device memcpy */
 		clock_gettime(CLOCK_REALTIME, &h2d_start[i]);
 		err = cudaMemcpyAsync(d_A, h_A, num_pkts * sizeof(int),
 			cudaMemcpyHostToDevice, my_stream);
 		CPE(err != cudaSuccess, "H2D memcpy failed\n");
 		clock_gettime(CLOCK_REALTIME, &h2d_end[i]);
 
-		/** < Kernel launch */
+		/**< Kernel launch */
 		clock_gettime(CLOCK_REALTIME, &kernel_start[i]);
 		vectorAdd<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_A, num_pkts);
 		clock_gettime(CLOCK_REALTIME, &kernel_end[i]);
@@ -87,19 +87,19 @@ void gpu_run(int *h_A, int *d_A, int num_pkts, cudaStream_t my_stream)
 		err = cudaGetLastError();
 		CPE(err != cudaSuccess, "Kernel launch failed\n");
 
-		/** < Device-to-host memcpy */
+		/**< Device-to-host memcpy */
 		clock_gettime(CLOCK_REALTIME, &d2h_start[i]);
 		err = cudaMemcpyAsync(h_A, d_A, num_pkts * sizeof(int),
 			cudaMemcpyDeviceToHost, my_stream);
 		CPE(err != cudaSuccess, "D2H memcpy failed\n");
 		clock_gettime(CLOCK_REALTIME, &d2h_end[i]);
 
-		/** < Wait for operation completion */
+		/**< Wait for operation completion */
 		clock_gettime(CLOCK_REALTIME, &sync_start[i]);
 		cudaStreamSynchronize(my_stream);
 		clock_gettime(CLOCK_REALTIME, &sync_end[i]);
 
-		/** < Measure the difference */
+		/**< Measure the difference */
 		h2d_diff[i] =
 			(double) (h2d_end[i].tv_nsec - h2d_start[i].tv_nsec) / 1000 +
 			(h2d_end[i].tv_sec - h2d_start[i].tv_sec) * 1000000;
@@ -121,13 +121,13 @@ void gpu_run(int *h_A, int *d_A, int num_pkts, cudaStream_t my_stream)
 		d2h_tot += d2h_diff[i];
 		sync_tot += sync_diff[i];
 
-		/** < Check results */
+		/**< Check results */
 		for(j = 0; j < num_pkts; j ++) {
 			assert(h_A[j] == i * i);
 		}
 	}
 
-	/** < Sort the times for percentiles */
+	/**< Sort the times for percentiles */
 	qsort(h2d_diff, ITERS, sizeof(double), cmpfunc);
 	qsort(kernel_diff, ITERS, sizeof(double), cmpfunc);
 	qsort(d2h_diff, ITERS, sizeof(double), cmpfunc);
@@ -162,11 +162,11 @@ int main(int argc, char *argv[])
 
 	printDeviceProperties();
 
-	/** < Create a CUDA stream for asynch operations */
+	/**< Create a CUDA stream for asynch operations */
 	err = cudaStreamCreate(&my_stream);
 	CPE(err != cudaSuccess, "Failed to create cudaStream\n");
 
-	/** < Allocate host and device buffers */
+	/**< Allocate host and device buffers */
 	h_A = (int *) malloc(num_pkts * sizeof(int));
 	err = cudaMalloc((void **) &d_A, num_pkts * sizeof(int));
 	CPE(err != cudaSuccess, "Failed to cudaMalloc\n");
@@ -176,14 +176,14 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	/** < Run the measurement code */
+	/**< Run the measurement code */
 	gpu_run(h_A, d_A, num_pkts, my_stream);
 	
-	/** < Free host and device memory */
+	/**< Free host and device memory */
 	free(h_A);
 	cudaFree(d_A);
 
-	// Reset the device and exit
+	/**< Reset the device and exit */
 	err = cudaDeviceReset();
 	CPE(err != cudaSuccess, "Failed to de-initialize the device\n");
 	return 0;

@@ -136,19 +136,19 @@ int main(int argc, char *argv[])
 	int i;
 	int *h_log, *d_log;
 	int *h_pkts_cpu;
-	/** <Separate packet buffer to compare GPU's result with the CPU's */
+	/**< Separate packet buffer to compare GPU's result with the CPU's */
 	int *h_pkts_gpu, *d_pkts_gpu;
 
 	srand(time(NULL));
 
 	printDeviceProperties();
 
-	/** <Initialize a cudaStream for async calls */
+	/**< Initialize a cudaStream for async calls */
 	err = cudaStreamCreate(&myStream);
 	CPE(err != cudaSuccess, "Failed to create cudaStream\n", -1);
 
 	red_printf("Allocating host log of size %lu bytes\n", LOG_CAP * sizeof(int));
-	/** <Initialize hugepage log and copy it to the device: do it once */
+	/**< Initialize hugepage log and copy it to the device: do it once */
 #if USE_HUGEPAGE == 1
 	int sid = shmget(1, LOG_CAP * sizeof(int), SHM_HUGETLB | 0666 | IPC_CREAT);
 	assert(sid >= 0);
@@ -170,26 +170,26 @@ int main(int argc, char *argv[])
 	err = cudaMemcpy(d_log, h_log, LOG_CAP * sizeof(int), cudaMemcpyHostToDevice);
 	CPE(err != cudaSuccess, "Failed to copy to device memory\n", -1);
 
-	/** <Initialize the packet arrays for CPU and GPU code */
+	/**< Initialize the packet arrays for CPU and GPU code */
 	h_pkts_cpu =  (int *) malloc(MAX_PKTS * sizeof(int));
 
-	/** <The host packet-array for GPU code should be pinned */
+	/**< The host packet-array for GPU code should be pinned */
 	err = cudaMallocHost((void **) &h_pkts_gpu, MAX_PKTS * sizeof(int));
 	err = cudaMalloc((void **) &d_pkts_gpu, MAX_PKTS * sizeof(int));
 
-	/** <Test for different batch sizes */
+	/**< Test for different batch sizes */
 	assert(MAX_PKTS % 8 == 0);
 	for(int num_pkts = 16; num_pkts < MAX_PKTS; num_pkts *= 2) {
 
 		double cpu_time = 0, gpu_time = 0;
 
-		/** <Initialize packets */
+		/**< Initialize packets */
 		for(i = 0; i < num_pkts; i ++) {
 			h_pkts_cpu[i] = rand() & LOG_CAP_;
 			h_pkts_gpu[i] = h_pkts_cpu[i];
 		}
 	
-		/** Perform several measurements for averaging */
+		/**< Perform several measurements for averaging */
 		for(i = 0; i < ITERS; i ++) {
 			cpu_time += cpu_run(h_pkts_cpu, h_log, num_pkts);
 			gpu_time += gpu_run(h_pkts_gpu, d_pkts_gpu, d_log, num_pkts);
@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
 		cpu_time = cpu_time / ITERS;
 		gpu_time = gpu_time / ITERS;
 	
-		/** <Verify that the result vector is correct */
+		/**< Verify that the result vector is correct */
 		for(int i = 0; i < num_pkts; i ++) {
 			if (h_pkts_cpu[i] != h_pkts_gpu[i]) {
 				fprintf(stderr, "Result verification failed at element %d!\n", i);
@@ -219,18 +219,18 @@ int main(int argc, char *argv[])
 		printf("\n");
 	}
 
-	// Free device memory
+	/**< Free device memory */
 	cudaFree(d_pkts_gpu);
 	cudaFree(d_log);
 
-	// Free host memory
+	/**< Free host memory */
 	free(h_pkts_cpu);
 	cudaFreeHost(h_pkts_gpu);
 #if USE_HUGEPAGE == 0
 	free(h_log);
 #endif
 
-	// Reset the device and exit
+	/**< Reset the device and exit */
 	err = cudaDeviceReset();
 	CPE(err != cudaSuccess, "Failed to de-initialize the device\n", -1);
 

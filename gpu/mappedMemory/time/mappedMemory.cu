@@ -3,9 +3,9 @@
 int volatile *h_A, *h_B;
 int volatile *d_A, *d_B;
 int volatile *h_flag, *d_flag;
-int num_pkts = -1;			/** < Passed as a command-line flag */
+int num_pkts = -1;			/**< Passed as a command-line flag */
 
-pthread_t cpu_thread;		/** < CPU thread that talks to the GPU */
+pthread_t cpu_thread;		/**< CPU thread that talks to the GPU */
 
 __global__ void
 vectorAdd(volatile int *A, volatile int *B, volatile int *flag, int N)
@@ -14,13 +14,14 @@ vectorAdd(volatile int *A, volatile int *B, volatile int *flag, int N)
 	int iter = 0;
 	
 	if(i < N) {
-		/** < Wait for CPU flag a finite number of times */
+		/**< Wait for CPU flag a finite number of times */
 		for(iter = 0; iter < ITERS; iter ++) {
 			while(flag[0] == iter - 1) {
-				// Do nothing
+				/**< Do nothing */
 			}
 
-			/** < Don't touch A[i] twice */
+			/**< Don't touch A[i] twice. Don't write to the flag again.
+			  *  Writing to B[i] will generate PCIe transactions. */
 			B[i] = A[i] + 1;
 		}
 	}
@@ -28,7 +29,7 @@ vectorAdd(volatile int *A, volatile int *B, volatile int *flag, int N)
 
 void *gpu_run(void *ptr)
 {
-	/** < We can only get full execution measurements */
+	/**< We can only get full execution measurements */
 	struct timespec start, end;
 	double diff[ITERS];
 	double tot;
@@ -37,22 +38,22 @@ void *gpu_run(void *ptr)
 
 	for(iter = 0; iter < ITERS; iter ++) {
 
-		/** < Set B to zero: the GPU will make it non-zero */
+		/**< Set B to zero: the GPU will make it non-zero */
 		memset((char *) h_B, 0, num_pkts * sizeof(int));
 	
-		/** < Start a timer */
+		/**< Start a timer */
 		clock_gettime(CLOCK_REALTIME, &start);
 		
-		/** < Write input data into A */
+		/**< Write input data into A */
 		for(j = 0; j < num_pkts; j ++) {
-			h_A[j] = iter + 1;		// Always > 0
+			h_A[j] = iter + 1;		/**< Always > 0 */
 			assert(h_A[j] != 0);
 		}
 
-		/** < Raise a flag for the GPU */
+		/**< Raise a flag for the GPU */
 		h_flag[0] = iter;
 
-		/** < Wait till the GPU makes all of h_B non-zero */
+		/**< Wait till the GPU makes all of h_B non-zero */
 		waitForNonZero(h_B, num_pkts);
 
 		for(j = 0; j < num_pkts; j ++) {
@@ -62,7 +63,7 @@ void *gpu_run(void *ptr)
 			}
 		}
 
-		/** < Stop timer */
+		/**< Stop timer */
 		clock_gettime(CLOCK_REALTIME, &end);
 
 		diff[iter] = get_timespec_us(start, end);
@@ -71,7 +72,7 @@ void *gpu_run(void *ptr)
 		printf("\tIter %d: %.2f us\n", iter, diff[iter]);
 	}
 
-	/** < Sort the times for percentile */
+	/**< Sort the times for percentile */
 	qsort(diff, ITERS, sizeof(double), cmpfunc);
 	red_printf("Average %.2f 5th %.2f 95th %.2f\n",
 		tot / ITERS, diff[0], diff[(ITERS * 95) / 100]);
@@ -81,7 +82,7 @@ void *gpu_run(void *ptr)
 
 int main(int argc, char **argv)
 {
-	/** < num_pkts is passed as a command-line flag */
+	/**< num_pkts is passed as a command-line argument */
 	assert(argc == 2);
 	num_pkts = atoi(argv[1]);
 
@@ -91,10 +92,10 @@ int main(int argc, char **argv)
 	int err = cudaSuccess;
 	printDeviceProperties();
 
-	/** < Enable mapped-memory on device */
+	/**< Enable mapped-memory on device */
 	cudaSetDeviceFlags(cudaDeviceMapHost);
 
-	/** < Allocate the mapped-memory regions */
+	/**< Allocate the mapped-memory regions */
 	err = cudaHostAlloc(&h_A, num_pkts * sizeof(int), cudaHostAllocMapped);
 	err = cudaHostAlloc(&h_B, num_pkts * sizeof(int), cudaHostAllocMapped);
 	err = cudaHostAlloc(&h_flag, sizeof(int), cudaHostAllocMapped);
@@ -106,17 +107,17 @@ int main(int argc, char **argv)
 	err = cudaHostGetDevicePointer((void **) &d_flag, (void *) h_flag, 0);
 	CPE(err != cudaSuccess, "Could not get device pointer for mapped memory\n");
 
-	/** < Init. mapped memory: For iteration #i, i >= 0, the flag is i */
+	/**< Init. mapped memory: For iteration #i, i >= 0, the flag is i */
 	h_flag[0] = -1;
 	for(int i = 0; i < num_pkts; i++) {
 		h_A[i] = 0;
 		h_B[i] = 0;
 	}
 
-	/** < Launch a CPU thread that talks to the GPU */
+	/**< Launch a CPU thread that talks to the GPU */
 	pthread_create(&cpu_thread, NULL, gpu_run, NULL);
 
-	/** < Launch the kernel once */
+	/**< Launch the kernel once */
 	red_printf("Launching CUDA kernel\n");
 
 	cudaStream_t my_stream;
@@ -132,12 +133,12 @@ int main(int argc, char **argv)
 	printf("Waiting for CPU thread to finish\n");
 	pthread_join(cpu_thread, NULL);
 
-	/** < Free allocated mapped memory */
+	/**< Free allocated mapped memory */
 	cudaFreeHost((void *) h_A);
 	cudaFreeHost((void *) h_B);
 	cudaFreeHost((void *) h_flag);
 
-	/** < Reset the device and exit */
+	/**< Reset the device and exit */
 	err = cudaDeviceReset();
 	CPE(err != cudaSuccess, "Failed to de-initialize the device\n");
 

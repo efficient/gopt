@@ -1,0 +1,21 @@
+mappedMemory.cu:
+===============
+
+	Benchmark to measure the minimum time for CPU-GPU communication for a variable
+	number of integers with polling on mapped memory.
+
+	main() takes the number of integers (num_pkts) to communicate to the GPU as an
+	argument. It runs ITERS iterations of mapped memory-based communication, and
+	records the total time for each iteration.
+
+	Output for each run of main():
+		* The average, 5th percentile, and 95th percentile, of total communcation time
+		  measured over all iterations.
+
+run.sh:
+=======
+
+	Runs main() with different values of num_pkts.
+
+	Output:
+		* The 5th percentile for each value of num_pkts.

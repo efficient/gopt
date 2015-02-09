@@ -1,0 +1,22 @@
+memcpyTime.cu:
+==============
+
+	Benchmark to measure the minimum time for CPU-GPU communication for a variable
+	number of integers with asynchronous CUDA functions.
+
+	main() takes the number of integers (num_pkts) to communicate to the GPU as an
+	argument. It runs ITERS iterations of memcpy (h2d), kernel launch, and memcpy
+	(d2h) and records the time for each step.
+
+	Output for each run of main():
+		* The time division for each iteration.
+		* The average, 5th percentile, and 95th percentile of total communication
+		  time measured over all iterations.
+
+run.sh:
+=======
+
+	Runs main() with different values of num_pkts.
+
+	Output:
+		* The 5th percentile for each value of num_pkts.
