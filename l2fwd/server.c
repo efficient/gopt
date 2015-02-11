@@ -237,7 +237,7 @@ void run_server(struct rte_lpm *lpm)
 		int nb_rx_new = 0, tries = 0;
 		
 		/**< Lcores *cannot* wait for a fixed number of packets from a port.
-		  * If we do this, the port mysteriously runs out of RX desc */
+		  *  If we do this, the port mysteriously runs out of RX desc */
 		while(nb_rx_new < MAX_SRV_BURST && tries < 5) {
 			nb_rx_new += rte_eth_rx_burst(port_id, queue_id, 
 				&rx_pkts_burst[nb_rx_new], MAX_SRV_BURST - nb_rx_new);

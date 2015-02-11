@@ -9,7 +9,7 @@
 
 #define IPV4_PREFIX_FILE "../data_dump/ipv4/ipv4_java_out"
 
-/**< Don't want to include rte header */
+/**< Don't want to include DPDK headers */
 #define IPv4_MAX_ETHPORTS 16
 #define IPv4_ISSET(a, i) (a & (1 << i))
 
