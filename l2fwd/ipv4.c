@@ -135,29 +135,33 @@ struct ipv4_prefix *ipv4_amp_prefixes(struct ipv4_prefix *prefix_arr,
 	return new_prefix_arr;
 }
 
-/**< Generate probe IPv4 addresses from prefixes.
-  *  XXX: Is this the best way of generating addresses from prefixes?
-  *  Smaller prefixes have larger subnets and should be chosen more often.*/
-struct ipv4_addr *ipv4_gen_addrs(int num_addrs,
-	struct ipv4_prefix *prefix_arr, int num_prefixes)
+/**< Generate probe IPv4 addresses from prefixes. This method chooses prefixes
+  *  at random that have a valid match in the lpm. */
+uint32_t *ipv4_gen_addrs(int lcore_id, struct rte_lpm *lpm)
 {
-	assert(num_addrs > 0 && prefix_arr != NULL && num_prefixes > 0);
-
-	struct ipv4_addr *addr_arr;
-	int addr_mem_size = num_addrs * sizeof(struct ipv4_addr);
-
-	addr_arr = hrd_malloc_socket(PROBE_ADDR_SHM_KEY, addr_mem_size, 0);
-
-	/**< Generate addresses using randomly chosen prefixes */
+	assert(lpm != NULL);
+	int i;
+	uint8_t next_hop;
 	uint64_t seed = 0xdeadbeef;
-	int i, j;
-	for(i = 0; i < num_addrs; i ++) {
-		int prefix_id = rand() % num_prefixes;
-		memcpy(addr_arr[i].bytes, prefix_arr[prefix_id].bytes, IPV4_ADDR_LEN);
+	LL tries = 0;
 
-		int last_full_byte = (prefix_arr[prefix_id].depth / 8) - 1;
-		for(j = last_full_byte; j < IPV4_ADDR_LEN; j ++) {
-			addr_arr[i].bytes[j] = fastrand(&seed) & 255;
+	/**< Move fastrand so that clients don't get the same IP addresses */
+	int fastrand_offset = (lcore_id / 2) * IPV4_NUM_ADDRS;
+	printf("\tOffsetting fastrand by %d\n", fastrand_offset);
+	for(i = 0; i < fastrand_offset; i ++) {
+		fastrand(&seed);
+	}
+
+	uint32_t *addr_arr = malloc(IPV4_NUM_ADDRS * sizeof(uint32_t));
+
+	for(i = 0; i < IPV4_NUM_ADDRS; i ++) {
+		tries ++;
+		uint32_t ip = (uint32_t) fastrand(&seed);
+
+		if(rte_lpm_lookup(lpm, ip, &next_hop) == 0) {
+			addr_arr[i] = ip;
+		} else {
+			i --;		/**< Try this value of i again */
 		}
 	}
 
