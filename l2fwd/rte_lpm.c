@@ -883,8 +883,7 @@ void *hrd_malloc_socket(int shm_key, int size, int socket_id)
 
 	/**< Bind the buffer to this socket */
 	const unsigned long nodemask = (1 << socket_id);
-	int ret = mbind(buf, size, MPOL_BIND, &nodemask, 32, 0);
-	assert(ret == 0);
+	mbind(buf, size, MPOL_BIND, &nodemask, 32, 0);
 
 	return buf;
 }

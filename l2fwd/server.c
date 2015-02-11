@@ -101,10 +101,10 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			tbl_entry = *(const uint16_t *)&lpm->tbl8[tbl8_index];
 		}
 
-		/**< TODO: Using totally random prefixes causes the LPM to fail for 50%
-		  *  of packets. This needs to be fixed, but probably won't affect perf
-		  *  much because the failure is detected on accessing tbl24 (tbl8s are
-		  *  still not being accessed).
+		/**< Using totally random prefixes causes the LPM to fail for 50%
+		  *  of packets. Ideally this should be fixed, or a different FIB could
+		  *  be used that has dst ports for all prefixes, but this is what PS
+		  *  does.
 		  *  Check success: assert((tbl_entry & RTE_LPM_LOOKUP_SUCCESS) == 0);
 		  *  XXX: Hack - make dst_port random by using randomness from dst_ip*/
 
