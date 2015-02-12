@@ -120,7 +120,7 @@ void *shm_map(int key, int bytes)
 inline uint32_t fastrand(uint64_t* seed)
 {
     *seed = *seed * 1103515245 + 12345;
-    return (uint32_t)(*seed >> 32);
+    return (uint32_t) (*seed >> 32);
 }
 
 // Count the number of 1-bits in n

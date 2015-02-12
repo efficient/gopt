@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <assert.h>
 
+#include <rte_byteorder.h>
 #include <rte_common.h>
 #include <rte_cycles.h>
 #include <rte_prefetch.h>
@@ -67,10 +68,9 @@
 
 /**
  * Per-lcore, per-port statistics:
- * The server process on each lcore creates a separate instance of
- * lcore_port_info for each port. The total number of packets transmitted
- * is collected in the nb_tx_all_ports field for port #0 (this does not
- * require that port #0 is enabled.
+ * The server process on each lcore creates an array of lcore_port_info,
+ * one per port. Some statistics are collected across all ports - they are
+ * collected in the 0th element of this array.
  */
 struct lcore_port_info {
 	struct rte_mbuf *mbufs[MAX_SRV_BURST];
@@ -106,5 +106,6 @@ void micro_sleep(double us, double cycles_to_ns_fac);
 
 void print_ether_hdr(struct ether_hdr *eth_hdr);
 
+inline int is_valid_ipv4_pkt(struct ipv4_hdr *pkt, uint32_t link_len);
 float get_sleep_time(void);
 
