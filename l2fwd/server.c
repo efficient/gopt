@@ -53,7 +53,8 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 	const struct rte_lpm *lpm, 
-	struct lcore_port_info *lp_info)
+	struct lcore_port_info *lp_info,
+	const struct mac_ints *mac_ints_arr)
 {
 	int batch_index = 0;
 	foreach(batch_index, nb_pkts) {
@@ -112,8 +113,10 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		/**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
 		/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
-		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[dst_port]);
-		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
+		int *mac_ints_dst = (int *) eth_hdr;
+		mac_ints_dst[0] = mac_ints_arr[dst_port].chunk[0];
+		mac_ints_dst[1] = mac_ints_arr[dst_port].chunk[1];
+		mac_ints_dst[2] = mac_ints_arr[dst_port].chunk[2];
 
 		/**< Garble dst port to reduce RX load on clients */
 		eth_hdr->d_addr.addr_bytes[0] += (dst_ip & 0xff);
@@ -124,7 +127,8 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 
 void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
                           const struct rte_lpm *lpm,
-                          struct lcore_port_info *lp_info)
+                          struct lcore_port_info *lp_info,
+                          const struct mac_ints *mac_ints_arr)
 {
 	struct ether_hdr *eth_hdr[BATCH_SIZE];
 	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
@@ -133,6 +137,7 @@ void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
 	unsigned tbl24_index[BATCH_SIZE];
 	uint16_t tbl_entry[BATCH_SIZE];
 	unsigned tbl8_index[BATCH_SIZE];
+	int *mac_ints_dst[BATCH_SIZE];
 
 	int I = 0;			// batch index
 	void *batch_rips[BATCH_SIZE];		// goto targets
@@ -188,8 +193,10 @@ fpp_label_1:
         /**%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
         
 		/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
-        set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[dst_port[I]]);
-        set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[dst_port[I]]);
+		mac_ints_dst[I] = (int *) eth_hdr[I];
+		mac_ints_dst[I][0] = mac_ints_arr[dst_port[I]].chunk[0];
+		mac_ints_dst[I][1] = mac_ints_arr[dst_port[I]].chunk[1];
+		mac_ints_dst[I][2] = mac_ints_arr[dst_port[I]].chunk[2];
 
 		/**< Garble dst port to reduce RX load on clients */
 		eth_hdr[I]->d_addr.addr_bytes[0] += (dst_ip[I] & 0xff);
@@ -219,6 +226,16 @@ void run_server(struct rte_lpm *lpm)
 
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
+
+	/**< Construct the mac ints for all 4 ports. This allows us to set the
+	  *  Ethernet header during TX in 3 integer copies. */
+	assert(num_active_ports <= 4);
+	struct mac_ints mac_ints_arr[4];
+	for(i = 0; i < 4; i ++) {
+		uint8_t *hack_bytes = (uint8_t *) mac_ints_arr[i].chunk;
+		set_mac(&hack_bytes[0], dst_mac_arr[i]);
+		set_mac(&hack_bytes[6], src_mac_arr[i]);
+	}
 	
 	/**< Initialize the per-port info for this lcore */
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
@@ -259,9 +276,9 @@ void run_server(struct rte_lpm *lpm)
 		lp_info[port_id].nb_rx += nb_rx_new;
 
 #if GOTO == 1
-		process_batch_goto(rx_pkts_burst, nb_rx_new, lpm, lp_info);
+		process_batch_goto(rx_pkts_burst, nb_rx_new, lpm, lp_info, mac_ints_arr);
 #else
-		process_batch_nogoto(rx_pkts_burst, nb_rx_new, lpm, lp_info);
+		process_batch_nogoto(rx_pkts_burst, nb_rx_new, lpm, lp_info, mac_ints_arr);
 #endif
 		
 		/**< STAT PRINTING */

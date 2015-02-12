@@ -21,7 +21,7 @@
 #include "util.h"
 #include "ipv4.h"
 
-#define GOTO 1
+#define GOTO 0
 
 #define LL long long
 
@@ -82,6 +82,13 @@ struct lcore_port_info {
 
 	int nb_tx_all_ports;	/**< Total packets transmitted on all ports */
 	int queue_id;	/**< Queue used by this lcore on this port */
+};
+
+/**< All packets forwarded to port #N need the same Ethernet header during TX.
+  *  We compute the header for each port once and store it in 3 integers. This
+  *  makes the header-modification very cheap (3 integer copies). */
+struct mac_ints {
+	int chunk[3];
 };
 
 struct rte_mempool *mempool_init(char *name, int socket_id);
