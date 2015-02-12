@@ -111,3 +111,4 @@ void print_ether_hdr(struct ether_hdr *eth_hdr);
 
 inline int is_valid_ipv4_pkt(struct ipv4_hdr *pkt, uint32_t link_len);
 float get_sleep_time(void);
+
