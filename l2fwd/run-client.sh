@@ -23,3 +23,4 @@ sudo ./build/l2fwd -c 0x555 -n 3 client $@		#AAA means all odd numbered cores
 # 0x15 = Lcores for xge0
 # 0x555 = Lcores for xge0,1
 # 0xAAA = Lcores for xge2,3
+# 0x2A = Lcores for xge2

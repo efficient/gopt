@@ -1,7 +1,6 @@
 #include "main.h"
 int is_client = -1, client_id;
 
-/**< Structures for DPDK */
 static struct ether_addr l2fwd_ports_eth_addr[RTE_MAX_ETHPORTS]; /**< MACs */
 struct rte_mempool *l2fwd_pktmbuf_pool[RTE_MAX_LCORE];	/**< Per lcore mempools */
 

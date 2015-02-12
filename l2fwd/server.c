@@ -51,8 +51,9 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
-void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
-	struct lcore_port_info *lp_info)
+void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
+	struct lcore_port_info *lp_info,
+	const struct mac_ints *mac_ints_arr)
 {
 	int batch_index = 0;
 
@@ -75,8 +76,14 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		int resp = req[0] & 0xff;
 		int dst_port = resp & 3;
 
-		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[dst_port]);
-		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
+		/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
+		int *mac_ints_dst = (int *) eth_hdr;
+		mac_ints_dst[0] = mac_ints_arr[dst_port].chunk[0];
+		mac_ints_dst[1] = mac_ints_arr[dst_port].chunk[1];
+		mac_ints_dst[2] = mac_ints_arr[dst_port].chunk[2];
+
+		/**< Garble dst port to reduce RX load on clients */
+		eth_hdr->d_addr.addr_bytes[0] += (req[0] & 0xff);
 
 		/**< Send out the packet based on the value of resp */
 		send_packet(pkts[batch_index], dst_port, lp_info);
@@ -101,6 +108,16 @@ void run_server(void)
 
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
+
+	/**< Construct the mac ints for all 4 ports. This allows us to set the
+	  *  Ethernet header during TX in 3 integer copies. */
+	assert(num_active_ports <= 4);
+	struct mac_ints mac_ints_arr[4];
+	for(i = 0; i < 4; i ++) {
+		uint8_t *hack_bytes = (uint8_t *) mac_ints_arr[i].chunk;
+		set_mac(&hack_bytes[0], dst_mac_arr[i]);
+		set_mac(&hack_bytes[6], src_mac_arr[i]);
+	}
 	
 	/**< Initialize the per-port info for this lcore */
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
@@ -122,7 +139,7 @@ void run_server(void)
 		int nb_rx_new = 0, tries = 0;
 		
 		/**< Lcores *cannot* wait for a fixed number of packets from a port.
-		  * If we do this, the port mysteriously runs out of RX desc */
+		  *  If we do this, the port mysteriously runs out of RX desc */
 		while(nb_rx_new < MAX_SRV_BURST && tries < 5) {
 			nb_rx_new += rte_eth_rx_burst(port_id, queue_id, 
 				&rx_pkts_burst[nb_rx_new], MAX_SRV_BURST - nb_rx_new);
@@ -140,7 +157,7 @@ void run_server(void)
 	
 		lp_info[port_id].nb_rx += nb_rx_new;
 
-		process_batch_nogoto(rx_pkts_burst, nb_rx_new, lp_info);
+		process_batch_nogoto(rx_pkts_burst, nb_rx_new, lp_info, mac_ints_arr);
 		
 		/**< STAT PRINTING */
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {

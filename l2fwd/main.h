@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <assert.h>
 
+#include <rte_byteorder.h>
 #include <rte_common.h>
 #include <rte_cycles.h>
 #include <rte_prefetch.h>
@@ -78,6 +79,13 @@ struct lcore_port_info {
 	int queue_id;	/**< Queue used by this lcore on this port */
 };
 
+/**< All packets forwarded to port #N need the same Ethernet header during TX.
+  *  We compute the header for each port once and store it in 3 integers. This
+  *  makes the header-modification very cheap (3 integer copies). */
+struct mac_ints {
+	int chunk[3];
+};
+
 struct rte_mempool *mempool_init(char *name, int socket_id);
 
 int client_port_queue_to_lcore(int port_id, int queue_id);
@@ -96,5 +104,6 @@ void micro_sleep(double us, double cycles_to_ns_fac);
 
 void print_ether_hdr(struct ether_hdr *eth_hdr);
 
+inline int is_valid_ipv4_pkt(struct ipv4_hdr *pkt, uint32_t link_len);
 float get_sleep_time(void);
 

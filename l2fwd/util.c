@@ -35,6 +35,40 @@ void red_printf(const char *format, ...)
     va_end(args);
 }
 
+// Like printf, but red. Limited to 1000 characters.
+void blue_printf(const char *format, ...)
+{	
+	#define BLUE_LIM 1000
+	va_list args;
+	int i;
+
+	char buf1[BLUE_LIM], buf2[BLUE_LIM];
+	memset(buf1, 0, BLUE_LIM);
+	memset(buf2, 0, BLUE_LIM);
+
+    va_start(args, format);
+
+	// Marshal the stuff to print in a buffer
+	vsnprintf(buf1, BLUE_LIM, format, args);
+
+	// Probably a bad check for buffer overflow
+	for(i = BLUE_LIM - 1; i >= BLUE_LIM - 50; i --) {
+		assert(buf1[i] == 0);
+	}
+
+	// Add markers for red color and reset color
+	snprintf(buf2, 1000, "\033[34m%s\033[0m", buf1);
+
+	// Probably another bad check for buffer overflow
+	for(i = BLUE_LIM - 1; i >= BLUE_LIM - 50; i --) {
+		assert(buf2[i] == 0);
+	}
+
+	printf("%s", buf2);
+
+    va_end(args);
+}
+
 void print_buf(char *A, int n)
 {
 	int i;
