@@ -190,6 +190,9 @@ fpp_label_1:
 		/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
         set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[dst_port[I]]);
         set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[dst_port[I]]);
+
+		/**< Garble dst port to reduce RX load on clients */
+		eth_hdr[I]->d_addr.addr_bytes[0] += (dst_ip[I] & 0xff);
         
         send_packet(pkts[I], dst_port[I], lp_info);
 
