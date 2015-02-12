@@ -33,6 +33,7 @@ public class ProcRib {
 
 		for(int i = 0; i <= 32; i ++) {
 			System.err.println("Prefixes with len = " + i + " = " + stats[i]);
+			System.err.println("\tPossible IPv4 addresses = " + stats[i] * (1 << (32 - i)));
 		}
 
 		c.close();
