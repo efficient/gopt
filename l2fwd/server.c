@@ -54,7 +54,8 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 
 void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
                           struct ndn_bucket *ht,
-                          struct lcore_port_info *lp_info, int port_id)
+                          struct lcore_port_info *lp_info, int port_id,
+                          struct mac_ints *mac_ints_arr)
 {
 	struct ether_hdr *eth_hdr[BATCH_SIZE];
 	char *name[BATCH_SIZE];
@@ -72,6 +73,7 @@ void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
 	struct ndn_slot *slots[BATCH_SIZE];
 	int8_t _dst_port[BATCH_SIZE];
 	uint64_t _hash[BATCH_SIZE];
+	int *mac_ints_dst[BATCH_SIZE];
 
 	int I = 0;			// batch index
 	void *batch_rips[BATCH_SIZE];		// goto targets
@@ -171,14 +173,13 @@ fpp_label_2:
             lp_info[port_id].nb_loookup_fail ++;
             rte_pktmbuf_free(pkts[I]);
         } else {
-            set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[fwd_port[I]]);
-            
-            /**< Reduce RX load on client: If the client sent a bad
-             *  src MAC address, garble dst MAC address */
-            if(eth_hdr[I]->s_addr.addr_bytes[0] == 0xef) {
-                eth_hdr[I]->d_addr.addr_bytes[0] ++;
-            }
-            set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
+			mac_ints_dst[I] = (int *) eth_hdr[I];
+			mac_ints_dst[I][0] = mac_ints_arr[fwd_port[I]].chunk[0];
+			mac_ints_dst[I][1] = mac_ints_arr[fwd_port[I]].chunk[1];
+			mac_ints_dst[I][2] = mac_ints_arr[fwd_port[I]].chunk[2];
+
+			/**< TODO: Garble dst mac */
+
             send_packet(pkts[I], fwd_port[I], lp_info);
         }  
       
@@ -195,7 +196,8 @@ fpp_end:
 
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
 	struct ndn_bucket *ht,
-	struct lcore_port_info *lp_info, int port_id)
+	struct lcore_port_info *lp_info, int port_id,
+	struct mac_ints *mac_ints_arr)
 {
 
 	int batch_index = 0;		/**< Don't make global!! */
@@ -290,14 +292,12 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			lp_info[port_id].nb_loookup_fail ++;
 			rte_pktmbuf_free(pkts[batch_index]);
 		} else {
-			set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[fwd_port]);
-		
-			/**< Reduce RX load on client: If the client sent a bad 
-			  *  src MAC address, garble dst MAC address */
-			if(eth_hdr->s_addr.addr_bytes[0] == 0xef) {
-				eth_hdr->d_addr.addr_bytes[0] ++;
-			}
-			set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[port_id]);
+			int *mac_ints_dst = (int *) eth_hdr;
+			mac_ints_dst[0] = mac_ints_arr[fwd_port].chunk[0];
+			mac_ints_dst[1] = mac_ints_arr[fwd_port].chunk[1];
+			mac_ints_dst[2] = mac_ints_arr[fwd_port].chunk[2];
+
+			/**< TODO: Garble dst mac */
 			send_packet(pkts[batch_index], fwd_port, lp_info);
 		}
 	}
@@ -317,6 +317,16 @@ void run_server(struct ndn_bucket *ht)
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
 
+	/**< Construct the mac ints for all 4 ports. This allows us to set the
+	  *  Ethernet header during TX in 3 integer copies. */
+	assert(num_active_ports <= 4);
+	struct mac_ints mac_ints_arr[4];
+	for(i = 0; i < 4; i ++) {
+		uint8_t *hack_bytes = (uint8_t *) mac_ints_arr[i].chunk;
+		set_mac(&hack_bytes[0], dst_mac_arr[i]);
+		set_mac(&hack_bytes[6], src_mac_arr[i]);
+	}
+	
 	/**< Initialize the per-port info for this lcore */
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
 	memset(lp_info, 0, RTE_MAX_ETHPORTS * sizeof(struct lcore_port_info));
@@ -357,10 +367,10 @@ void run_server(struct ndn_bucket *ht)
 
 #if GOTO == 1
 		process_batch_goto(rx_pkts_burst, 
-			nb_rx_new, ht, lp_info, port_id);
+			nb_rx_new, ht, lp_info, port_id, mac_ints_arr);
 #else
 		process_batch_nogoto(rx_pkts_burst,
-			nb_rx_new, ht, lp_info, port_id);
+			nb_rx_new, ht, lp_info, port_id, mac_ints_arr);
 #endif
 		
 		/**< STAT PRINTING */
