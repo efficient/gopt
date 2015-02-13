@@ -61,6 +61,7 @@ void run_client(int client_id, struct rte_mempool **l2fwd_pktmbuf_pool)
 		
 			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
 			if((fastrand(&rss_seed) & 0xff) == 0) {
+				/**< STAMP: This pkt is used for GPU latency measurement. */
 				set_mac(src_mac_ptr, src_mac_arr[client_id][port_id]);
 			} else {
 				set_mac(src_mac_ptr, 0xdeadbeef);
