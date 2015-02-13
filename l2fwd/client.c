@@ -10,8 +10,8 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 							{0x44d7a3211b00, 0x45d7a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00}};
 
 	/**< [xia-router2 - xge0,1,4,5], [xia-router2 - xge2,3,6,7] */
-	/*LL dst_mac_arr[2][4] = {{0x6c10bb211b00, 0x6d10bb211b00, 0xc8a610ca0568, 0xc9a610ca0568},
-							{0x64d2bd211b00, 0x65d2bd211b00, 0xa2a610ca0568, 0xa3a610ca0568}};*/
+	LL dst_mac_arr[2][4] = {{0x6c10bb211b00, 0x6d10bb211b00, 0xc8a610ca0568, 0xc9a610ca0568},
+							{0x64d2bd211b00, 0x65d2bd211b00, 0xa2a610ca0568, 0xa3a610ca0568}};
 
 	/**< Even cores take xge0,1. Odd cores take xge2, xge3 */
 	int lcore_to_port[12] = {0, 2, 0, 2, 0, 2, 1, 3, 1, 3, 1, 3};
@@ -41,10 +41,13 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 	LL nb_tx = 0, nb_rx = 0;
 	struct ether_hdr *eth_hdr;
 	struct ipv4_hdr *ip_hdr;
-	uint8_t *src_mac_ptr;
+	uint8_t *src_mac_ptr, *dst_mac_ptr;
 
 	LL rx_samples = 0, latency_tot = 0;
 	uint64_t rss_seed = 0xdeadbeef;
+
+	/**< sizeof(ether_hdr) + sizeof(ipv6_hdr) is 54 --> 56 for 4 byte align */
+	int hdr_size = 36;
 
 	float sleep_us = 2;
 
@@ -66,13 +69,14 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 			ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 		
 			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
-
-			/**< Occassionally, put the correct src mac address */
 			if((fastrand(&rss_seed) & 0xff) == 0) {
 				set_mac(src_mac_ptr, src_mac_arr[client_id][port_id]);
 			} else {
 				set_mac(src_mac_ptr, 0xdeadbeef);
 			}
+
+			dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
+			set_mac(dst_mac_ptr, dst_mac_arr[client_id][port_id]);
 
 			eth_hdr->ether_type = htons(ETHER_TYPE_IPv4);
 	
@@ -84,20 +88,20 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 			/**< Add global core identifier and timestamp */
 			char *data_ptr = rte_pktmbuf_mtod(tx_pkts_burst[i], char *);
 
-			int *magic = (int *) (data_ptr + HDR_SIZE);
+			int *magic = (int *) (data_ptr + hdr_size);
 			magic[0] = client_id * 1000 + lcore_id;	/**< 36 -> 40 */
 			
 			/**< Add client-side timestamp */
-			LL *clt_tsc = (LL *) (data_ptr + HDR_SIZE + sizeof(int));
+			LL *clt_tsc = (LL *) (data_ptr + hdr_size + sizeof(int));
 			clt_tsc[0] = rte_rdtsc();		/**< 40 -> 48 */
 
 			/**< Choose a dst name from the ones inserted in the NDN index */
-			char *name_ptr = data_ptr + HDR_SIZE + sizeof(int) + sizeof(LL);
+			char *name_ptr = data_ptr + hdr_size + sizeof(int) + sizeof(LL);
 
 			/** Copy name to pkt. Adds the terminating 0 char. */
 			strcpy(name_ptr, name_arr[name_i + i].name);
 
-			int pkt_size = HDR_SIZE + sizeof(int) + sizeof(long long) +
+			int pkt_size = hdr_size + sizeof(int) + sizeof(long long) +
 				strlen(name_ptr) + 1;	/**< Null-terminated */
 
 			tx_pkts_burst[i]->pkt.nb_segs = 1;
@@ -126,12 +130,12 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 			for(i = 0; i < nb_rx_new; i ++) {
 				/**< Verify the server's response */
 				int *magic = (int *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) + 
-					HDR_SIZE);
+					hdr_size);
 				int tx_magic = magic[0];
 
-				/**< Retrive TX data: timestamp and global lcore ID */
+				/**< Retrive send-TSC and lcore from which this pkt was sent */
 				LL *clt_tsc = (LL *) (rte_pktmbuf_mtod(rx_pkts_burst[i], char *) +
-					HDR_SIZE + 4);
+					hdr_size + 4);
 				if(client_id * 1000 + lcore_id == tx_magic) {
 					rx_samples ++;
 					LL cur_tsc = rte_rdtsc();

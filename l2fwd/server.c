@@ -1,12 +1,13 @@
 #include "main.h"
 #include "city.h"
 
-// Only immutable information should be global
-// xia-router2 xge0,1,2,3,4,5,6,7
+/**< Only immutable information should be global
+  *  xia-router2 xge0,1,2,3,4,5,6,7 */
 LL src_mac_arr[8] = {0x6c10bb211b00, 0x6d10bb211b00, 0x64d2bd211b00, 0x65d2bd211b00,
 					 0xc8a610ca0568, 0xc9a610ca0568, 0xa2a610ca0568, 0xa3a610ca0568};
 
-// xia-router0 xge0,1    xia-router1 xge0,1    xia-router0 xge2,3    xia-router1 xge2,3
+/**< xia-router0 xge0,1    xia-router1 xge0,1
+  *  xia-router0 xge2,3    xia-router1 xge2,3 */
 LL dst_mac_arr[8] = {0x36d3bd211b00, 0x37d3bd211b00, 0x44d7a3211b00, 0x45d7a3211b00,
 					 0xa8d6a3211b00, 0xa9d6a3211b00, 0x0ad7a3211b00, 0x0bd7a3211b00};
 
@@ -30,13 +31,13 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	lp_info[port_id].mbufs[tot_buffered] = pkt;
 	tot_buffered ++;
 
-	// TX when a sufficient number of packets are buffered
+	/**< TX when a sufficient number of packets are buffered */
 	if(unlikely(tot_buffered == MAX_SRV_BURST)) {
 		int queue_id = lp_info[port_id].queue_id;
 		int nb_tx_new = rte_eth_tx_burst(port_id, queue_id, 
 			lp_info[port_id].mbufs, MAX_SRV_BURST);
 
-		// Free unsent packets
+		/**< Free unsent packets */
 		for(i = nb_tx_new; i < MAX_SRV_BURST; i ++) {
 			rte_pktmbuf_free(lp_info[port_id].mbufs[i]);
 		}
@@ -91,7 +92,7 @@ fpp_start:
         
         eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
         data_ptr[I] = (char *) pkts[I]->pkt.data;
-        name[I] = data_ptr[I] + HDR_SIZE + sizeof(int) + sizeof(LL);
+        name[I] = data_ptr[I] + 36 + sizeof(int) + sizeof(LL);
         
          /**< URL char iterator and slot iterator */
         
@@ -167,7 +168,7 @@ fpp_label_2:
         
         /**< Count failed packets and transmit */
         if(fwd_port[I] == -1) {
-            lp_info[port_id].nb_tx_fail ++;
+            lp_info[port_id].nb_loookup_fail ++;
             rte_pktmbuf_free(pkts[I]);
         } else {
             set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[fwd_port[I]]);
@@ -211,7 +212,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
 		data_ptr = (char *) pkts[batch_index]->pkt.data;
-		name = data_ptr + HDR_SIZE + sizeof(int) + sizeof(LL);
+		name = data_ptr + 36 + sizeof(int) + sizeof(LL);
 
 		int c_i, i;	/**< URL char iterator and slot iterator */
 		int bkt_num, bkt_1, bkt_2;
@@ -286,7 +287,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 
 		/**< Count failed packets and transmit */
 		if(fwd_port == -1) {
-			lp_info[port_id].nb_tx_fail ++;
+			lp_info[port_id].nb_loookup_fail ++;
 			rte_pktmbuf_free(pkts[batch_index]);
 		} else {
 			set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[fwd_port]);
@@ -315,7 +316,7 @@ void run_server(struct ndn_bucket *ht)
 
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
-	
+
 	/**< Initialize the per-port info for this lcore */
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
 	memset(lp_info, 0, RTE_MAX_ETHPORTS * sizeof(struct lcore_port_info));
@@ -336,7 +337,7 @@ void run_server(struct ndn_bucket *ht)
 		int nb_rx_new = 0, tries = 0;
 		
 		/**< Lcores *cannot* wait for a fixed number of packets from a port.
-		  * If we do this, the port mysteriously runs out of RX desc */
+		  *  If we do this, the port mysteriously runs out of RX desc */
 		while(nb_rx_new < MAX_SRV_BURST && tries < 5) {
 			nb_rx_new += rte_eth_rx_burst(port_id, queue_id, 
 				&rx_pkts_burst[nb_rx_new], MAX_SRV_BURST - nb_rx_new);
@@ -372,20 +373,20 @@ void run_server(struct ndn_bucket *ht)
 			red_printf("Lcore %d, total: %f\n", lcore_id, 
 				lp_info[0].nb_tx_all_ports / seconds);
 
+			/**< Reset all-port stats in case port 0 is disabled */
+			lp_info[0].nb_tx_all_ports = 0;
 			for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
 				if(ISSET(XIA_R2_PORT_MASK, i)) {
 					printf("\tLcore: %d, port %d: S: %f, F: %f\n", lcore_id, i,
 						lp_info[i].nb_tx / seconds, 
-						lp_info[i].nb_tx_fail / seconds);
+						lp_info[i].nb_loookup_fail / seconds);
 				}
 
-				// Do not reset the nb_buf counter
+				/**< Do not reset the nb_buf counter */
 				lp_info[i].nb_tx = 0;
-				lp_info[i].nb_tx_fail = 0;
+				lp_info[i].nb_loookup_fail = 0;
 
 				lp_info[i].nb_rx = 0;
-	
-				lp_info[i].nb_tx_all_ports = 0;
 			}
 
 			printf("\tLcore %d, Average TX burst size: %lld\n", lcore_id, 
