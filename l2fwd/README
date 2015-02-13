@@ -74,14 +74,19 @@
 	40-47:	client's tsc for end-to-end latency measurement
 	48-55:	server's tsc for server-only latency measurement	
 
-5. Packet formatting, and RSS issues for IPv6 packets:
-   ===================================================
+5. IPv6 forwarding:
+   ================
 
-	The Ethernet (14 bytes) and IPv6 header (40 bytes) take the 1st 54 bytes of a
-	packet. Assume 56 for alignment.
+	Based on DPDK's l3fwd's simple_ipv6_fwd_4pkts
 
-	56-63:	Client's TSC (this comes first because 56 is 8-byte aligned)
-	64-68:  Client's lcore_id.
+	Formatting:
+	===========
+
+		The Ethernet (14 bytes) and IPv6 header (40 bytes) take the 1st 54 bytes
+		of a packet. Assume 56 for alignment.
+
+		56-63:	Client's TSC (this comes first because 56 is 8-byte aligned)
+		64-68:  Client's lcore_id.
 
 	RSS issue:
 	==========

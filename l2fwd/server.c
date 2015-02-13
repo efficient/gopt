@@ -56,7 +56,7 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
  * lp_info = port statistics for this lcore
  */
 void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
-	 struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq,
+	struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq,
 	struct mac_ints *mac_ints_arr)
 {
 	int batch_index = 0, hdr_size = 36;
