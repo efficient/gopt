@@ -86,6 +86,13 @@ struct lcore_port_info {
 	int queue_id;	/**< Queue used by this lcore on this port */
 };
 
+/**< All packets forwarded to port #N need the same Ethernet header during TX.
+  *  We compute the header for each port once and store it in 3 integers. This
+  *  makes the header-modification very cheap (3 integer copies). */
+struct mac_ints {
+	int chunk[3];
+};
+
 struct rte_mempool *mempool_init(char *name, int socket_id);
 
 int client_port_queue_to_lcore(int port_id, int queue_id);
