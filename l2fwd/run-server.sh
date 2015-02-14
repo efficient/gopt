@@ -5,7 +5,7 @@ function blue() {
 	echo "${es}$1${ee}"
 }
 
-worker_core_mask="0x55"		# Mask for lcores running DPDK-workers
+worker_core_mask="0x15"		# Mask for lcores running DPDK-workers
 
 blue "Killing existing GPU-master processes"
 sudo killall master

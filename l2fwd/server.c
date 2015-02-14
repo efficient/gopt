@@ -56,7 +56,8 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
  * lp_info = port statistics for this lcore
  */
 void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
-	 struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq)
+	struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq,
+	struct mac_ints *mac_ints_arr)
 {
 	int batch_index = 0, hdr_size = 56;
 
@@ -118,14 +119,15 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 			lp_info[0].gpu_added_latency_samples += 1;
 		}
 
-		/**< Modify L2 header: Do this after checking src mac for STAMP */
-		set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[dst_port]);
-		set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[dst_port]);
+		/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
+		int *mac_ints_dst = (int *) eth_hdr;
+		mac_ints_dst[0] = mac_ints_arr[dst_port].chunk[0];
+		mac_ints_dst[1] = mac_ints_arr[dst_port].chunk[1];
+		mac_ints_dst[2] = mac_ints_arr[dst_port].chunk[2];
 
-		/**< Garble dst MAC to reduce RX load on clients. Uses randomness from
-		  *  the IPv6 dst addresses offered by clients. */
-		eth_hdr->d_addr.addr_bytes[0] += ip6_hdr->dst_addr[0];
-		
+		/**< Garble dst port to reduce RX load on clients */
+		eth_hdr->d_addr.addr_bytes[0] += (lc_wmq->sent & 0xff);
+
 		/**< Use the GPU's response to determine the output port */
 		send_packet(send_pkt, dst_port, lp_info);
 
@@ -148,6 +150,16 @@ void run_server(volatile struct wm_queue *wmq)
 
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
+
+	/**< Construct the mac ints for all 4 ports. This allows us to set the
+	  *  Ethernet header during TX in 3 integer copies. */
+	assert(num_active_ports <= 4);
+	struct mac_ints mac_ints_arr[4];
+	for(i = 0; i < 4; i ++) {
+		uint8_t *hack_bytes = (uint8_t *) mac_ints_arr[i].chunk;
+		set_mac(&hack_bytes[0], dst_mac_arr[i]);
+		set_mac(&hack_bytes[6], src_mac_arr[i]);
+	}
 	
 	/**< Initialize the per-port info for this lcore */
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
@@ -188,7 +200,8 @@ void run_server(volatile struct wm_queue *wmq)
 	
 		lp_info[port_id].nb_rx += nb_rx_new;
 
-		process_batch_gpu(rx_pkts_burst, nb_rx_new, lp_info, lc_wmq);
+		process_batch_gpu(rx_pkts_burst,
+			nb_rx_new, lp_info, lc_wmq, mac_ints_arr);
 		
 		/**< STAT PRINTING */
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {
