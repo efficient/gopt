@@ -13,7 +13,13 @@ extern "C" {
 #include "util.h"
 }
 
-#define MASTER_TEST_GPU 1
+#define MASTER_TEST_GPU 1	/**< Test cuckoo hash table impl and exit */
+
+uint32_t non_inline_fastrand_for_cuda(uint64_t *seed)
+{
+    *seed = *seed * 1103515245 + 12345;
+    return (uint32_t) (*seed >> 32);
+}
 
 /**< Functions for hashing from within a CUDA kernel */
 static const uint32_t cu_c1 = 0xcc9e2d51;
@@ -57,6 +63,7 @@ __device__ uint32_t cu_Hash32Len0to4(char *s, int len)
 }
 /**< Hashing functions for CUDA kernels end here */
 
+/**< Kernel to look up 32-bit MAC addresses in a cuckoo hash table */
 __global__ void
 cuckooGpu(uint32_t *req, int *resp, struct cuckoo_bucket *ht_index, int num_reqs)
 {
@@ -74,6 +81,7 @@ cuckooGpu(uint32_t *req, int *resp, struct cuckoo_bucket *ht_index, int num_reqs
 
 			if(slot_mac == dst_mac) {
 				fwd_port = slot_port;
+				break;
 				/**< Don't break: avoid divergence. TODO: Maybe bad idea? */
 			}
 		}
@@ -87,12 +95,26 @@ cuckooGpu(uint32_t *req, int *resp, struct cuckoo_bucket *ht_index, int num_reqs
 
 				if(slot_mac == dst_mac) {
 					fwd_port = slot_port;
+					break;
 					/**<Don't break: avoid divergence. TODO: Maybe bad idea? */
 				}
 			}
 		}
 
 		resp[i] = fwd_port;
+	}
+}
+
+/**< Kernel to compute hashes of 32-bit ints. Only used for testing my CUDA
+  *  impl of CityHash32 */
+__global__ void
+hashGpu(uint32_t *req, uint32_t *resp, int num_reqs)
+{
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+	if (i < num_reqs) {
+		uint32_t dst_mac = req[i];
+		resp[i] = cu_Hash32Len0to4((char *) &dst_mac, 4);
 	}
 }
 
@@ -228,9 +250,9 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 	}
 }
 
-/**< Test the CUDA kernel by comparing prefix matching outputs with DPDK's
+/**< Test the CUDA kernel by comparing cuckoo outputs with cuckoo lib
   *  outputs. Enabled by setting MASTER_TEST_GPU = 1
-  *  We need to look up both host index and device index for comparison. */
+  *  We need both host and device hash index for lookup comparison. */
 void test_cuckoo_32_gpu(int nb_req,
 	cudaStream_t my_stream, uint32_t *mac_addrs,
 	uint32_t *h_reqs, uint32_t *d_reqs,	/**< Kernel inputs */
@@ -281,7 +303,7 @@ void test_cuckoo_32_gpu(int nb_req,
 	for(i = 0; i < nb_req; i ++) {
 		int exp_next_hop = cuckoo_lookup(h_reqs[i], h_ht_index);
 
-		/**< Compare DPDK's output with kernel output */
+		/**< Compare with kernel output */
 		if(exp_next_hop != h_resps[i]) {
 			printf("Probe %d failed! cuckoo: %d, CUDA: %d\n",
 				i, exp_next_hop, h_resps[i]);
@@ -289,17 +311,79 @@ void test_cuckoo_32_gpu(int nb_req,
 		}
 	}
 
-	red_printf("GPU cuckoo tests passed (total = %d)\n", nb_req);
+	double seconds = ((double) (end.tv_nsec - start.tv_nsec)) / 1000000000.0 +
+		(end.tv_sec - start.tv_sec);
+	printf("\t\tGPU hash table rate = %.1f M/s\n", (nb_req / seconds) / 1000000);
+}
+
+/**< Test the CUDA implementation of CityHash32.
+  *  Enabled by setting MASTER_TEST_GPU = 1 */
+void test_hash(int nb_req,
+	cudaStream_t my_stream,
+	uint32_t *h_reqs, uint32_t *d_reqs,	/**< Kernel inputs */
+	uint32_t *h_resps, uint32_t *d_resps)	/**< Kernel outputs */
+{
+	int i, err;
+	assert( h_reqs != NULL && d_reqs != NULL &&
+		h_resps != NULL && d_resps != NULL);
+
+	/**< Ensure that requests will fit in the allocated worker-master queues */
+	assert(nb_req <= WM_MAX_LCORE * WM_QUEUE_CAP);
+
+	/**< Create random uint32_t for testing */
+	uint64_t seed = 0xdeadbeef;
+	for(i = 0; i < nb_req; i ++) {
+		h_reqs[i] = non_inline_fastrand_for_cuda(&seed);
+	}
+	
+	/**< Copy requests to device */
+	err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(uint32_t),
+		cudaMemcpyHostToDevice, my_stream);
+	CPE1(err != cudaSuccess, "Failed to copy requests h2d. nb_req = %d\n",
+		nb_req);
+
+	struct timespec start, end;
+	clock_gettime(CLOCK_REALTIME, &start);
+
+	/**< Kernel launch */
+	int threadsPerBlock = 256;
+	int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
+
+	hashGpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
+		d_resps, nb_req);
+	err = cudaGetLastError();
+	CPE(err != cudaSuccess, "Failed to launch ipv6Gpu kernel\n");
+
+	/**< Copy responses from device */
+	err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(uint32_t),
+		cudaMemcpyDeviceToHost, my_stream);
+	CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
+
+	/**< Synchronize all CUDA operations */
+	cudaStreamSynchronize(my_stream);
+
+	clock_gettime(CLOCK_REALTIME, &end);
+
+	for(i = 0; i < nb_req; i ++) {
+		int exp_hash = CityHash32((char *) &h_reqs[i], 4);
+
+		/**< Compare with kernel output */
+		if(exp_hash != h_resps[i]) {
+			printf("Probe %d failed! CityHash: %d, CUDA: %d\n",
+				i, exp_hash, h_resps[i]);
+			exit(-1);
+		}
+	}
 
 	double seconds = ((double) (end.tv_nsec - start.tv_nsec)) / 1000000000.0 +
 		(end.tv_sec - start.tv_sec);
-	red_printf("GPU cuckoo rate = %.1f M/s\n", (nb_req / seconds) / 1000000);
+	printf("\t\tGPU CityHash32 rate = %.1f M/s\n", (nb_req / seconds) / 1000000);
 }
 
 int main(int argc, char **argv)
 {
 	int c, i, err = cudaSuccess;
-	int lcore_mask = -1;
+	int lcore_mask = -1, nb_req;
 	cudaStream_t my_stream;
 	volatile struct wm_queue *wmq;
 
@@ -385,9 +469,16 @@ int main(int argc, char **argv)
 	
 	/**< Launch the GPU master */
 #if MASTER_TEST_GPU == 1
-	blue_printf("\tGPU master: launching GPU test code\n");
-	int nb_req = 32;
-	for(; nb_req <= WM_MAX_LCORE * WM_QUEUE_CAP; nb_req *= 2) {
+	for(nb_req = 32; nb_req <= WM_MAX_LCORE * WM_QUEUE_CAP; nb_req *= 2) {
+		blue_printf("GPU master: testing with %d requests\n", nb_req);
+
+		printf("\tTesting CityHash32 impl\n");
+		test_hash(nb_req,
+			my_stream,
+			h_reqs, d_reqs,
+			(uint32_t *) h_resps, (uint32_t *) d_resps);
+
+		printf("\tTesting cuckoo hash table impl\n");
 		test_cuckoo_32_gpu(nb_req,
 			my_stream, mac_addrs,
 			h_reqs, d_reqs,
