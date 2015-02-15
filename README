@@ -1,6 +1,21 @@
 Directory structure:
+===================
+
+	antlr:
+	======
+		ANTLR code to transform code using goto optimization.
+
+	antlr/actual:
+	============
+		Sample applications for benchmarking the transformation.
 
 	l2fwd:
-	=====
-		DPDK code for L2 forwarding b/w xia-router2 and xia-router1/0
+	======
+		DPDK code for full-system benchmarks.
 
+	data_dump:
+	==========
+		Contains data files for:
+			1. Unique IPv4 and IPv6 prefixes from RouteViews.
+			2. Processed IPv6 prefixes: suitable for trie insertion.
+			3. Snort 2.9.7's valid rules, patterns and packets.
