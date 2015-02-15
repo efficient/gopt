@@ -53,15 +53,19 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 
 void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
                           struct cuckoo_bucket *ht_index,
-                          struct lcore_port_info *lp_info, int port_id)
+                          struct lcore_port_info *lp_info, int port_id,
+                          struct mac_ints *mac_ints_arr)
 {
 	int i[BATCH_SIZE];
 	struct ether_hdr *eth_hdr[BATCH_SIZE];
+	struct ipv4_hdr *ip_hdr[BATCH_SIZE];
+	uint32_t dst_ip[BATCH_SIZE];
 	void *dst_mac_ptr[BATCH_SIZE];
 	ULL dst_mac[BATCH_SIZE];
 	int fwd_port[BATCH_SIZE];
 	int bkt_2[BATCH_SIZE];
 	int bkt_1[BATCH_SIZE];
+	int *mac_ints_dst[BATCH_SIZE];
 
 	int I = 0;			// batch index
 	void *batch_rips[BATCH_SIZE];		// goto targets
@@ -81,6 +85,8 @@ fpp_start:
 	}
 
 	eth_hdr[I] = (struct ether_hdr *) pkts[I]->pkt.data;
+	ip_hdr[I] = (struct ipv4_hdr *) ((char *) eth_hdr[I] + sizeof(struct ether_hdr));
+	dst_ip[I] = ip_hdr[I]->dst_addr;
 
 	dst_mac_ptr[I] = &eth_hdr[I]->d_addr.addr_bytes[0];
 	dst_mac[I] = get_mac(eth_hdr[I]->d_addr.addr_bytes);
@@ -115,11 +121,15 @@ fpp_label_2:
 		lp_info[port_id].nb_tx_fail ++;
 		rte_pktmbuf_free(pkts[I]);
 	} else {
-		set_mac(eth_hdr[I]->d_addr.addr_bytes, dst_mac_arr[fwd_port[I]]);
-		if(eth_hdr[I]->s_addr.addr_bytes[0] == 0xef) {
-			eth_hdr[I]->d_addr.addr_bytes[0] ++;
-		}
-		set_mac(eth_hdr[I]->s_addr.addr_bytes, src_mac_arr[port_id]);
+		/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
+		mac_ints_dst[I] = (int *) eth_hdr[I];
+		mac_ints_dst[I][0] = mac_ints_arr[fwd_port[I]].chunk[0];
+		mac_ints_dst[I][1] = mac_ints_arr[fwd_port[I]].chunk[1];
+		mac_ints_dst[I][2] = mac_ints_arr[fwd_port[I]].chunk[2];
+
+		/**< Garble dst port to reduce RX load on clients */
+		eth_hdr[I]->d_addr.addr_bytes[0] += (dst_ip[I] & 0xff);
+
 		send_packet(pkts[I], fwd_port[I], lp_info);
 	}
 
@@ -135,13 +145,16 @@ fpp_end:
 
 void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts, 
 	struct cuckoo_bucket *ht_index,
-	struct lcore_port_info *lp_info, int port_id)
+	struct lcore_port_info *lp_info, int port_id,
+	struct mac_ints *mac_ints_arr)
 {
 	int batch_index = 0;
 
 	foreach(batch_index, nb_pkts) {
 		int i;
 		struct ether_hdr *eth_hdr;
+		struct ipv4_hdr *ip_hdr;
+		uint32_t dst_ip;
 
 		void *dst_mac_ptr;
 		ULL dst_mac;
@@ -152,6 +165,8 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		}
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
+		ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
+		dst_ip = ip_hdr->dst_addr;
 
 		dst_mac_ptr = &eth_hdr->d_addr.addr_bytes[0];
 		/**< We need the dst_mac for comparison with the key in hash-table */
@@ -186,15 +201,15 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			lp_info[port_id].nb_tx_fail ++;
 			rte_pktmbuf_free(pkts[batch_index]);
 		} else {
-			set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[fwd_port]);
-		
-			/**< Reduce RX load on client: If the client sent a bad 
-			  *  src address, garble dst address */
-			if(eth_hdr->s_addr.addr_bytes[0] == 0xef) {
-				eth_hdr->d_addr.addr_bytes[0] ++;
-			}
+			/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
+			int *mac_ints_dst = (int *) eth_hdr;
+			mac_ints_dst[0] = mac_ints_arr[fwd_port].chunk[0];
+			mac_ints_dst[1] = mac_ints_arr[fwd_port].chunk[1];
+			mac_ints_dst[2] = mac_ints_arr[fwd_port].chunk[2];
 
-			set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[fwd_port]);
+			/**< Garble dst port to reduce RX load on clients */
+			eth_hdr->d_addr.addr_bytes[0] += (dst_ip & 0xff);
+			
 			send_packet(pkts[batch_index], fwd_port, lp_info);
 		}
 	}
@@ -213,6 +228,16 @@ void run_server(struct cuckoo_bucket *ht_index)
 
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
+
+	/**< Construct the mac ints for all 4 ports. This allows us to set the
+	  *  Ethernet header during TX in 3 integer copies. */
+	assert(num_active_ports <= 4);
+	struct mac_ints mac_ints_arr[4];
+	for(i = 0; i < 4; i ++) {
+		uint8_t *hack_bytes = (uint8_t *) mac_ints_arr[i].chunk;
+		set_mac(&hack_bytes[0], dst_mac_arr[i]);
+		set_mac(&hack_bytes[6], src_mac_arr[i]);
+	}
 	
 	/**< Initialize the per-port info for this lcore */
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
@@ -254,10 +279,10 @@ void run_server(struct cuckoo_bucket *ht_index)
 
 #if GOTO == 1
 		process_batch_goto(rx_pkts_burst, 
-			nb_rx_new, ht_index, lp_info, port_id);
+			nb_rx_new, ht_index, lp_info, port_id, mac_ints_arr);
 #else
 		process_batch_nogoto(rx_pkts_burst,
-			nb_rx_new, ht_index, lp_info, port_id);
+			nb_rx_new, ht_index, lp_info, port_id, mac_ints_arr);
 #endif
 		
 		/**< STAT PRINTING */
