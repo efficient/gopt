@@ -13,7 +13,7 @@ extern "C" {
 #include "util.h"
 }
 
-#define MASTER_TEST_GPU 1	/**< Test cuckoo hash table impl and exit */
+#define MASTER_TEST_GPU 0	/**< Test cuckoo hash table impl and exit */
 
 uint32_t non_inline_fastrand_for_cuda(uint64_t *seed)
 {
@@ -128,7 +128,7 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 {
 	assert(num_workers != 0);
 	assert(worker_lcores != NULL);
-	assert(num_workers * WM_QUEUE_THRESH < WM_QUEUE_CAP);
+	assert(num_workers <= WM_MAX_LCORE);
 	
 	int i, err;
 
