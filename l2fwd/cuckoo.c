@@ -1,6 +1,6 @@
 #include "cuckoo.h"
 
-// Don't want to include rte header for RTE_MAX_ETHPORTS
+/**< Don't want to include rte header for RTE_MAX_ETHPORTS */
 #define CUCKOO_MAX_ETHPORTS 16
 #define CUCKOO_ISSET(a, i) (a & (1 << i))
 
@@ -32,7 +32,7 @@ void cuckoo_init(uint32_t **mac_addrs,
 
 	srand(2);
 
-	// Allocate the packets and put them into the hash index randomly
+	/**< Allocate the packets and put them into the hash index randomly */
 	printf("Putting active ports into hash index randomly\n");
 	*mac_addrs = malloc(NUM_MAC * sizeof(uint32_t));
 
@@ -51,7 +51,7 @@ void cuckoo_init(uint32_t **mac_addrs,
 
 		int success = 0;
 		for(slot_i = 0; slot_i < 8; slot_i ++) {
-			// Find an empty slot
+			/**< Find an empty slot */
 			if((*ht_index)[bkt].slot[slot_i].mac == 0) {
 				(*ht_index)[bkt].slot[slot_i].mac = mac_32;
 				int port = port_arr[rand() % num_active_ports];
@@ -62,7 +62,7 @@ void cuckoo_init(uint32_t **mac_addrs,
 		}
 
 		if(success == 0) {
-			// Failed to find an empty slot
+			/**< Failed to find an empty slot */
 			slot_i = rand() % 8;
 			(*ht_index)[bkt].slot[slot_i].mac = mac_32;
 			int port = port_arr[rand() % num_active_ports];

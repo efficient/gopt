@@ -52,10 +52,12 @@
 #define MAX(a, b) (a > b ? a : b)
 #define htons(n) (((((unsigned short)(n) & 0xFF)) << 8) | (((unsigned short)(n) & 0xFF00) >> 8))
 
-#define CPE2(val, msg, error, fault) \
-	if(val) {fflush(stdout); fprintf(stderr, msg, error, fault); exit(-1);}
-#define CPE(val, msg) \
-	if(val) {fflush(stdout); fprintf(stderr, msg); exit(-1);}
+#define CPE2(cmp, msg, val_1, val_2) \
+	if(cmp) {fflush(stdout); fprintf(stderr, msg, val_1, val_2); exit(-1);}
+#define CPE1(cmp, msg, val_1) \
+	if(cmp) {fflush(stdout); fprintf(stderr, msg, val_1); exit(-1);}
+#define CPE(cmp, msg) \
+	if(cmp) {fflush(stdout); fprintf(stderr, msg); exit(-1);}
 
 void red_printf(const char *format, ...);
 void blue_printf(const char *format, ...);
