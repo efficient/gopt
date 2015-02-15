@@ -21,7 +21,7 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	int i;
 
 	if(unlikely(!ISSET(XIA_R2_PORT_MASK, port_id))) {
-		red_printf("TX on invalid port!. Exiting.\n");
+		red_printf("TX on invalid port %d!. Exiting.\n", port_id);
 		exit(-1);
 	}
 
@@ -56,7 +56,8 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
  * lp_info = port statistics for this lcore
  */
 void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, int port_id,
-	 struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq)
+	struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq,
+	struct mac_ints *mac_ints_arr)
 {
 	int batch_index = 0, hdr_size = 36;
 
@@ -74,60 +75,64 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 
 		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
 
-		/** < Timestamp some pkts before putting on work queue 
-		  *   This works because the src mac address for most packets
-		  *   is 0xdeadbeef */
-		if(eth_hdr->s_addr.addr_bytes[0] != 0xef) {
+		/**< Timestamp (client) STAMPed pkts before putting on work queue */
+		if(unlikely(eth_hdr->s_addr.addr_bytes[0] != 0xef)) {
 			srv_tsc = (LL *) (rte_pktmbuf_mtod(pkts[batch_index], char *) +
 				hdr_size + 12);
 			srv_tsc[0] = rte_rdtsc();
 		}
 
 		dst_mac = get_mac(eth_hdr->d_addr.addr_bytes);
-		
+
 		lc_wmq->reqs[head & WM_QUEUE_CAP_] = dst_mac;
 		lc_wmq->mbufs[head & WM_QUEUE_CAP_] = (void *) pkts[batch_index];
 
 		head ++;
 	}
 
-	// Update the shared head to enque the entire batch	
+	/**< Update the shared head to enque the entire batch */
 	lc_wmq->head = head;
 	while(lc_wmq->head - lc_wmq->tail >= WM_QUEUE_THRESH) {
-		// Do nothing
+		/**< Do nothing */
 	}
 
-	// Snapshot the tail into a local variable
-	int tail = lc_wmq->tail;
+	/**< Snapshot the tail into a local variable */
+	long long tail = lc_wmq->tail;
 	while(lc_wmq->sent != tail) {
-		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		// Offset in queue
-		struct rte_mbuf *send_mbuf = lc_wmq->mbufs[q_i];
-		
-		/** < Measure latency added by GPU for stamped packets */
-		eth_hdr = (struct ether_hdr *) send_mbuf->pkt.data;
-		if(eth_hdr->s_addr.addr_bytes[0] != 0xef) {
-			srv_tsc = (LL *) (rte_pktmbuf_mtod(send_mbuf, char *) +
+		int q_i = lc_wmq->sent & WM_QUEUE_CAP_;		/**< Offset in queue */
+		struct rte_mbuf *send_pkt = lc_wmq->mbufs[q_i];
+
+		int dst_port = lc_wmq->resps[q_i];
+
+		/**< Measure latency added by GPU for STAMPed packets */
+		eth_hdr = (struct ether_hdr *) send_pkt->pkt.data;
+		if(unlikely(eth_hdr->s_addr.addr_bytes[0] != 0xef)) {
+			srv_tsc = (LL *) (rte_pktmbuf_mtod(send_pkt, char *) +
 				hdr_size + 12);
 			lp_info[0].gpu_added_latency += rte_rdtsc() - srv_tsc[0];
 			lp_info[0].gpu_added_latency_samples += 1;
 		}
-		
-		int fwd_port = lc_wmq->resps[q_i];
 
-		/** < Count failed packets and transmit */
-		if(fwd_port == -1) {
+		/**< Count failed packets and transmit */
+		if(dst_port == -1) {
 			lp_info[port_id].nb_tx_fail ++;
-			rte_pktmbuf_free(send_mbuf);
+			rte_pktmbuf_free(send_pkt);
 		} else {
-			set_mac(eth_hdr->s_addr.addr_bytes, src_mac_arr[port_id]);
-			set_mac(eth_hdr->d_addr.addr_bytes, dst_mac_arr[fwd_port]);
-			send_packet(send_mbuf, fwd_port, lp_info);
+			/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
+			int *mac_ints_dst = (int *) eth_hdr;
+			mac_ints_dst[0] = mac_ints_arr[dst_port].chunk[0];
+			mac_ints_dst[1] = mac_ints_arr[dst_port].chunk[1];
+			mac_ints_dst[2] = mac_ints_arr[dst_port].chunk[2];
+
+			/**< Garble dst port to reduce RX load on clients */
+			eth_hdr->d_addr.addr_bytes[0] += (lc_wmq->sent & 0xff);
+
+			/**< Use the GPU's response to determine the output port */
+			send_packet(send_pkt, dst_port, lp_info);
 		}
 
-		/** < This is independent on actually calling send_packet */
 		lc_wmq->sent ++;
 	}
-	
 }
 
 void run_server(volatile struct wm_queue *wmq)
@@ -145,6 +150,16 @@ void run_server(volatile struct wm_queue *wmq)
 
 	int num_active_ports = bitcount(XIA_R2_PORT_MASK);
 	int *port_arr = get_active_bits(XIA_R2_PORT_MASK);
+
+	/**< Construct the mac ints for all 4 ports. This allows us to set the
+	  *  Ethernet header during TX in 3 integer copies. */
+	assert(num_active_ports <= 4);
+	struct mac_ints mac_ints_arr[4];
+	for(i = 0; i < 4; i ++) {
+		uint8_t *hack_bytes = (uint8_t *) mac_ints_arr[i].chunk;
+		set_mac(&hack_bytes[0], dst_mac_arr[i]);
+		set_mac(&hack_bytes[6], src_mac_arr[i]);
+	}
 	
 	/**< Initialize the per-port info for this lcore */
 	struct lcore_port_info lp_info[RTE_MAX_ETHPORTS];
@@ -185,7 +200,8 @@ void run_server(volatile struct wm_queue *wmq)
 	
 		lp_info[port_id].nb_rx += nb_rx_new;
 
-		process_batch_gpu(rx_pkts_burst, nb_rx_new, port_id, lp_info, lc_wmq);
+		process_batch_gpu(rx_pkts_burst,
+			nb_rx_new, port_id, lp_info, lc_wmq, mac_ints_arr);
 		
 		/**< STAT PRINTING */
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {
@@ -202,10 +218,15 @@ void run_server(volatile struct wm_queue *wmq)
 				lp_info[0].nb_tx_all_ports / seconds,
 				gpu_added_us / lp_info[0].gpu_added_latency_samples);
 
+			/**< Reset all-port stats in case port 0 is disabled */
+			lp_info[0].nb_tx_all_ports = 0;
+			lp_info[0].gpu_added_latency = 0;
+			lp_info[0].gpu_added_latency_samples = 0;
+
 			for(i = 0; i < RTE_MAX_ETHPORTS; i++) {
 				if(ISSET(XIA_R2_PORT_MASK, i)) {
 					printf("\tLcore: %d, port %d: S: %f, F: %f\n", lcore_id, i,
-						lp_info[i].nb_tx / seconds, 
+						lp_info[i].nb_tx / seconds,
 						lp_info[i].nb_tx_fail / seconds);
 				}
 
@@ -214,10 +235,6 @@ void run_server(volatile struct wm_queue *wmq)
 				lp_info[i].nb_tx_fail = 0;
 
 				lp_info[i].nb_rx = 0;
-	
-				lp_info[i].nb_tx_all_ports = 0;
-				lp_info[i].gpu_added_latency = 0;
-				lp_info[i].gpu_added_latency_samples = 0;
 			}
 
 			printf("\tLcore %d, Average TX burst size: %lld\n", lcore_id, 

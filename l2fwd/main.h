@@ -74,19 +74,27 @@
  */
 struct lcore_port_info {
 	struct rte_mbuf *mbufs[MAX_SRV_BURST];
-	int nb_buf;
-	int nb_tx;
-	int nb_tx_fail;			// Port not found for a dst mac
-	int nb_rx;
-	int nb_tx_all_ports;				// Use @port 0
+	int nb_buf;		/**< Number of packets buffered for TX on this port */
+	int nb_tx;		/**< Number of packets transmitted on this port */
+	int nb_rx;		/**< Number of packets received on this port */
+	int nb_tx_fail;	/**< Cuckoo lookup failed */
 
-	// For measuring latency added by the GPU
-	long long gpu_added_latency;			// Use @port 0
-	long long gpu_added_latency_samples;	// Use @port 0
+	int nb_tx_all_ports;	/**< Total packets transmitted on all ports */
 
-	// Information passed between functions to avoid re-calculation
+	/**< For measuring latency added by the GPU */
+	long long gpu_added_latency;			/**< Use @port 0 */
+	long long gpu_added_latency_samples;	/**< Use @port 0 */
+
+	/**< Information passed between functions to avoid re-calculation */
 	int queue_id;
 	int lcore_id;
+};
+
+/**< All packets forwarded to port #N need the same Ethernet header during TX.
+  *  We compute the header for each port once and store it in 3 integers. This
+  *  makes the header-modification very cheap (3 integer copies). */
+struct mac_ints {
+	int chunk[3];
 };
 
 struct rte_mempool *mempool_init(char *name, int socket_id);

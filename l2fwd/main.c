@@ -66,7 +66,9 @@ main(int argc, char **argv)
 	uint8_t port_id;
 	unsigned lcore_id;
 
-	if(argc > 5) {		// Do this before eal parsing
+	/**< Do args parsing before EAL's args parsing.
+	  *  Do all data-structure hugepage allocations before EAL's init(). */
+	if(argc > 5) {
 		is_client = 1;
 		client_id = atoi(argv[6]);
 
@@ -78,7 +80,7 @@ main(int argc, char **argv)
 	} else {
 		is_client = 0;
 
-		/** < Create the worker-master queues for all workers */
+		/**< Create the worker-master queues for all workers */
 		red_printf("\tDPDK main: Mapping worker-master shared queues\n");
 
 		while(wm_queue_bytes < (int) (WM_MAX_LCORE * sizeof(struct wm_queue))) {
@@ -88,6 +90,7 @@ main(int argc, char **argv)
 			wm_queue_bytes / M_2);
 
 		wmq = shm_map(WM_QUEUE_KEY, wm_queue_bytes);
+		assert(wmq != NULL);
 		red_printf("\tDPDK main: Mapping worker-master queues done\n");
 	}
 

@@ -67,6 +67,7 @@ void run_client(int client_id, uint32_t *mac_addrs,
 
 			/**< Occassionally, put the correct src mac address */
 			if((fastrand(&rss_seed) & 0xff) == 0) {
+				/**< STAMP: This pkt is used for GPU latency measurement. */
 				set_mac(src_mac_ptr, src_mac_arr[client_id][port_id]);
 			} else {
 				set_mac(src_mac_ptr, 0xdeadbeef);

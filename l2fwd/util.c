@@ -154,9 +154,9 @@ int *get_active_bits(int mask)
 	return active_bits;
 }
 
-/** < The client uses this function for setting 32-bit dummy MAC addrs.
-  *   But this needs to work for full MAC addrs to so that the clients
-  *   actually RX packets */
+/**< The client uses this function for setting 32-bit dummy MAC addrs.
+  *  But this needs to work for full MAC addrs to so that the clients
+  *  actually RX packets */
 inline void set_mac(uint8_t *mac_ptr, ULL mac_addr)
 {
    	mac_ptr[0] = mac_addr & 0xFF;
