@@ -1,7 +1,6 @@
 /* Common functions used in DPDK code  */
 #include "main.h"
 
-
 void check_all_ports_link_status(uint8_t port_num, int portmask)
 {
 	uint8_t port_id;
