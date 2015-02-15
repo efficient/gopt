@@ -75,3 +75,40 @@ void cuckoo_init(uint32_t **mac_addrs,
 
 	printf("Percentage of entries overwritten = %f\n", (double) overwrites / NUM_MAC);
 }
+
+/**< Return the mapped port for a 32-bit request MAC */
+int cuckoo_lookup(uint32_t req, struct cuckoo_bucket *ht_index)
+{
+	int bkt_1, bkt_2, fwd_port = -1;
+	int j;
+	
+	uint32_t dst_mac = req;
+	bkt_1 = CityHash32((char *) &dst_mac, 4) & NUM_BKT_;
+
+	for(j = 0; j < 8; j ++) {
+		uint32_t slot_mac = ht_index[bkt_1].slot[j].mac;
+		int slot_port = ht_index[bkt_1].slot[j].port;
+
+		if(slot_mac == dst_mac) {
+			assert(slot_port != -1);
+			fwd_port = slot_port;
+			break;
+		}
+	}
+
+	if(fwd_port == -1) {
+		bkt_2 = CityHash32((char *) &bkt_1, 4) & NUM_BKT_;
+
+		for(j = 0; j < 8; j ++) {
+			uint32_t slot_mac = ht_index[bkt_2].slot[j].mac;
+			int slot_port = ht_index[bkt_2].slot[j].port;
+
+			if(slot_mac == dst_mac) {
+				fwd_port = slot_port;
+				break;
+			}
+		}
+	}
+
+	return fwd_port;
+}

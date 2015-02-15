@@ -13,6 +13,8 @@ extern "C" {
 #include "util.h"
 }
 
+#define MASTER_TEST_GPU 1
+
 /**< Functions for hashing from within a CUDA kernel */
 static const uint32_t cu_c1 = 0xcc9e2d51;
 static const uint32_t cu_c2 = 0x1b873593;
@@ -226,6 +228,74 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 	}
 }
 
+/**< Test the CUDA kernel by comparing prefix matching outputs with DPDK's
+  *  outputs. Enabled by setting MASTER_TEST_GPU = 1
+  *  We need to look up both host index and device index for comparison. */
+void test_cuckoo_32_gpu(int nb_req,
+	cudaStream_t my_stream, uint32_t *mac_addrs,
+	uint32_t *h_reqs, uint32_t *d_reqs,	/**< Kernel inputs */
+	int *h_resps, int *d_resps,	/**< Kernel outputs */
+	struct cuckoo_bucket *d_ht_index, struct cuckoo_bucket *h_ht_index)
+{
+	int i, err;
+	assert(mac_addrs != NULL && h_reqs != NULL && d_reqs != NULL &&
+		h_resps != NULL && d_resps != NULL && d_ht_index != NULL);
+
+	/**< Ensure that requests will fit in the allocated worker-master queues */
+	assert(nb_req <= WM_MAX_LCORE * WM_QUEUE_CAP);
+
+	/**< Choose random probe addresses from inserted MACs */
+	for(i = 0; i < nb_req; i ++) {
+		int prefix_arr_i = rand() % NUM_MAC_;
+		h_reqs[i] = mac_addrs[prefix_arr_i];
+	}
+	
+	/**< Copy requests to device */
+	err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(uint32_t),
+		cudaMemcpyHostToDevice, my_stream);
+	CPE1(err != cudaSuccess, "Failed to copy requests h2d. nb_req = %d\n",
+		nb_req);
+
+	struct timespec start, end;
+	clock_gettime(CLOCK_REALTIME, &start);
+
+	/**< Kernel launch */
+	int threadsPerBlock = 256;
+	int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
+
+	cuckooGpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
+		d_resps, d_ht_index, nb_req);
+	err = cudaGetLastError();
+	CPE(err != cudaSuccess, "Failed to launch ipv6Gpu kernel\n");
+
+	/**< Copy responses from device */
+	err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(int),
+		cudaMemcpyDeviceToHost, my_stream);
+	CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
+
+	/**< Synchronize all CUDA operations */
+	cudaStreamSynchronize(my_stream);
+
+	clock_gettime(CLOCK_REALTIME, &end);
+
+	for(i = 0; i < nb_req; i ++) {
+		int exp_next_hop = cuckoo_lookup(h_reqs[i], h_ht_index);
+
+		/**< Compare DPDK's output with kernel output */
+		if(exp_next_hop != h_resps[i]) {
+			printf("Probe %d failed! cuckoo: %d, CUDA: %d\n",
+				i, exp_next_hop, h_resps[i]);
+			exit(-1);
+		}
+	}
+
+	red_printf("GPU cuckoo tests passed (total = %d)\n", nb_req);
+
+	double seconds = ((double) (end.tv_nsec - start.tv_nsec)) / 1000000000.0 +
+		(end.tv_sec - start.tv_sec);
+	red_printf("GPU cuckoo rate = %.1f M/s\n", (nb_req / seconds) / 1000000);
+}
+
 int main(int argc, char **argv)
 {
 	int c, i, err = cudaSuccess;
@@ -314,11 +384,22 @@ int main(int argc, char **argv)
 	int *worker_lcores = get_active_bits(lcore_mask);
 	
 	/**< Launch the GPU master */
+#if MASTER_TEST_GPU == 1
+	blue_printf("\tGPU master: launching GPU test code\n");
+	int nb_req = 32;
+	for(; nb_req <= WM_MAX_LCORE * WM_QUEUE_CAP; nb_req *= 2) {
+		test_cuckoo_32_gpu(nb_req,
+			my_stream, mac_addrs,
+			h_reqs, d_reqs,
+			h_resps, d_resps,
+			d_ht_index, h_ht_index);
+	}
+#else
 	blue_printf("\tGPU master: launching GPU code\n");
 	master_gpu(wmq, my_stream,
 		h_reqs, d_reqs, 
 		h_resps, d_resps, 
 		d_ht_index,
 		num_workers, worker_lcores);
-
+#endif
 }

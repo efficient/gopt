@@ -32,3 +32,6 @@ struct cuckoo_bucket
 
 void cuckoo_init(uint32_t **mac_addrs, 
 	struct cuckoo_bucket** ht_index, int portmask);
+
+/**< Return the mapped port for a 32-bit MAC */
+int cuckoo_lookup(uint32_t req, struct cuckoo_bucket *ht_index);
