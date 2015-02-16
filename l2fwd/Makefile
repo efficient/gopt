@@ -17,3 +17,6 @@ CFLAGS += -O3
 CFLAGS += $(WERROR_FLAGS) -Wno-missing-prototypes -Wno-missing-declarations
 
 include $(RTE_SDK)/mk/rte.extapp.mk
+
+master: util.c master.cu
+	nvcc -O3 -o master util.c master.cu -lrt

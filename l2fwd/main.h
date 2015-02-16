@@ -72,11 +72,11 @@
  */
 struct lcore_port_info {
 	struct rte_mbuf *mbufs[MAX_SRV_BURST];
-	int nb_buf;		/**< Number of packets buffered for TX on this port */
-	int nb_tx;		/**< Number of packets transmitted on this port */
-	int nb_rx;		/**< Number of packets received on this port */
+	long long nb_buf;		/**< Number of packets buffered for TX on this port */
+	long long nb_tx;		/**< Number of packets transmitted on this port */
+	long long nb_rx;		/**< Number of packets received on this port */
 
-	int nb_tx_all_ports;	/**< Total packets transmitted on all ports */
+	long long nb_tx_all_ports;	/**< Total packets transmitted on all ports */
 
 	/**< For measuring latency added by the GPU */
 	long long gpu_added_latency;			/**< Use @port 0 */

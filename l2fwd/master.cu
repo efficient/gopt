@@ -31,8 +31,12 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 {
 	assert(num_workers != 0);
 	assert(worker_lcores != NULL);
+	assert(num_workers <= WM_MAX_LCORE);
 	
-	int i, err;
+	/**< A circular queue iterator. This needs to be 64 bit to go from the old
+	  *  queue head to the new head. */
+	long long cq_i;
+	int err;
 
 	/**< Variables for batch-size and latency averaging measurements */
 	int msr_iter = 0;			/**< Number of kernel launches */
@@ -74,8 +78,8 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 			req_lo[w_lid] = nb_req;
 
 			/**< Add the new requests from this worker to the GPU req. buffer */
-			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
-				int q_i = i & WM_QUEUE_CAP_;	/**< Queues are circular */
+			for(cq_i = prev_head[w_lid]; cq_i < new_head[w_lid]; cq_i ++) {
+				int q_i = cq_i & WM_QUEUE_CAP_;	/**< Actual queue offset */
 				int req = lc_wmq->reqs[q_i];
 
 				h_reqs[nb_req] = req;
@@ -88,37 +92,37 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		}
 
 		/**< Copy requests to device */
-		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(int), 
-			cudaMemcpyHostToDevice, my_stream);
-		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
-
-		/**< Kernel launch */
-		int threadsPerBlock = 256;
-		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
-	
-		masterGpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
-			d_resps, nb_req);
-		err = cudaGetLastError();
-		CPE(err != cudaSuccess, "Failed to launch masterGpu kernel\n");
-
-		/**< Copy responses from device */
-		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(int),
-			cudaMemcpyDeviceToHost, my_stream);
-		CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
-
-		/**< Synchronize all CUDA operations */
-		cudaStreamSynchronize(my_stream);
+//		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(int), 
+//			cudaMemcpyHostToDevice, my_stream);
+//		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
+//
+//		/**< Kernel launch */
+//		int threadsPerBlock = 256;
+//		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
+//	
+//		masterGpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
+//			d_resps, nb_req);
+//		err = cudaGetLastError();
+//		CPE(err != cudaSuccess, "Failed to launch masterGpu kernel\n");
+//
+//		/**< Copy responses from device */
+//		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(int),
+//			cudaMemcpyDeviceToHost, my_stream);
+//		CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
+//
+//		/**< Synchronize all CUDA operations */
+//		cudaStreamSynchronize(my_stream);
 		
 		/**< Copy the responses back to worker queues */
 		for(w_i = 0; w_i < num_workers; w_i ++) {
 			w_lid = worker_lcores[w_i];		/**< Don't use w_i after this */
 			lc_wmq = &wmq[w_lid];
 
-			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
+			for(cq_i = prev_head[w_lid]; cq_i < new_head[w_lid]; cq_i ++) {
 				/**< Offset in this workers' queue and the GPU req. buffer */
-				int q_i = i & WM_QUEUE_CAP_;				
-				int req_i = req_lo[w_lid] + (i - prev_head[w_lid]);
-				lc_wmq->resps[q_i] = h_resps[req_i];
+				int q_i = cq_i & WM_QUEUE_CAP_;				
+				int req_i = req_lo[w_lid] + (cq_i - prev_head[w_lid]);
+				lc_wmq->resps[q_i] = (cq_i + h_resps[req_i]) & 3;
 			}
 
 			prev_head[w_lid] = new_head[w_lid];

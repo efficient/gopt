@@ -63,7 +63,7 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 
 	struct ether_hdr *eth_hdr;
 
-	int head = lc_wmq->head;
+	LL head = lc_wmq->head;
 	LL *srv_tsc;
 
 	foreach(batch_index, nb_pkts) {
