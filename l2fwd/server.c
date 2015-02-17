@@ -54,6 +54,13 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 /**
  * lc_wmq = the worker/master queue for this lcore.
  * lp_info = port statistics for this lcore
+ *
+ * This function performs two distinct tasks:
+ * 1. Enqueue a batch of packets to the GPU.
+ * 2. Dequeue packets from the GPU and transmit them.
+ *
+ * These two tasks should ideally be decoupled: we should try to dequeu packets
+ * even when we don't have anything to deque.
  */
 void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	struct lcore_port_info *lp_info, volatile struct wm_queue *lc_wmq,
@@ -189,8 +196,15 @@ void run_server(volatile struct wm_queue *wmq)
 			tries ++;
 		}
 		
+		/**< rx_burst() will return 0 when too many packets have been received
+		  *  and not transmitted or freed. If we get 0 pkts, process_batch_gpu
+		  *  will still check for responses from the GPU */
+		process_batch_gpu(rx_pkts_burst,
+			nb_rx_new, port_id, lp_info, lc_wmq, mac_ints_arr);
+
 		if(nb_rx_new == 0) {
-			port_index = (port_index + 1) < num_active_ports ? port_index + 1 : 0;
+			port_index = (port_index + 1) < num_active_ports ? 
+				port_index + 1 : 0;
 			continue;
 		}
 
@@ -200,8 +214,6 @@ void run_server(volatile struct wm_queue *wmq)
 	
 		lp_info[port_id].nb_rx += nb_rx_new;
 
-		process_batch_gpu(rx_pkts_burst,
-			nb_rx_new, port_id, lp_info, lc_wmq, mac_ints_arr);
 		
 		/**< STAT PRINTING */
 		if (unlikely(lp_info[0].nb_tx_all_ports >= 10000000)) {
