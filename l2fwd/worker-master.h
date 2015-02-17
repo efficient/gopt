@@ -3,7 +3,7 @@
 #define WM_QUEUE_CAP_ 4095
 
 /**< Maximum outstanding packets maintained by a worker for the master */
-#define WM_QUEUE_THRESH 2048
+#define WM_QUEUE_THRESH 4000
 #define WM_QUEUE_KEY 1
 
 /**< Maximum worker lcores supported by the master */
