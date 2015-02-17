@@ -18,3 +18,7 @@ CFLAGS += $(WERROR_FLAGS) -Wno-missing-prototypes -Wno-missing-declarations -Wno
 LDLIBS += -lnuma
 
 include $(RTE_SDK)/mk/rte.extapp.mk
+
+master: util.c ipv6.c rte_lpm6.c master.cu
+	nvcc -O3 -o master -gencode arch=compute_35,code=compute_35 util.c ipv6.c rte_lpm6.c master.cu -lrt -lnuma
+

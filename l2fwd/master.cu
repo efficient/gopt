@@ -64,8 +64,12 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 {
 	assert(num_workers != 0);
 	assert(worker_lcores != NULL);
+	assert(num_workers <= WM_MAX_LCORE);
 	
-	int i, err;
+	/**< A circular queue iterator. This needs to be 64 bit to go from the old
+	  *  queue head to the new head. */
+	long long cq_i;
+	int err;
 
 	/**< Variables for batch-size and latency averaging measurements */
 	int msr_iter = 0;			/**< Number of kernel launches */
@@ -90,8 +94,6 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 
 	clock_gettime(CLOCK_REALTIME, &msr_start);
 
-	int req_gathering_tries = 0;
-
 	while(1) {
 
 		/**< Copy all the requests supplied by workers into the contiguous 
@@ -100,18 +102,17 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 			w_lid = worker_lcores[w_i];		/**< Don't use w_i after this */
 			lc_wmq = &wmq[w_lid];
 			
-			/**< Snapshot this worker queue's head. The entries in the queue up
-			  *  to index (lc_wmq->head - 1) are definitely valid. The entry at
-			  *  index lc_wmq->head also might be valid in some cases - we will
-			  *  process it in the next iteration */
+			/**< Snapshot this worker queue's head. lc_wmq->head is the number
+			  *  entries queued by this worker, so the entries in the queue up
+			  *  to index (lc_wmq->head - 1) are definitely valid. */
 			new_head[w_lid] = lc_wmq->head;
 
 			/**< Record the beginning of the GPU req. buffer for this lcore */
 			req_lo[w_lid] = nb_req;
 
 			/**< Add the new requests from this worker to the GPU req. buffer */
-			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
-				int q_i = i & WM_QUEUE_CAP_;	/**< Queues are circular */
+			for(cq_i = prev_head[w_lid]; cq_i < new_head[w_lid]; cq_i ++) {
+				int q_i = cq_i & WM_QUEUE_CAP_;	/**< Actual queue offset */
 
 				ipv6_mov16((uint8_t *) &h_reqs[nb_req],
 					(uint8_t *) lc_wmq->reqs[q_i].bytes);
@@ -120,22 +121,13 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		}
 
 		if(nb_req == 0) {	/**< No new packets from any worker? */
-			req_gathering_tries ++;
-			if(req_gathering_tries >= 100000000) {
-				printf("master: Waiting for requests..., new_head = %lld\n",
-					new_head[0]);
-				req_gathering_tries = 0;
-			}
 			continue;
 		}
-
-		req_gathering_tries = 0;
 
 		/**< Copy requests to device */
 		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(struct ipv6_addr), 
 			cudaMemcpyHostToDevice, my_stream);
-		CPE1(err != cudaSuccess, "Failed to copy requests h2d. nb_req = %d\n",
-			nb_req);
+		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
 
 		/**< Kernel launch */
 		int threadsPerBlock = 256;
@@ -159,16 +151,18 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 			w_lid = worker_lcores[w_i];		/**< Don't use w_i after this */
 			lc_wmq = &wmq[w_lid];
 
-			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
+			for(cq_i = prev_head[w_lid]; cq_i < new_head[w_lid]; cq_i ++) {
 				/**< Offset in this workers' queue and the GPU req. buffer */
-				int q_i = i & WM_QUEUE_CAP_;				
-				int req_i = req_lo[w_lid] + (i - prev_head[w_lid]);
+				int q_i = cq_i & WM_QUEUE_CAP_;				
+				int req_i = req_lo[w_lid] + (cq_i - prev_head[w_lid]);
 				lc_wmq->resps[q_i] = h_resps[req_i];
 			}
 
 			prev_head[w_lid] = new_head[w_lid];
 		
-			/**< Update tail for this worker */
+			/**< Update tail for this worker: the master has processed packets
+			  *  up to index (new_head[w_lid] - 1) for this worker, so total
+			  *  number of processed packets is new_head[w_lid]. */
 			lc_wmq->tail = new_head[w_lid];
 		}
 
