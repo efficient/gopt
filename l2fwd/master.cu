@@ -92,26 +92,26 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		}
 
 		/**< Copy requests to device */
-//		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(int), 
-//			cudaMemcpyHostToDevice, my_stream);
-//		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
-//
-//		/**< Kernel launch */
-//		int threadsPerBlock = 256;
-//		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
-//	
-//		masterGpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
-//			d_resps, nb_req);
-//		err = cudaGetLastError();
-//		CPE(err != cudaSuccess, "Failed to launch masterGpu kernel\n");
-//
-//		/**< Copy responses from device */
-//		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(int),
-//			cudaMemcpyDeviceToHost, my_stream);
-//		CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
-//
-//		/**< Synchronize all CUDA operations */
-//		cudaStreamSynchronize(my_stream);
+		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(int), 
+			cudaMemcpyHostToDevice, my_stream);
+		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
+
+		/**< Kernel launch */
+		int threadsPerBlock = 256;
+		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
+	
+		masterGpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
+			d_resps, nb_req);
+		err = cudaGetLastError();
+		CPE(err != cudaSuccess, "Failed to launch masterGpu kernel\n");
+
+		/**< Copy responses from device */
+		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(int),
+			cudaMemcpyDeviceToHost, my_stream);
+		CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
+
+		/**< Synchronize all CUDA operations */
+		cudaStreamSynchronize(my_stream);
 		
 		/**< Copy the responses back to worker queues */
 		for(w_i = 0; w_i < num_workers; w_i ++) {

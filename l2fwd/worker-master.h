@@ -1,9 +1,9 @@
 /**< Capacity of a queue between a PacketShader-style worker-master */
-#define WM_QUEUE_CAP 16384
-#define WM_QUEUE_CAP_ 16383
+#define WM_QUEUE_CAP 4096
+#define WM_QUEUE_CAP_ 4095
 
 /**< Maximum outstanding packets maintained by a worker for the master */
-#define WM_QUEUE_THRESH 4096
+#define WM_QUEUE_THRESH 2048
 #define WM_QUEUE_KEY 1
 
 /**< Maximum worker lcores supported by the master */
