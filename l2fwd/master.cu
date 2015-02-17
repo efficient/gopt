@@ -130,7 +130,10 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 	assert(worker_lcores != NULL);
 	assert(num_workers <= WM_MAX_LCORE);
 	
-	int i, err;
+	/**< A circular queue iterator. This needs to be 64 bit to go from the old
+	  *  queue head to the new head. */
+	long long cq_i;
+	int err;
 
 	/**< Variables for batch-size and latency averaging measurements */
 	int msr_iter = 0;			/**< Number of kernel launches */
@@ -163,18 +166,17 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 			w_lid = worker_lcores[w_i];		/**< Don't use w_i after this */
 			lc_wmq = &wmq[w_lid];
 			
-			/**< Snapshot this worker queue's head. The entries in the queue up
-			  *  to index (lc_wmq->head - 1) are definitely valid. The entry at
-			  *  index lc_wmq->head also might be valid in some cases - we will
-			  *  process it in the next iteration */
+			/**< Snapshot this worker queue's head. lc_wmq->head is the number
+			  *  entries queued by this worker, so the entries in the queue up
+			  *  to index (lc_wmq->head - 1) are definitely valid. */
 			new_head[w_lid] = lc_wmq->head;
 
 			/**< Record the beginning of the GPU req. buffer for this lcore */
 			req_lo[w_lid] = nb_req;
 
 			/**< Add the new requests from this worker to the GPU req. buffer */
-			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
-				int q_i = i & WM_QUEUE_CAP_;	/**< Queues are circular */
+			for(cq_i = prev_head[w_lid]; cq_i < new_head[w_lid]; cq_i ++) {
+				int q_i = cq_i & WM_QUEUE_CAP_;	/**< Actual queue offset */
 				uint32_t req = lc_wmq->reqs[q_i];
 
 				h_reqs[nb_req] = req;
@@ -213,16 +215,18 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 			w_lid = worker_lcores[w_i];		/**< Don't use w_i after this */
 			lc_wmq = &wmq[w_lid];
 
-			for(i = prev_head[w_lid]; i < new_head[w_lid]; i ++) {
+			for(cq_i = prev_head[w_lid]; cq_i < new_head[w_lid]; cq_i ++) {
 				/**< Offset in this workers' queue and the GPU req. buffer */
-				int q_i = i & WM_QUEUE_CAP_;				
-				int req_i = req_lo[w_lid] + (i - prev_head[w_lid]);
+				int q_i = cq_i & WM_QUEUE_CAP_;				
+				int req_i = req_lo[w_lid] + (cq_i - prev_head[w_lid]);
 				lc_wmq->resps[q_i] = h_resps[req_i];
 			}
 
 			prev_head[w_lid] = new_head[w_lid];
 		
-			/**< Update tail for this worker */
+			/**< Update tail for this worker: the master has processed packets
+			  *  up to index (new_head[w_lid] - 1) for this worker, so total
+			  *  number of processed packets is new_head[w_lid]. */
 			lc_wmq->tail = new_head[w_lid];
 		}
 
@@ -383,7 +387,7 @@ void test_hash(int nb_req,
 int main(int argc, char **argv)
 {
 	int c, i, err = cudaSuccess;
-	int lcore_mask = -1, nb_req;
+	int lcore_mask = -1;
 	cudaStream_t my_stream;
 	volatile struct wm_queue *wmq;
 
@@ -469,6 +473,7 @@ int main(int argc, char **argv)
 	
 	/**< Launch the GPU master */
 #if MASTER_TEST_GPU == 1
+	int nb_req;
 	for(nb_req = 32; nb_req <= WM_MAX_LCORE * WM_QUEUE_CAP; nb_req *= 2) {
 		blue_printf("GPU master: testing with %d requests\n", nb_req);
 
