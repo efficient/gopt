@@ -3,8 +3,8 @@
 
 #define LOG_SID 1
 
-/**< 512 MB: DRAM */
-#define LOG_CAP (128 * 1024 * 1024)		// Number of ints in the log
+/**< 1 GB: DRAM */
+#define LOG_CAP (256 * 1024 * 1024)		// Number of ints in the log
 #define LOG_CAP_ (LOG_CAP - 1)
 
 /**< 16 MB: L3 cache */
