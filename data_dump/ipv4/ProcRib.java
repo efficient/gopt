@@ -16,6 +16,8 @@ public class ProcRib {
 		Scanner c = new Scanner(new File("uniq_ipv4_rib_201409"));
 		int stats[] = new int[33];
 
+		int lt_24 = 0;	/*< Number of prefixes with length <= 24 */
+
 		for(int i = 0; i < N; i ++) {
 			String line = c.nextLine();
 			String prefix = line.split(" ")[1];
@@ -26,6 +28,10 @@ public class ProcRib {
 			int depth = Integer.parseInt(bytes[1]);
 			stats[depth] ++;
 
+			if(depth <= 24) {
+				lt_24 ++;
+			}
+
 			int dstPort = randGen.nextInt(256);
 
 			System.out.println(depth + "  " + prefixBytes + "  " + dstPort);
@@ -35,6 +41,8 @@ public class ProcRib {
 			System.err.println("Prefixes with len = " + i + " = " + stats[i]);
 			System.err.println("\tPossible IPv4 addresses = " + stats[i] * (1 << (32 - i)));
 		}
+
+		System.err.println("Fraction of prefixes with depth <= 24 = " + (float) lt_24 / N);
 
 		c.close();
 	}
