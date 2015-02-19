@@ -13,15 +13,8 @@ extern "C" {
 #include "util.h"
 }
 
-#define MASTER_TEST_GPU 0	/**< Test cuckoo hash table impl and exit */
+#define MASTER_TEST_GPU 1	/**< Test cuckoo hash table impl and exit */
 
-uint32_t non_inline_fastrand_for_cuda(uint64_t *seed)
-{
-    *seed = *seed * 1103515245 + 12345;
-    return (uint32_t) (*seed >> 32);
-}
-
-/**< Functions for hashing from within a CUDA kernel */
 static const uint32_t cu_c1 = 0xcc9e2d51;
 static const uint32_t cu_c2 = 0x1b873593;
 
@@ -61,67 +54,101 @@ __device__ uint32_t cu_Hash32Len0to4(char *s, int len)
 	}
 	return cu_fmix(cu_Mur(b, cu_Mur(len, c)));
 }
-/**< Hashing functions for CUDA kernels end here */
 
-/**< Kernel to look up 32-bit MAC addresses in a cuckoo hash table */
-__global__ void
-cuckooGpu(uint32_t *req, int *resp, struct cuckoo_bucket *ht_index, int num_reqs)
+__device__ uint32_t cu_Fetch32(uint8_t *s)
 {
-	int i = blockDim.x * blockIdx.x + threadIdx.x;
+	uint32_t byte_3 = s[0];
+	uint32_t byte_2 = s[1];
+	uint32_t byte_1 = s[2];
+	uint32_t byte_0 = s[3];
 
-	if (i < num_reqs) {
+	return (byte_0 << 24) + (byte_1 << 16) + (byte_2 << 8) + byte_3;
+}
+
+__device__ uint32_t cu_Hash32Len5to12(char *s, int len)
+{
+	uint32_t a = len, b = len * 5, c = 9, d = b;
+
+	a += cu_Fetch32((uint8_t *) s);
+	b += cu_Fetch32((uint8_t *) (s + len - 4));
+	c += cu_Fetch32((uint8_t *) (s + ((len >> 1) & 4)));
+	
+  	return cu_fmix(cu_Mur(c, cu_Mur(b, cu_Mur(a, d))));
+}
+
+__device__ ULL cu_get_mac(uint8_t *mac_ptr)
+{
+	ULL ret = 0;
+	ret = mac_ptr[0] + 
+		((ULL) mac_ptr[1] << 8) + 
+		((ULL) mac_ptr[2] << 16) +
+		((ULL) mac_ptr[3] << 24) +
+		((ULL) mac_ptr[4] << 32) +
+		((ULL) mac_ptr[5] << 40);
+
+	return ret;
+}
+
+/**< Kernel to look up MAC addresses in a cuckoo hash table */
+__global__ void
+cuckooGpu(struct wm_ether_addr *req,
+	int *resp, struct cuckoo_bucket *ht_index, int num_reqs)
+{
+	int t_i = blockDim.x * blockIdx.x + threadIdx.x;
+
+	if(t_i < num_reqs) {
+		
 		int bkt_1, bkt_2, fwd_port = -1;
+		int i;
 
-		uint32_t dst_mac = req[i];
-		bkt_1 = cu_Hash32Len0to4((char *) &dst_mac, 4) & NUM_BKT_;
+		uint8_t *dst_mac_ptr = req[t_i].addr_bytes;
+		ULL dst_mac = cu_get_mac(dst_mac_ptr);
 
-		for(int j = 0; j < 8; j ++) {
-			uint32_t slot_mac = ht_index[bkt_1].slot[j].mac;
-			int slot_port = ht_index[bkt_1].slot[j].port;
+		/**< Compute the 1st bucket using the full mac address */
+		bkt_1 = cu_Hash32Len5to12((char *) dst_mac_ptr, 6) & NUM_BKT_;
 
-			if(slot_mac == dst_mac) {
-				fwd_port = slot_port;
+		for(i = 0; i < 8; i ++) {
+			if(SLOT_TO_MAC(ht_index[bkt_1].slot[i]) == dst_mac) {
+				fwd_port = SLOT_TO_PORT(ht_index[bkt_1].slot[i]);
 				break;
-				/**< Don't break: avoid divergence. TODO: Maybe bad idea? */
 			}
 		}
 
+		/**< 2nd bucket is computed using the 1st bucket */
 		if(fwd_port == -1) {
 			bkt_2 = cu_Hash32Len0to4((char *) &bkt_1, 4) & NUM_BKT_;
 
-			for(int j = 0; j < 8; j ++) {
-				uint32_t slot_mac = ht_index[bkt_2].slot[j].mac;
-				int slot_port = ht_index[bkt_2].slot[j].port;
-
-				if(slot_mac == dst_mac) {
-					fwd_port = slot_port;
+			for(i = 0; i < 8; i ++) {
+				if(SLOT_TO_MAC(ht_index[bkt_2].slot[i]) == dst_mac) {
+					fwd_port = SLOT_TO_PORT(ht_index[bkt_2].slot[i]);
 					break;
-					/**<Don't break: avoid divergence. TODO: Maybe bad idea? */
 				}
 			}
 		}
 
-		resp[i] = fwd_port;
+		resp[t_i] = fwd_port;
 	}
 }
 
-/**< Kernel to compute hashes of 32-bit ints. Only used for testing my CUDA
-  *  impl of CityHash32 */
+/**< Kernel to compute hashes of 4 byte and 6 byte strings. Only used for
+  *  testing my CUDA impl of CityHash32 */
 __global__ void
-hashGpu(uint32_t *req, uint32_t *resp, int num_reqs)
+hashGpu(struct wm_ether_addr *req, uint32_t *resp, int num_reqs)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < num_reqs) {
-		uint32_t dst_mac = req[i];
-		resp[i] = cu_Hash32Len0to4((char *) &dst_mac, 4);
+		uint8_t *dst_mac_ptr = req[i].addr_bytes;
+		uint32_t hash_6 = cu_Hash32Len5to12((char *) dst_mac_ptr, 6);
+		uint32_t hash_4 = cu_Hash32Len0to4((char *) dst_mac_ptr, 4);
+		resp[i] = hash_6 ^ hash_4;
 	}
 }
 
 /**< wmq: the worker/master queue for all lcores. Non-NULL iff the lcore is an
   *  active worker. */
 void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
-	uint32_t *h_reqs, uint32_t *d_reqs,	/**< Kernel inputs */
+	struct wm_ether_addr *h_reqs, struct wm_ether_addr *d_reqs,	/**< Kernel inputs */
 	int *h_resps, int *d_resps,	/**< Kernel outputs */
 	struct cuckoo_bucket *d_ht_index,	/**< MAC lookup index */
 	int num_workers, int *worker_lcores)
@@ -177,9 +204,9 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 			/**< Add the new requests from this worker to the GPU req. buffer */
 			for(cq_i = prev_head[w_lid]; cq_i < new_head[w_lid]; cq_i ++) {
 				int q_i = cq_i & WM_QUEUE_CAP_;	/**< Actual queue offset */
-				uint32_t req = lc_wmq->reqs[q_i];
+				memcpy((uint8_t *) &h_reqs[nb_req],
+					(uint8_t *) &lc_wmq->reqs[q_i], WM_REQ_SIZE);
 
-				h_reqs[nb_req] = req;
 				nb_req ++;
 			}
 		}
@@ -189,7 +216,7 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		}
 
 		/**< Copy requests to device */
-		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(uint32_t), 
+		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * WM_REQ_SIZE,
 			cudaMemcpyHostToDevice, my_stream);
 		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
 
@@ -203,7 +230,7 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 		CPE(err != cudaSuccess, "Failed to launch cuckooGpu kernel\n");
 
 		/**< Copy responses from device */
-		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(int),
+		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * WM_RESP_SIZE,
 			cudaMemcpyDeviceToHost, my_stream);
 		CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
 
@@ -257,9 +284,9 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 /**< Test the CUDA kernel by comparing cuckoo outputs with cuckoo lib
   *  outputs. Enabled by setting MASTER_TEST_GPU = 1
   *  We need both host and device hash index for lookup comparison. */
-void test_cuckoo_32_gpu(int nb_req,
-	cudaStream_t my_stream, uint32_t *mac_addrs,
-	uint32_t *h_reqs, uint32_t *d_reqs,	/**< Kernel inputs */
+void test_cuckoo_48_gpu(int nb_req,
+	cudaStream_t my_stream, ULL *mac_addrs,
+	struct wm_ether_addr *h_reqs, struct wm_ether_addr *d_reqs,	/**< Kernel inputs */
 	int *h_resps, int *d_resps,	/**< Kernel outputs */
 	struct cuckoo_bucket *d_ht_index, struct cuckoo_bucket *h_ht_index)
 {
@@ -273,11 +300,11 @@ void test_cuckoo_32_gpu(int nb_req,
 	/**< Choose random probe addresses from inserted MACs */
 	for(i = 0; i < nb_req; i ++) {
 		int prefix_arr_i = rand() % NUM_MAC_;
-		h_reqs[i] = mac_addrs[prefix_arr_i];
+		set_mac_ni(h_reqs[i].addr_bytes, mac_addrs[prefix_arr_i]);
 	}
 	
 	/**< Copy requests to device */
-	err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(uint32_t),
+	err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * WM_REQ_SIZE,
 		cudaMemcpyHostToDevice, my_stream);
 	CPE1(err != cudaSuccess, "Failed to copy requests h2d. nb_req = %d\n",
 		nb_req);
@@ -295,7 +322,7 @@ void test_cuckoo_32_gpu(int nb_req,
 	CPE(err != cudaSuccess, "Failed to launch ipv6Gpu kernel\n");
 
 	/**< Copy responses from device */
-	err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(int),
+	err = cudaMemcpyAsync(h_resps, d_resps, nb_req * WM_RESP_SIZE,
 		cudaMemcpyDeviceToHost, my_stream);
 	CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
 
@@ -304,8 +331,13 @@ void test_cuckoo_32_gpu(int nb_req,
 
 	clock_gettime(CLOCK_REALTIME, &end);
 
+	int nb_fails = 0;
+
 	for(i = 0; i < nb_req; i ++) {
-		int exp_next_hop = cuckoo_lookup(h_reqs[i], h_ht_index);
+		int exp_next_hop = cuckoo_lookup(h_reqs[i].addr_bytes, h_ht_index);
+		if(exp_next_hop == -1) {
+			nb_fails ++;
+		}
 
 		/**< Compare with kernel output */
 		if(exp_next_hop != h_resps[i]) {
@@ -317,31 +349,34 @@ void test_cuckoo_32_gpu(int nb_req,
 
 	double seconds = ((double) (end.tv_nsec - start.tv_nsec)) / 1000000000.0 +
 		(end.tv_sec - start.tv_sec);
-	printf("\t\tGPU hash table rate = %.1f M/s\n", (nb_req / seconds) / 1000000);
+	printf("\t\tGPU hash table rate = %.1f M/s, fail percentage = %.3f\n",
+		(nb_req / seconds) / 1000000, (float) nb_fails / nb_req);
 }
 
 /**< Test the CUDA implementation of CityHash32.
   *  Enabled by setting MASTER_TEST_GPU = 1 */
 void test_hash(int nb_req,
 	cudaStream_t my_stream,
-	uint32_t *h_reqs, uint32_t *d_reqs,	/**< Kernel inputs */
+	struct wm_ether_addr *h_reqs, struct wm_ether_addr *d_reqs,	/**< Kernel inputs */
 	uint32_t *h_resps, uint32_t *d_resps)	/**< Kernel outputs */
 {
-	int i, err;
-	assert( h_reqs != NULL && d_reqs != NULL &&
+	int i, j, err;
+	assert(h_reqs != NULL && d_reqs != NULL &&
 		h_resps != NULL && d_resps != NULL);
 
 	/**< Ensure that requests will fit in the allocated worker-master queues */
 	assert(nb_req <= WM_MAX_LCORE * WM_QUEUE_CAP);
 
-	/**< Create random uint32_t for testing */
+	/**< Create random MAC addresses for testing */
 	uint64_t seed = 0xdeadbeef;
 	for(i = 0; i < nb_req; i ++) {
-		h_reqs[i] = non_inline_fastrand_for_cuda(&seed);
+		for(j = 0; j < 6; j ++) {
+			h_reqs[i].addr_bytes[j] = (uint8_t) fastrand_ni(&seed);
+		}
 	}
 	
 	/**< Copy requests to device */
-	err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * sizeof(uint32_t),
+	err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * WM_REQ_SIZE,
 		cudaMemcpyHostToDevice, my_stream);
 	CPE1(err != cudaSuccess, "Failed to copy requests h2d. nb_req = %d\n",
 		nb_req);
@@ -359,7 +394,7 @@ void test_hash(int nb_req,
 	CPE(err != cudaSuccess, "Failed to launch ipv6Gpu kernel\n");
 
 	/**< Copy responses from device */
-	err = cudaMemcpyAsync(h_resps, d_resps, nb_req * sizeof(uint32_t),
+	err = cudaMemcpyAsync(h_resps, d_resps, nb_req * WM_RESP_SIZE,
 		cudaMemcpyDeviceToHost, my_stream);
 	CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
 
@@ -369,7 +404,8 @@ void test_hash(int nb_req,
 	clock_gettime(CLOCK_REALTIME, &end);
 
 	for(i = 0; i < nb_req; i ++) {
-		int exp_hash = CityHash32((char *) &h_reqs[i], 4);
+		int exp_hash = CityHash32((char *) &h_reqs[i], 6) ^
+			CityHash32((char *) &h_reqs[i], 4);
 
 		/**< Compare with kernel output */
 		if(exp_hash != h_resps[i]) {
@@ -392,11 +428,11 @@ int main(int argc, char **argv)
 	volatile struct wm_queue *wmq;
 
 	/**< CUDA buffers */
-	uint32_t *h_reqs, *d_reqs;
+	struct wm_ether_addr *h_reqs, *d_reqs;
 	int *h_resps, *d_resps;	
 
 	struct cuckoo_bucket *h_ht_index, *d_ht_index;
-	uint32_t *mac_addrs;
+	ULL *mac_addrs;
 
 	/**< Get the worker lcore mask */
 	while ((c = getopt (argc, argv, "c:")) != -1) {
@@ -440,8 +476,10 @@ int main(int argc, char **argv)
 	blue_printf("\tGPU master: creating worker-master shm queues done\n");
 
 	/**< Allocate buffers for requests from all workers*/
+	int max_reqs = WM_QUEUE_CAP * WM_MAX_LCORE;
+
 	blue_printf("\tGPU master: creating buffers for requests\n");
-	int reqs_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(uint32_t);
+	int reqs_buf_size = max_reqs * WM_REQ_SIZE;
 	err = cudaMallocHost((void **) &h_reqs, reqs_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMallocHost req buffer\n");
 	err = cudaMalloc((void **) &d_reqs, reqs_buf_size);
@@ -449,7 +487,7 @@ int main(int argc, char **argv)
 
 	/**< Allocate buffers for responses for all workers */
 	blue_printf("\tGPU master: creating buffers for responses\n");
-	int resps_buf_size = WM_QUEUE_CAP * WM_MAX_LCORE * sizeof(int);
+	int resps_buf_size = max_reqs * WM_RESP_SIZE;
 	err = cudaMallocHost((void **) &h_resps, resps_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMallocHost resp buffers\n");
 	err = cudaMalloc((void **) &d_resps, resps_buf_size);
@@ -457,12 +495,10 @@ int main(int argc, char **argv)
 
 	/**< Create the cuckoo hash-index and copy it over */
 	blue_printf("\tGPU master: creating cuckoo hash index\n");
-
 	cuckoo_init(&mac_addrs, &h_ht_index, CUCKOO_PORT_MASK);
 
-	int ht_index_bytes = NUM_BKT * sizeof(struct cuckoo_bucket);
-	
 	blue_printf("\tGPU master: alloc-ing hash index on device\n");
+	int ht_index_bytes = NUM_BKT * sizeof(struct cuckoo_bucket);
 	err = cudaMalloc((void **) &d_ht_index, ht_index_bytes);
 	CPE(err != cudaSuccess, "Failed to cudaMalloc ht_index\n");
 	cudaMemcpy(d_ht_index, h_ht_index, ht_index_bytes, 
@@ -481,10 +517,10 @@ int main(int argc, char **argv)
 		test_hash(nb_req,
 			my_stream,
 			h_reqs, d_reqs,
-			(uint32_t *) h_resps, (uint32_t *) d_resps);
+			(uint32_t *) h_resps, (uint32_t *) d_resps); /**< Hash -> uint32 */
 
 		printf("\tTesting cuckoo hash table impl\n");
-		test_cuckoo_32_gpu(nb_req,
+		test_cuckoo_48_gpu(nb_req,
 			my_stream, mac_addrs,
 			h_reqs, d_reqs,
 			h_resps, d_resps,

@@ -69,7 +69,6 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 	int batch_index = 0, hdr_size = 36;
 
 	struct ether_hdr *eth_hdr;
-	uint32_t dst_mac;
 
 	LL head = lc_wmq->head;
 	LL *srv_tsc;
@@ -89,9 +88,10 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 			srv_tsc[0] = rte_rdtsc();
 		}
 
-		dst_mac = get_mac(eth_hdr->d_addr.addr_bytes);
+		/**< Copy the MAC address to wm queue */
+		rte_memcpy((uint8_t *) &(lc_wmq->reqs[head & WM_QUEUE_CAP_].addr_bytes),
+			(char *) eth_hdr->d_addr.addr_bytes, WM_REQ_SIZE);
 
-		lc_wmq->reqs[head & WM_QUEUE_CAP_] = dst_mac;
 		lc_wmq->mbufs[head & WM_QUEUE_CAP_] = (void *) pkts[batch_index];
 
 		head ++;

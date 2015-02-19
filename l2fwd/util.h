@@ -68,9 +68,17 @@ inline uint32_t fastrand(uint64_t* seed);
 int bitcount(int n);
 int *get_active_bits(int mask);
 
-inline void set_mac(uint8_t *mac_ptr, unsigned long long mac_addr);
-inline uint32_t get_mac(uint8_t *mac_ptr);
+inline void set_mac(uint8_t *mac_ptr, ULL mac_addr);
+inline ULL get_mac(uint8_t *mac_ptr);
 inline void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr);
 
 void print_mac_arr(uint8_t *mac);
 void print_mac_ull(ULL mac);
+
+/**< Non-inlined fastrand for calling from CUDA code. This should not be
+  *  used on the packet-processing datapath */
+uint32_t fastrand_ni(uint64_t* seed);
+
+/**< Non-inlined set_mac for calling from CUDA code. This should not be
+  *  used on the packet-processing datapath */
+void set_mac_ni(uint8_t *mac_ptr, ULL mac_addr);

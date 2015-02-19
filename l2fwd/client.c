@@ -2,7 +2,7 @@
 #define MAX_CLT_TX_BURST 16
 #define MAX_CLT_RX_BURST 16
 
-void run_client(int client_id, uint32_t *mac_addrs,
+void run_client(int client_id, ULL *mac_addrs,
 	struct rte_mempool **l2fwd_pktmbuf_pool)
 {
 	/**< [xia-router0 - xge0,1,2,3], [xia-router1 - xge0,1,2,3] */

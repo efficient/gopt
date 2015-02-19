@@ -4,12 +4,13 @@
 #define CUCKOO_MAX_ETHPORTS 16
 #define CUCKOO_ISSET(a, i) (a & (1 << i))
 
-void cuckoo_init(uint32_t **mac_addrs, 
+void cuckoo_init(ULL **mac_addrs, 
 	struct cuckoo_bucket **ht_index, int portmask)
 {
 	int i, overwrites = 0;
-	uint32_t rand_1, rand_2;
-	uint32_t mac_32;
+	LL rand_1, rand_2;
+	ULL mac_48;
+	uint8_t __mac_48[6];
 
 	int bkt, slot_i;
 
@@ -34,17 +35,22 @@ void cuckoo_init(uint32_t **mac_addrs,
 
 	/**< Allocate the packets and put them into the hash index randomly */
 	printf("Putting active ports into hash index randomly\n");
-	*mac_addrs = malloc(NUM_MAC * sizeof(uint32_t));
+	*mac_addrs = malloc(NUM_MAC * sizeof(ULL));
 
 	for(i = 0; i < NUM_MAC; i++) {
-		rand_1 = (uint32_t) rand();
-		rand_2 = (uint32_t) rand();
-		mac_32 = rand_1 ^ (rand_2 << 1);
+		rand_1 = (LL) lrand48();
+		rand_2 = (LL) lrand48();
+		mac_48 = (ULL) (rand_1 ^ (rand_2 << 16));
+		assert(mac_48 <= 0xffffffffffffL && mac_48 > 0);
 
-		(*mac_addrs)[i] = mac_32;
+		/**< Store the mac so that the client can use it for probes later */
+		(*mac_addrs)[i] = mac_48;
 
-		// Choose one of the two candidate buckets randomly
-		bkt = CityHash32((char *) &mac_32, 4) & NUM_BKT_;
+		/**< Put the mac into a byte-array for hash computation */
+		set_mac(__mac_48, mac_48);
+
+		/**< Choose one of the two candidate buckets randomly */
+		bkt = CityHash32((char *) __mac_48, 6) & NUM_BKT_;
 		if(rand() % 2 != 0) {
 			bkt = CityHash32((char *) &bkt, 4) & NUM_BKT_;
 		}
@@ -52,10 +58,9 @@ void cuckoo_init(uint32_t **mac_addrs,
 		int success = 0;
 		for(slot_i = 0; slot_i < 8; slot_i ++) {
 			/**< Find an empty slot */
-			if((*ht_index)[bkt].slot[slot_i].mac == 0) {
-				(*ht_index)[bkt].slot[slot_i].mac = mac_32;
-				int port = port_arr[rand() % num_active_ports];
-				(*ht_index)[bkt].slot[slot_i].port = port;
+			if(SLOT_TO_MAC((*ht_index)[bkt].slot[slot_i]) == 0) {
+				ULL port = port_arr[rand() % num_active_ports];
+				(*ht_index)[bkt].slot[slot_i] = (port << 48) + mac_48;
 				success = 1;
 				break;
 			}
@@ -64,9 +69,8 @@ void cuckoo_init(uint32_t **mac_addrs,
 		if(success == 0) {
 			/**< Failed to find an empty slot */
 			slot_i = rand() % 8;
-			(*ht_index)[bkt].slot[slot_i].mac = mac_32;
-			int port = port_arr[rand() % num_active_ports];
-			(*ht_index)[bkt].slot[slot_i].port = port;
+			ULL port = port_arr[rand() % num_active_ports];
+			(*ht_index)[bkt].slot[slot_i] = (port << 48) + mac_48;
 			success = 1;
 	
 			overwrites ++;
@@ -76,35 +80,31 @@ void cuckoo_init(uint32_t **mac_addrs,
 	printf("Percentage of entries overwritten = %f\n", (double) overwrites / NUM_MAC);
 }
 
-/**< Return the mapped port for a 32-bit request MAC */
-int cuckoo_lookup(uint32_t req, struct cuckoo_bucket *ht_index)
+/**< Return the mapped port for a MAC address*/
+int cuckoo_lookup(uint8_t *dst_mac_ptr, struct cuckoo_bucket *ht_index)
 {
 	int bkt_1, bkt_2, fwd_port = -1;
-	int j;
-	
-	uint32_t dst_mac = req;
-	bkt_1 = CityHash32((char *) &dst_mac, 4) & NUM_BKT_;
+	int i;
 
-	for(j = 0; j < 8; j ++) {
-		uint32_t slot_mac = ht_index[bkt_1].slot[j].mac;
-		int slot_port = ht_index[bkt_1].slot[j].port;
+	ULL dst_mac = get_mac(dst_mac_ptr);
 
-		if(slot_mac == dst_mac) {
-			assert(slot_port != -1);
-			fwd_port = slot_port;
+	/**< Compute the 1st bucket using the full mac address */
+	bkt_1 = CityHash32((const char *) dst_mac_ptr, 6) & NUM_BKT_;
+
+	for(i = 0; i < 8; i ++) {
+		if(SLOT_TO_MAC(ht_index[bkt_1].slot[i]) == dst_mac) {
+			fwd_port = SLOT_TO_PORT(ht_index[bkt_1].slot[i]);
 			break;
 		}
 	}
 
+	/**< 2nd bucket is computed using the 1st bucket */
 	if(fwd_port == -1) {
 		bkt_2 = CityHash32((char *) &bkt_1, 4) & NUM_BKT_;
 
-		for(j = 0; j < 8; j ++) {
-			uint32_t slot_mac = ht_index[bkt_2].slot[j].mac;
-			int slot_port = ht_index[bkt_2].slot[j].port;
-
-			if(slot_mac == dst_mac) {
-				fwd_port = slot_port;
+		for(i = 0; i < 8; i ++) {
+			if(SLOT_TO_MAC(ht_index[bkt_2].slot[i]) == dst_mac) {
+				fwd_port = SLOT_TO_PORT(ht_index[bkt_2].slot[i]);
 				break;
 			}
 		}

@@ -19,19 +19,20 @@
 #define NUM_MAC (16 * 1024 * 1024)
 #define NUM_MAC_ (NUM_MAC - 1)
 
-struct cuckoo_slot
-{
-	uint32_t mac;
-	int port;
-};
-
 struct cuckoo_bucket
 {
-	struct cuckoo_slot slot[8];
+	/**< Slot: bytes 0:1 = port | bytes 2:7 = mac */
+	ULL slot[8];
 };
 
-void cuckoo_init(uint32_t **mac_addrs, 
+// These macros should be safe for use with the ANTLR code
+#define SLOT_TO_MAC(s) (s & ((1L << 48) - 1))
+#define SLOT_TO_PORT(s) (s >> 48)
+
+// Cuckoo-specific function prototypes
+uint32_t hash(uint32_t u);
+void cuckoo_init(ULL **mac_addrs, 
 	struct cuckoo_bucket** ht_index, int portmask);
 
-/**< Return the mapped port for a 32-bit MAC */
-int cuckoo_lookup(uint32_t req, struct cuckoo_bucket *ht_index);
+/**< Return the mapped port for a MAC address */
+int cuckoo_lookup(uint8_t *dst_mac_ptr, struct cuckoo_bucket *ht_index);

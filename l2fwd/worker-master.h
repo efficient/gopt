@@ -9,6 +9,15 @@
 /**< Maximum worker lcores supported by the master */
 #define WM_MAX_LCORE 16
 
+/**< Avoid including DPDK headers in CUDA code */
+struct wm_ether_addr
+{
+	uint8_t addr_bytes[6];
+};
+
+#define WM_REQ_SIZE sizeof(struct wm_ether_addr)
+#define WM_RESP_SIZE sizeof(int)
+
 /**
  * A shared circular queue between a worker and a master.
  * The mbufs are actually pointers to rte_mbuf structs, but we use void 
@@ -17,7 +26,7 @@
 struct wm_queue
 {
 	void *mbufs[WM_QUEUE_CAP];	/**< Book keeping by worker thread */
-	uint32_t reqs[WM_QUEUE_CAP];	/**< Input by worker thread */
+	struct wm_ether_addr reqs[WM_QUEUE_CAP];	/**< Input by worker thread */
 	int resps[WM_QUEUE_CAP];	/**< Output by master thread */
 
 	/**< All counters should be on separate cachelines */
