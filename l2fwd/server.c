@@ -118,7 +118,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		mac_ints_dst[1] = mac_ints_arr[dst_port].chunk[1];
 		mac_ints_dst[2] = mac_ints_arr[dst_port].chunk[2];
 
-		/**< Garble dst port to reduce RX load on clients */
+		/**< Garble dst MAC to reduce RX load on clients */
 		eth_hdr->d_addr.addr_bytes[0] += (dst_ip & 0xff);
 
 		send_packet(pkts[batch_index], dst_port, lp_info);
