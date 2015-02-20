@@ -73,8 +73,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		int *req = (int *) (rte_pktmbuf_mtod(pkts[batch_index], char *) +
 			hdr_size + 20);
 
-		int resp = req[0] & 0xff;
-		int dst_port = resp & 3;
+		int dst_port = req[0] & 3;
 
 		/**< TX boilerplate: use the computed next_hop for L2 src and dst. */
 		int *mac_ints_dst = (int *) eth_hdr;
@@ -82,8 +81,8 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		mac_ints_dst[1] = mac_ints_arr[dst_port].chunk[1];
 		mac_ints_dst[2] = mac_ints_arr[dst_port].chunk[2];
 
-		/**< Garble dst port to reduce RX load on clients */
-		eth_hdr->d_addr.addr_bytes[0] += (req[0] & 0xff);
+		/**< Garble dst MAC to reduce RX load on clients */
+		eth_hdr->d_addr.addr_bytes[0] += ((req[0] >> 8) & 0xff);
 
 		/**< Send out the packet based on the value of resp */
 		send_packet(pkts[batch_index], dst_port, lp_info);
