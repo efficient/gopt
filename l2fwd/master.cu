@@ -13,7 +13,7 @@ extern "C" {
 #include "util.h"
 }
 
-#define MASTER_TEST_GPU 1	/**< Test cuckoo hash table impl and exit */
+#define MASTER_TEST_GPU 0	/**< Test cuckoo hash table impl and exit */
 
 static const uint32_t cu_c1 = 0xcc9e2d51;
 static const uint32_t cu_c2 = 0x1b873593;
