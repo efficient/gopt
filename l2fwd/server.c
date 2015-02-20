@@ -127,7 +127,7 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts,
 		mac_ints_dst[1] = mac_ints_arr[dst_port].chunk[1];
 		mac_ints_dst[2] = mac_ints_arr[dst_port].chunk[2];
 
-		/**< Garble dst port to reduce RX load on clients */
+		/**< Garble dst MAC to reduce RX load on clients */
 		eth_hdr->d_addr.addr_bytes[0] += (lc_wmq->sent & 0xff);
 
 		/**< Use the GPU's response to determine the output port */
