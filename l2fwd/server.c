@@ -271,6 +271,11 @@ void process_batch_passthrough(struct rte_mbuf **pkts, int nb_pkts,
 
 void run_server(struct rte_lpm6 *lpm)
 {
+
+#if PASSTHROUGH == 1
+	printf("unused param lpm = %p\n", lpm);
+#endif
+
 	int i;
 
 	int lcore_id = rte_lcore_id();
