@@ -45,14 +45,18 @@ in fastpp/data_dump. This file has 11 million URLs and is around
 #define NDN_NUM_BKT_ (NDN_NUM_BKT - 1)
 #define NDN_NUM_SLOTS 8
 
+/**< A 16-byte slot */
 struct __attribute__((__packed__)) ndn_slot
 {
 	int8_t dst_port;			/**< -1 for invalid slots */
 	uint8_t is_terminal;
 	uint64_t cityhash;
-	uint8_t pad[6];				/**< Space for more signatures */
+
+	/**< Space for more URL signatures to reduce false positive lookups*/
+	uint8_t pad[6];			
 };
 
+/**< A bucket contains 8 slots */
 struct ndn_bucket
 {
 	struct ndn_slot slots[NDN_NUM_SLOTS];

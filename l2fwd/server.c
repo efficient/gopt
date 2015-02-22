@@ -178,7 +178,8 @@ fpp_label_2:
 			mac_ints_dst[I][1] = mac_ints_arr[fwd_port[I]].chunk[1];
 			mac_ints_dst[I][2] = mac_ints_arr[fwd_port[I]].chunk[2];
 
-			/**< TODO: Garble dst mac */
+			/**< Garble dst MAC to reduce RX load on clients */
+			eth_hdr[I]->d_addr.addr_bytes[0] += bkt_1[I] & 0xff;
 
             send_packet(pkts[I], fwd_port[I], lp_info);
         }  
@@ -297,7 +298,8 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			mac_ints_dst[1] = mac_ints_arr[fwd_port].chunk[1];
 			mac_ints_dst[2] = mac_ints_arr[fwd_port].chunk[2];
 
-			/**< TODO: Garble dst mac */
+			/**< Garble dst MAC to reduce RX load on clients */
+			eth_hdr->d_addr.addr_bytes[0] += bkt_1 & 0xff;
 			send_packet(pkts[batch_index], fwd_port, lp_info);
 		}
 	}

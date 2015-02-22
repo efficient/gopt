@@ -152,7 +152,7 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 	*ht = shmat(index_sid, 0, 0);
 	memset((char *) *ht, 0, index_size);
 
-	/**< Set all dst_port fields to -1 */
+	/**< Set dst_port to -1 to invalidate all slots*/
 	for(i = 0; i < NDN_NUM_BKT; i ++) {
 		struct ndn_slot *slots = ((*ht)[i]).slots;
 		for(j = 0; j < NDN_NUM_SLOTS; j ++) {
@@ -174,7 +174,7 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 		}
 
 		int url_len = strlen(url);
-		assert(url[url_len - 1] == '/');
+		assert(url[url_len - 1] == '/' && url[url_len] == 0);
 		assert(url_len < NDN_MAX_URL_LENGTH - 3);	/**< Plenty of headroom */
 
 		/**< The destination port for all prefixes from this URL */
@@ -336,6 +336,7 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 
 	printf("\tndn: Average name length = %.2f\n",
 		(double) tot_len / nb_names);
+
 	/**< Shuffle */
 	printf("\tndn: Shuffling names\n");
 	struct ndn_name temp;
