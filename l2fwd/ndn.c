@@ -37,7 +37,7 @@ int ndn_contains(const char *prefix, int len,
 	int i;
 	int bkt_num, bkt_1, bkt_2;
 
-	uint64_t prefix_hash = CityHash64WithSeed(prefix, len, NDN_SEED);
+	uint64_t prefix_hash = CityHash64(prefix, len);
 	uint16_t tag = prefix_hash >> 48;
 
 	struct ndn_slot *slots;
@@ -54,8 +54,8 @@ int ndn_contains(const char *prefix, int len,
 			slots = ht[bkt_2].slots;
 		}
 
-		/**< Now, "slot" points to an ndn_bucket. Find a valid slot with 
-		  *  a matching tag. */
+		/**< Now, "slot" points to an ndn_bucket. Find a valid slot that
+		  *  contains the same hash. */
 		for(i = 0; i < NDN_NUM_SLOTS; i ++) {
 			/**< Underscored variables are per-slot variables */
 			int8_t _dst_port = slots[i].dst_port;
@@ -96,7 +96,7 @@ int ndn_ht_insert(const char *prefix, int len,
 	int i;
 	int bkt_num, bkt_1, bkt_2;
 
-	uint64_t prefix_hash = CityHash64WithSeed(prefix, len, NDN_SEED);
+	uint64_t prefix_hash = CityHash64(prefix, len);
 	uint16_t tag = prefix_hash >> 48;
 
 	struct ndn_slot *slots;

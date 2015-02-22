@@ -52,6 +52,57 @@ void send_packet(struct rte_mbuf *pkt, int port_id,
 	}
 }
 
+/**< Try to find a match for the 1st component of this name in the hash
+  *  table. This function gets called when the clever matching trick of
+  *  starting from 2nd component matches fails. */
+int lookup_one_component(char *name, struct ndn_bucket *ht)
+{
+	int c_i, i;	/**< URL char iterator and slot iterator */
+	int bkt_num, bkt_1, bkt_2;
+
+	for(c_i = 0; c_i < NDN_MAX_URL_LENGTH; c_i ++) {
+		if(name[c_i] == '/') {
+			break;
+		}
+	}
+
+	/**< c_i is now at the boundary of the 1st component */
+	uint64_t prefix_hash = CityHash64(name, c_i + 1);
+	uint16_t tag = prefix_hash >> 48;
+
+	struct ndn_slot *slots;
+
+	/**< name[0] -> name[c_i] is a prefix of length c_i + 1 */
+	for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
+		if(bkt_num == 1) {
+			bkt_1 = prefix_hash & NDN_NUM_BKT_;
+			FPP_EXPENSIVE(&ht[bkt_1]);
+			slots = ht[bkt_1].slots;
+		} else {
+			bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
+			FPP_EXPENSIVE(&ht[bkt_2]);
+			slots = ht[bkt_2].slots;
+		}
+
+		/**< Now, "slots" points to an ndn_bucket. Find a valid slot
+		  *  that contains the same hash. */
+		for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+			int8_t _dst_port = slots[i].dst_port;
+			uint64_t _hash = slots[i].cityhash;
+
+			if(_dst_port >= 0 && _hash == prefix_hash) {
+
+				/**< As we're only matching this component, we're done! */
+				return slots[i].dst_port;
+			}
+		}
+	}
+
+	/**< No match even for the 1st component? */
+	return -1;
+
+}
+
 void process_batch_goto(struct rte_mbuf **pkts, int nb_pkts,
                           struct ndn_bucket *ht,
                           struct lcore_port_info *lp_info, int port_id,
@@ -115,7 +166,7 @@ fpp_start:
             }
             
             /**< c_i is now at the boundary of a component longer than the 1st */
-            prefix_hash[I] = CityHash64WithSeed(name[I], c_i[I] + 1, NDN_SEED);
+            prefix_hash[I] = CityHash64(name[I], c_i[I] + 1);
             tag[I] = prefix_hash[I] >> 48;
             
             /**< name[0] -> name[c_i] is a prefix of length c_i + 1 */
@@ -135,7 +186,7 @@ fpp_label_2:
                 }
                 
                 /**< Now, "slots" points to an ndn_bucket. Find a valid slot
-                 *  with a matching tag. */
+                 *  that contains the same hash. */
                 for(i[I] = 0; i[I] < NDN_NUM_SLOTS; i[I] ++) {
                     _dst_port[I] = slots[I][i[I]].dst_port;
                     _hash[I] = slots[I][i[I]].cityhash;
@@ -168,6 +219,12 @@ fpp_label_2:
             }
         }   /**< Loop over URL characters ends here */
         
+		/**< We failed to match with prefixes that match >=2 components of this
+		  *  name. Try matching only the 1st component now. */
+		if(fwd_port[I] == -1) {
+			fwd_port[I] = lookup_one_component(name[I], ht);
+		}
+
         /**< Count failed packets and transmit */
         if(fwd_port[I] == -1) {
             lp_info[port_id].nb_loookup_fail ++;
@@ -218,7 +275,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 		name = data_ptr + 36 + sizeof(int) + sizeof(LL);
 
 		int c_i, i;	/**< URL char iterator and slot iterator */
-		int bkt_num, bkt_1, bkt_2;
+		int bkt_num, bkt_1 = 0, bkt_2;
 
 		int terminate = 0;			/**< Stop processing this URL? */
 		int prefix_match_found = 0;	/**< Stop this hash-table lookup ? */
@@ -237,7 +294,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 			}
 
 			/**< c_i is now at the boundary of a component longer than the 1st */
-			uint64_t prefix_hash = CityHash64WithSeed(name, c_i + 1, NDN_SEED);
+			uint64_t prefix_hash = CityHash64(name, c_i + 1);
 			uint16_t tag = prefix_hash >> 48;
 
 			struct ndn_slot *slots;
@@ -255,7 +312,7 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 				}
 
 				/**< Now, "slots" points to an ndn_bucket. Find a valid slot
-				  *  with a matching tag. */
+				  *  that contains the same hash. */
 				for(i = 0; i < NDN_NUM_SLOTS; i ++) {
 					int8_t _dst_port = slots[i].dst_port;
 					uint64_t _hash = slots[i].cityhash;
@@ -287,6 +344,12 @@ void process_batch_nogoto(struct rte_mbuf **pkts, int nb_pkts,
 				break;
 			}
 		}	/**< Loop over URL characters ends here */
+
+		/**< We failed to match with prefixes that contain 2 or more
+		  *  components. Try matching the 1st component of this name now */
+		if(fwd_port == -1) {
+			fwd_port = lookup_one_component(name, ht);
+		}
 
 		/**< Count failed packets and transmit */
 		if(fwd_port == -1) {
