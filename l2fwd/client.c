@@ -98,11 +98,23 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 			/**< Choose a dst name from the ones inserted in the NDN index */
 			char *name_ptr = data_ptr + hdr_size + sizeof(int) + sizeof(LL);
 
-			/** Copy name to pkt. Adds the terminating 0 char. */
+			/**< Copy name to pkt. Adds the terminating 0 char. */
 			strcpy(name_ptr, name_arr[name_i + i].name);
 
+			/**< Extend or truncate the name to exactly 32 bytes */
+			int name_len = strlen(name_ptr);
+			if(name_len <= NDN_NAME_LEN) {
+				int c_i;
+				for(c_i = name_len; c_i < NDN_NAME_LEN; c_i ++) {
+					name_ptr[c_i] = 'a' + (fastrand(&rss_seed) & 0xf);
+				}
+				name_ptr[NDN_NAME_LEN] = 0;
+			} else {
+				name_ptr[NDN_NAME_LEN] = 0;
+			}
+
 			int pkt_size = hdr_size + sizeof(int) + sizeof(long long) +
-				strlen(name_ptr) + 1;	/**< Null-terminated */
+				NDN_NAME_LEN + 1;	/**< Include the null terminator. */
 
 			tx_pkts_burst[i]->pkt.nb_segs = 1;
 			tx_pkts_burst[i]->pkt.pkt_len = pkt_size;

@@ -22,6 +22,9 @@
 #define NDN_MAX_URL_LENGTH 150
 #define NDN_LOG_HEADROOM (NDN_MAX_URL_LENGTH * 3)
 
+/**< More than 98% of URLs in Tsinghua's FIB have length <= 32 bytes */
+#define NDN_NAME_LEN 32
+
 #define NDN_MAX_NAME_LENGTH 192		/**< For struct ndn_name */
 #define NDN_MAX_LINE_LENGTH 10000	/**< For ndn_get_num_lines() */
 
