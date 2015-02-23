@@ -1,5 +1,20 @@
-Assumption
-===========
+Definitions for NDN:
+====================
+
+	* A name is a sequence of components, including the final "/". For example:
+	"com/google/www/", "com/foo/bar/baz/" (without quotes). Names are inserted
+	into the NDN FIB by breaking them into smaller prefixes.
+
+	* Name and prefix have the same meaning.
+
+	* A trace is a name followed by any string (by this definition, every name
+	is also a trace, but not vice-versa). Traces are used for lookups into the
+	NDN FIB.
+
+
+
+Assumptions:
+============
 
 Incoming packets can only match terminal prefixes. For example, if we
 have *only* two inserted URLs:
@@ -8,14 +23,11 @@ have *only* two inserted URLs:
 	com/google/drive/ --> Port #2
 
 and a incoming packet has destination URL "com/google/", our outbound port
-is the outbound port of the *first* inserted URL that had this prefix. Ideally,
-we should do some sort of load-balancing between candidate ports.
-
+is the outbound port of the *first* inserted URL that had this prefix.
 
 Semantics of "terminal" prefixes:
 =================================
 	A terminal prefix means that an LPM should stop here.
-
 
 
 Inserting a URL into the NDN hash table:
@@ -32,19 +44,46 @@ For example, the URL com/google/maps leads to the insertion of three prefixes:
 	Overwriting existing prefixes:
 	==============================
 
-	As the existing prefix has an entry in the log (ht_log), it needs to be 
-	updated.  We never need to update the destination port (according to chosen
-	semantics above).
+		As the existing prefix has an entry in the hash table, it needs to be
+		updated.  We never need to update the destination port (according to chosen
+		semantics above).
+	
+		* If the new prefix is non-terminal, the is_terminal field of the log entry
+		should be set to non-terminal.
+		* If the new prefix is terminal, the is_terminal field of the log entry
+		should remain unchanged. However, the port should be over-written. For example,
+		if there are 2 FIB entries:
+			a/b/c/ -> Port 1
+			a/b/ -> Port 2
+		Then the trace "a/b/d" matches prefix "a/b" and should go on port 2. This
+		will only happen if inserting the terminal prefix "a/b/" overwrites the existing
+		port for the same non-terminal prefix inserted earlier.
 
-	> If the new prefix is non-terminal, the is_terminal field of the log entry
-	should be set to non-terminal.
-	> If the new prefix is terminal, the is_terminal field of the log entry
-	should remain unchanged. However, the port should be over-written. For example,
-	if there are 2 FIB entries:
-		a/b/c -> Port 1
-		a/b -> Port 2
-	Then name "a/b/d" matches prefix "a/b" and should go on port 2.
 
+
+Handling false positives and hash collisions (not implemented):
+==============================================================
+	The NDN FIB needs to provide the following:
+		1. Packets that match an inserted prefix should be forwarded to the
+		correct port.
+		2. Packets that don't match any inserted prefix can be handled in any
+		way that the FIB chooses.  Our FIB forwards them to an undefined port.
+
+	In this implementation, a prefix is identified using its 64-bit CityHash,
+	allowing for undetected collisions with other prefixes during insertion
+	or lookups. For example, say prefixes "a/b/" and "c/d/" have the same
+	CityHash64 value. If "c/d/" is inserted after "a/b/", the insertion
+	algorithm concludes that an entry for this prefix already exists. Then,
+	packets matching "c/d/" are forwarded to the wrong port, violating (1)
+	above.
+
+	However, if there are no undetected collisisons during insertions, all
+	collisions using lookups would be for packets that don't match any inserted
+	prefixes.  So, our goal then is to avoid undetected collisions during
+	insertions. This can be done by storing another signature in the ndn_bucket
+	structure (there is room for at least 7 more bytes in ndn_bucket). As
+	this signature needs to be computed only during insertion, it will not
+	affect lookup speed.
 
 
 10M FIB stats (Tsinghua's FIB)
@@ -68,4 +107,3 @@ students.
 The "Fast Name Lookup for Named Data Networking" (IWQoS 2014) paper claims that
 15.4% of their URLs have 3 components. That is for Tsinghua's smaller FIB with
 3 million entries.
-
