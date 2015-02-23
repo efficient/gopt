@@ -72,11 +72,10 @@ main(int argc, char **argv)
 		is_client = 1;
 		client_id = atoi(argv[6]);
 
-		red_printf("Client getting MAC addresses for server's cuckoo index\n");
-		/**< The cuckoo index will map mac addrs in the "mac_addrs" array to
-		  *  port-numbers from the portmask. Clients only need "mac_addrs". */
-		cuckoo_init(&mac_addrs, &ht_index, XIA_R2_PORT_MASK);
-		red_printf("\tGot mac addresses!\n");
+		red_printf("Counting and reading NDN names..\n");
+		nb_names = ndn_get_num_lines(NAME_FILE);
+		name_arr = ndn_get_name_array(NAME_FILE);
+		red_printf("\tReading %d NDN probe names.\n", nb_names);
 	} else {
 		is_client = 0;
 
@@ -120,7 +119,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	/* Initialise each port */
+	/**< Initialise each port */
 	int portmask = is_client == 1 ? XIA_R0_PORT_MASK : XIA_R2_PORT_MASK;
 	red_printf("\nInitializing ports\n");
 

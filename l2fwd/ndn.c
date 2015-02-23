@@ -496,5 +496,3 @@ inline int ndn_num_components(const char *url)
 	/**< Each component is ended by a slash */
 	return num_slash;
 }
-
-

@@ -83,8 +83,5 @@ uint128 CityHash128(const char *s, size_t len);
 // hashed into the result.
 uint128 CityHash128WithSeed(const char *s, size_t len, uint128 seed);
 
-
 #endif  // CITY_HASH_H_
-
-
 

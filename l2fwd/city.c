@@ -104,7 +104,6 @@ static inline uint64 Hash128to64(const uint128 x) {
   uint64 a = (Uint128Low64(x) ^ Uint128High64(x)) * kMul;
   a ^= (a >> 47);
   uint64 b = (Uint128High64(x) ^ a) * kMul;
-
   b ^= (b >> 47);
   b *= kMul;
   return b;
