@@ -127,6 +127,54 @@ hashGpu(struct wm_trace *req, uint32_t *resp, int num_reqs)
 	}
 }
 
+/**< Try to find a match for the 1st component of this name in the hash
+  *  table. This function gets called when the clever matching trick of
+  *  starting from 2nd component matches fails. */
+__device__ int cu_lookup_one_component(char *name, struct ndn_bucket *ht)
+{
+	int c_i, i;	/**< URL char iterator and slot iterator */
+	int bkt_num, bkt_1, bkt_2;
+
+	for(c_i = 0; c_i < NDN_TRACE_LEN; c_i ++) {
+		if(name[c_i] == '/') {
+			break;
+		}
+	}
+
+	/**< c_i is now at the boundary of the 1st component */
+	uint64_t prefix_hash = cu_CityHash64(name, c_i + 1);
+	uint16_t tag = prefix_hash >> 48;
+
+	struct ndn_slot *slots;
+
+	/**< name[0] -> name[c_i] is a prefix of length c_i + 1 */
+	for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
+		if(bkt_num == 1) {
+			bkt_1 = prefix_hash & NDN_NUM_BKT_;
+			slots = ht[bkt_1].slots;
+		} else {
+			bkt_2 = (bkt_1 ^ cu_CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
+			slots = ht[bkt_2].slots;
+		}
+
+		/**< Now, "slots" points to an ndn_bucket. Find a valid slot
+		  *  that contains the same hash. */
+		for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+			int8_t _dst_port = slots[i].dst_port;
+			uint64_t _hash = slots[i].cityhash;
+
+			if(_dst_port >= 0 && _hash == prefix_hash) {
+
+				/**< As we're only matching this component, we're done! */
+				return slots[i].dst_port;
+			}
+		}
+	}
+
+	/**< No match even for the 1st component? */
+	return -1;
+}
+
 /**< Kernel to look up NDN names in an NDN hash table */
 __global__ void
 ndnGpu(struct wm_trace *req, int *resp, struct ndn_bucket *ht, int num_reqs)
@@ -134,7 +182,87 @@ ndnGpu(struct wm_trace *req, int *resp, struct ndn_bucket *ht, int num_reqs)
 	int t_i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if(t_i < num_reqs) {
-		resp[t_i] = t_i & 3;
+		
+		char *trace = (char *) req[t_i].bytes;
+
+		int fwd_port = -1;
+		int c_i, i;	/**< URL char iterator and slot iterator */
+		int bkt_num, bkt_1 = 0, bkt_2 = 0;
+
+		int terminate = 0;			/**< Stop processing this URL? */
+		int prefix_match_found = 0;	/**< Stop this hash-table lookup ? */
+
+		/**< Completely ignore 1-component matches */		
+		for(c_i = 0; c_i < NDN_TRACE_LEN; c_i ++) {
+			if(trace[c_i] == '/') {
+				break;
+			}
+		}
+		c_i ++;
+
+		for(; c_i < NDN_TRACE_LEN; c_i ++) {
+			if(trace[c_i] != '/') {
+				continue;
+			}
+
+			/**< c_i is now at the boundary of a component longer than the 1st */
+			uint64_t prefix_hash = cu_CityHash64(trace, c_i + 1);
+			uint16_t tag = prefix_hash >> 48;
+
+			struct ndn_slot *slots;
+
+			/**< trace[0] -> trace[c_i] is a prefix of length c_i + 1 */
+			for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
+				if(bkt_num == 1) {
+					bkt_1 = prefix_hash & NDN_NUM_BKT_;
+					slots = ht[bkt_1].slots;
+				} else {
+					bkt_2 = (bkt_1 ^ cu_CityHash64((char *) &tag, 2)) & 
+						NDN_NUM_BKT_;
+					slots = ht[bkt_2].slots;
+				}
+
+				/**< Now, "slots" points to an ndn_bucket. Find a valid slot
+				  *  that contains the same hash. */
+				for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+					int8_t _dst_port = slots[i].dst_port;
+					uint64_t _hash = slots[i].cityhash;
+
+					if(_dst_port >= 0 && _hash == prefix_hash) {
+
+						/**< Record the dst port: this may get overwritten by
+						  *  longer prefix matches later */
+						fwd_port = slots[i].dst_port;
+
+						if(slots[i].is_terminal == 1) {
+							/**< A terminal FIB entry: we're done! */
+							terminate = 1;
+						}
+
+						prefix_match_found = 1;
+						break;
+					}
+				}
+
+				/**< Stop the hash-table lookup for trace[0 ... c_i] */
+				if(prefix_match_found == 1) {
+					break;
+				}
+			}
+
+			/**< Stop processing the trace if we found a terminal FIB entry */
+			if(terminate == 1) {
+				break;
+			}
+		}	/**< Loop over URL characters ends here */
+
+		/**< We failed to match with prefixes that contain 2 or more
+		  *  components. Try matching the 1st component of this trace now */
+		if(fwd_port == -1) {
+			fwd_port = cu_lookup_one_component(trace, ht);
+		}
+
+		resp[t_i] = fwd_port;
 	}
 }
 
@@ -219,7 +347,7 @@ void test_ndn_gpu(int nb_req,
 
 	for(i = 0; i < nb_req; i ++) {
 		/**< Casting from wm_trace to ndn_trace should be fine. */
-		int exp_next_hop = ndn_lookup((struct ndn_trace *) &h_reqs[i],
+		int exp_next_hop = ndn_lookup_gpu_only((struct ndn_trace *) &h_reqs[i],
 			h_ht);
 		if(exp_next_hop == -1) {
 			nb_fails ++;
@@ -233,7 +361,10 @@ void test_ndn_gpu(int nb_req,
 		}
 	}
 
-	printf("NDN GPU test passed!\n");
+	double seconds = ((double) (end.tv_nsec - start.tv_nsec)) / 1000000000.0 +
+		(end.tv_sec - start.tv_sec);
+	printf("\t\tGPU NDN lookup test passed! "
+		"GPU lookup rate = %.1f M/s\n", (nb_req / seconds) / 1000000);
 
 }
 
@@ -391,7 +522,6 @@ int main(int argc, char **argv)
 	err = cudaMalloc((void **) &d_resps, resps_buf_size);
 	CPE(err != cudaSuccess, "Failed to cudaMalloc resp buffers\n");
 
-#if MASTER_TEST_GPU == 0
 	/**< Read NDN names - these are used to generated traces later */
 	red_printf("Counting and reading NDN names..\n");
 	nb_names = ndn_get_num_lines(NDN_NAME_FILE);
@@ -408,8 +538,8 @@ int main(int argc, char **argv)
 	int ht_bytes = NDN_NUM_BKT * sizeof(struct ndn_bucket);
 	err = cudaMalloc((void **) &d_ht, ht_bytes);
 	CPE(err != cudaSuccess, "Failed to cudaMalloc ht\n");
-	cudaMemcpy(d_ht, h_ht, ht_bytes, cudaMemcpyHostToDevice);
-#endif
+	err = cudaMemcpy(d_ht, h_ht, ht_bytes, cudaMemcpyHostToDevice);
+	CPE(err != cudaSuccess, "Failed to cudaMemcpy NDN hash table\n");
 
 	int num_workers = bitcount(lcore_mask);
 	int *worker_lcores = get_active_bits(lcore_mask);
@@ -425,12 +555,12 @@ int main(int argc, char **argv)
 			h_reqs, d_reqs,
 			(uint32_t *) h_resps, (uint32_t *) d_resps);
 
-		/**printf("\tTesting NDN hash table impl\n");
+		printf("\tTesting NDN hash table impl\n");
 		test_ndn_gpu(nb_req, my_stream,
 			name_arr, nb_names,
 			h_reqs, d_reqs,
 			h_resps, d_resps,
-			h_ht, d_ht);*/
+			h_ht, d_ht);
 	}
 #else
 	blue_printf("\tGPU master: launching GPU code\n");

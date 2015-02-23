@@ -108,4 +108,4 @@ inline int ndn_num_components(const char *url);
 /**< Create a mutable prefix from a URL */
 char *ndn_get_prefix(const char *url, int len);
 
-int ndn_lookup(struct ndn_trace *trace, struct ndn_bucket *ht);
+int ndn_lookup_gpu_only(struct ndn_trace *t, struct ndn_bucket *ht);

@@ -134,9 +134,142 @@ int ndn_ht_insert(const char *prefix, int len,
 	return -1;
 }
 
-int ndn_lookup(struct ndn_trace *trace, struct ndn_bucket *ht)
+/**< Try to find a match for the 1st component of this trace in the hash
+  *  table. This function gets called when the clever matching trick of
+  *  starting from 2nd component matches fails.
+  *
+  *  This is a specialized function that works for fixed length traces of
+  *  length NDN_TRACE_LEN. The corresponding function in the CPU-only NDN
+  *  implementation works for null-terminatd traces. */
+int lookup_one_component_gpu_only(char *trace, struct ndn_bucket *ht)
 {
-	return 0;
+	int c_i, i;	/**< URL char iterator and slot iterator */
+	int bkt_num, bkt_1, bkt_2;
+
+	for(c_i = 0; c_i < NDN_TRACE_LEN; c_i ++) {
+		if(trace[c_i] == '/') {
+			break;
+		}
+	}
+
+	/**< c_i is now at the boundary of the 1st component */
+	uint64_t prefix_hash = CityHash64(trace, c_i + 1);
+	uint16_t tag = prefix_hash >> 48;
+
+	struct ndn_slot *slots;
+
+	/**< trace[0] -> trace[c_i] is a prefix of length c_i + 1 */
+	for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
+		if(bkt_num == 1) {
+			bkt_1 = prefix_hash & NDN_NUM_BKT_;
+			slots = ht[bkt_1].slots;
+		} else {
+			bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
+			slots = ht[bkt_2].slots;
+		}
+
+		/**< Now, "slots" points to an ndn_bucket. Find a valid slot
+		  *  that contains the same hash. */
+		for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+			int8_t _dst_port = slots[i].dst_port;
+			uint64_t _hash = slots[i].cityhash;
+
+			if(_dst_port >= 0 && _hash == prefix_hash) {
+
+				/**< As we're only matching this component, we're done! */
+				return slots[i].dst_port;
+			}
+		}
+	}
+
+	/**< No match even for the 1st component? */
+	return -1;
+}
+
+/**< A specialized NDN lookup function that works for fixed-size traces of
+  *  length NDN_TRACE_LEN bytes. The general function works for
+  *  null-terminated strings. */
+int ndn_lookup_gpu_only(struct ndn_trace *t, struct ndn_bucket *ht)
+{
+	char *trace = t->bytes;
+
+	int fwd_port = -1;
+	int c_i, i;	/**< URL char iterator and slot iterator */
+	int bkt_num, bkt_1 = 0, bkt_2;
+
+	int terminate = 0;			/**< Stop processing this URL? */
+	int prefix_match_found = 0;	/**< Stop this hash-table lookup ? */
+
+	/**< Completely ignore 1-component matches */		
+	for(c_i = 0; c_i < NDN_TRACE_LEN; c_i ++) {
+		if(trace[c_i] == '/') {
+			break;
+		}
+	}
+	c_i ++;
+
+	for(; c_i < NDN_TRACE_LEN; c_i ++) {
+		if(trace[c_i] != '/') {
+			continue;
+		}
+
+		/**< c_i is now at the boundary of a component longer than the 1st */
+		uint64_t prefix_hash = CityHash64(trace, c_i + 1);
+		uint16_t tag = prefix_hash >> 48;
+
+		struct ndn_slot *slots;
+
+		/**< trace[0] -> trace[c_i] is a prefix of length c_i + 1 */
+		for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
+			if(bkt_num == 1) {
+				bkt_1 = prefix_hash & NDN_NUM_BKT_;
+				slots = ht[bkt_1].slots;
+			} else {
+				bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
+				slots = ht[bkt_2].slots;
+			}
+
+			/**< Now, "slots" points to an ndn_bucket. Find a valid slot
+			  *  that contains the same hash. */
+			for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+				int8_t _dst_port = slots[i].dst_port;
+				uint64_t _hash = slots[i].cityhash;
+
+				if(_dst_port >= 0 && _hash == prefix_hash) {
+
+					/**< Record the dst port: this may get overwritten by
+					  *  longer prefix matches later */
+					fwd_port = slots[i].dst_port;
+
+					if(slots[i].is_terminal == 1) {
+						/**< A terminal FIB entry: we're done! */
+						terminate = 1;
+					}
+
+					prefix_match_found = 1;
+					break;
+				}
+			}
+
+			/**< Stop the hash-table lookup for trace[0 ... c_i] */
+			if(prefix_match_found == 1) {
+				break;
+			}
+		}
+
+		/**< Stop processing the trace if we found a terminal FIB entry */
+		if(terminate == 1) {
+			break;
+		}
+	}	/**< Loop over trace characters ends here */
+
+	/**< We failed to match with prefixes that contain 2 or more
+	  *  components. Try matching the 1st component of this trace now */
+	if(fwd_port == -1) {
+		fwd_port = lookup_one_component_gpu_only(trace, ht);
+	}
+
+	return fwd_port;
 }
 
 void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
