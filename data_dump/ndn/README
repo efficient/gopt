@@ -1,0 +1,41 @@
+fib_1010.lzma
+=============
+	The 10-million URL trace from Tsinghua. It has been reformatted, and IP-address
+	entries have been removed.
+
+	To decompress: lzma -d fib_1010.lzma
+	Fun fact: Text file compression using lzma is *much* better than gzip.
+
+	Length statistics of the URLs:
+	=============================
+		Average URL length = 17.82
+
+		10th percentile of length = 11
+		20th percentile of length = 13
+		30th percentile of length = 15
+		40th percentile of length = 16
+		50th percentile of length = 17
+		60th percentile of length = 19
+		70th percentile of length = 20
+		80th percentile of length = 22
+		90th percentile of length = 25
+		90th percentile of length = 25
+		91th percentile of length = 25
+		92th percentile of length = 26
+		93th percentile of length = 26
+		94th percentile of length = 27
+		95th percentile of length = 28
+		96th percentile of length = 29
+		97th percentile of length = 30
+		98th percentile of length = 31
+		99th percentile of length = 34
+		99.0 th percentile of length = 34
+		99.1 th percentile of length = 34
+		99.2 th percentile of length = 34
+		99.3 th percentile of length = 35
+		99.4 th percentile of length = 35
+		99.5 th percentile of length = 36
+		99.6 th percentile of length = 37
+		99.7 th percentile of length = 38
+		99.8 th percentile of length = 40
+		99.9 th percentile of length = 43

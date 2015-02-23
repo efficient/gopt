@@ -19,8 +19,9 @@ make
 
 blue "Removing DPDK's hugepages and shm keys 1 and 2"
 sudo rm -rf /mnt/huge/*
-sudo ipcm -M 1			# WM_QUEUE_KEY
-sudo ipcrm -M 2			# HASH_INDEX_KEY
+sudo ipcrm -M 1			# WM_QUEUE_KEY
+sudo ipcrm -M 2			# NDN_HT_INDEX_KEY
+sudo ipcrm -M 3			# NDN_NAMES_KEY
 
 blue "Running gpu master on core 15 and sleeping for 2 seconds"
 sudo taskset -c 14 ./master -c $worker_core_mask &

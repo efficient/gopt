@@ -18,5 +18,5 @@ CFLAGS += $(WERROR_FLAGS) -Wno-missing-prototypes -Wno-missing-declarations
 
 include $(RTE_SDK)/mk/rte.extapp.mk
 
-master: util.c city.c cuckoo.c master.cu
-	nvcc -O3 -o master -gencode arch=compute_30,code=compute_30 util.c city.c cuckoo.c master.cu -lrt
+master: util.c city.c ndn.c master.cu
+	nvcc -O3 -o master -gencode arch=compute_30,code=compute_30 util.c city.c ndn.c master.cu -lrt

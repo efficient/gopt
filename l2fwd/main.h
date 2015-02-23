@@ -20,8 +20,7 @@
 #include "fpp.h"
 #include "worker-master.h"
 #include "util.h"
-#include "cuckoo.h"
-
+#include "ndn.h"
 
 // sizeof(rte_mbuf) = 64, RTE_PKTMBUF_HEADROOM = 128
 #define MBUF_SIZE (2048 + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)

@@ -9,13 +9,16 @@
 /**< Maximum worker lcores supported by the master */
 #define WM_MAX_LCORE 16
 
-/**< Avoid including DPDK headers in CUDA code */
-struct wm_ether_addr
+#define WM_MAX_REQUESTS (WM_MAX_LCORE * WM_QUEUE_CAP)
+
+#define WM_TRACE_LEN 32
+
+struct wm_trace
 {
-	uint8_t addr_bytes[6];
+	uint8_t bytes[WM_TRACE_LEN];
 };
 
-#define WM_REQ_SIZE sizeof(struct wm_ether_addr)
+#define WM_REQ_SIZE sizeof(struct wm_trace)
 #define WM_RESP_SIZE sizeof(int)
 
 /**
@@ -26,7 +29,7 @@ struct wm_ether_addr
 struct wm_queue
 {
 	void *mbufs[WM_QUEUE_CAP];	/**< Book keeping by worker thread */
-	struct wm_ether_addr reqs[WM_QUEUE_CAP];	/**< Input by worker thread */
+	struct wm_trace reqs[WM_QUEUE_CAP];		/**< Input by worker thread */
 	int resps[WM_QUEUE_CAP];	/**< Output by master thread */
 
 	/**< All counters should be on separate cachelines */
