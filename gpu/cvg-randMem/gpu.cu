@@ -171,12 +171,9 @@ int main(int argc, char *argv[])
 	int sid = shmget(1, LOG_CAP * sizeof(int), SHM_HUGETLB | 0666 | IPC_CREAT);
 	assert(sid >= 0);
 	h_log = (int *) shmat(sid, 0, 0);
-
 	assert(h_log != NULL);
 
-	for(i = 0; i < LOG_CAP; i ++) {
-		h_log[i] = rand() % LOG_CAP;
-	}
+	init_ht_log(h_log, LOG_CAP);
 
 	red_printf("Allocating device log\n");
 	err = cudaMalloc((void **) &d_log, LOG_CAP * sizeof(int));
@@ -187,20 +184,20 @@ int main(int argc, char *argv[])
 	CPE(err != cudaSuccess, "Failed to copy to device memory\n", -1);
 
 	/**< Initialize the packet arrays for CPU and GPU code */
-	h_pkts_cpu = (int *) malloc(MAX_PKTS * sizeof(int));
+	h_pkts_cpu = (int *) malloc(GPU_MAX_PKTS * sizeof(int));
 
 	/**< The host packet-array for GPU code should be pinned */
-	err = cudaMallocHost((void **) &h_pkts_gpu, MAX_PKTS * sizeof(int));
-	err = cudaMalloc((void **) &d_pkts_gpu, MAX_PKTS * sizeof(int));
+	err = cudaMallocHost((void **) &h_pkts_gpu, GPU_MAX_PKTS * sizeof(int));
+	err = cudaMalloc((void **) &d_pkts_gpu, GPU_MAX_PKTS * sizeof(int));
 
 	/**< Test for different batch sizes */
-	assert(MAX_PKTS % 8 == 0);
-	for(int num_pkts = 16; num_pkts < MAX_PKTS; num_pkts *= 2) {
+	assert(GPU_MAX_PKTS % 8 == 0);
+	for(int num_pkts = 16; num_pkts < GPU_MAX_PKTS; num_pkts *= 2) {
 
 		double cpu_time = 0, gpu_time = 0;
 	
 		/**< Perform several measurements for averaging */
-		for(i = 0; i < ITERS; i ++) {
+		for(i = 0; i < GPU_ITERS; i ++) {
 
 			/**< Generate a different set of packets for each iteration */
 			for(j = 0; j < num_pkts; j ++) {
@@ -212,8 +209,8 @@ int main(int argc, char *argv[])
 			gpu_time += gpu_run(h_pkts_gpu, d_pkts_gpu, d_log, num_pkts);
 		}
 		
-		cpu_time = cpu_time / ITERS;
-		gpu_time = gpu_time / ITERS;
+		cpu_time = cpu_time / GPU_ITERS;
+		gpu_time = gpu_time / GPU_ITERS;
 	
 		/**< Verify that the result vector is correct */
 		for(int i = 0; i < num_pkts; i ++) {

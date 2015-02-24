@@ -13,67 +13,66 @@ void *cpu_func(void *ptr)
 	long long iter = 0;
 	int tid = ((struct thread_info *) ptr)->tid;
 	int *log = ((struct thread_info *) ptr)->log;
-	int *pkts;
+	int *streams;
 	struct timespec start, end;
 
 	printf("Running tid %d\n", tid);
 
-	/**< Initialize a local packet array */
-	pkts = (int *) malloc(NUM_PKTS * sizeof(int));
-	for(i = 0; i < NUM_PKTS; i ++) {
-		pkts[i] = rand() & LOG_CAP_;
+	/**< Initialize the streams */
+	streams = (int *) malloc(CPU_NUM_STREAMS * sizeof(int));
+	for(i = 0; i < CPU_NUM_STREAMS; i ++) {
+		streams[i] = rand() & LOG_CAP_;
 	}
 	
+	clock_gettime(CLOCK_REALTIME, &start);
+
 	while(1) {
 		iter ++;
-		
-		clock_gettime(CLOCK_REALTIME, &start);
 
 		/**< Follow 8 chains simultaneously */
-		for(i = 0; i < NUM_PKTS; i += 8) {
+		for(i = 0; i < CPU_NUM_STREAMS; i += 8) {
 			for(j = 0; j < DEPTH; j ++) {
-				pkts[i] = log[pkts[i]];
-				pkts[i + 1] = log[pkts[i + 1]];
-				pkts[i + 2] = log[pkts[i + 2]];
-				pkts[i + 3] = log[pkts[i + 3]];
-				pkts[i + 4] = log[pkts[i + 4]];
-				pkts[i + 5] = log[pkts[i + 5]];
-				pkts[i + 6] = log[pkts[i + 6]];
-				pkts[i + 7] = log[pkts[i + 7]];
+				streams[i] = log[streams[i]];
+				streams[i + 1] = log[streams[i + 1]];
+				streams[i + 2] = log[streams[i + 2]];
+				streams[i + 3] = log[streams[i + 3]];
+				streams[i + 4] = log[streams[i + 4]];
+				streams[i + 5] = log[streams[i + 5]];
+				streams[i + 6] = log[streams[i + 6]];
+				streams[i + 7] = log[streams[i + 7]];
 			}
 		}
 
-		/**< Prevent chains from getting into cycles */
-		for(i = 0; i < NUM_PKTS; i ++) {
-			pkts[i] = (pkts[i] + i) & LOG_CAP_;
-		}
+		if(iter == CPU_ITERS) {
+			clock_gettime(CLOCK_REALTIME, &end);
+			double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
+				(end.tv_sec - start.tv_sec);
 
-		clock_gettime(CLOCK_REALTIME, &end);
-		double time = (double) (end.tv_nsec - start.tv_nsec) / 1000000000 + 
-			(end.tv_sec - start.tv_sec);
-
-		if((iter & 1023) == 0) {
 			/**< Print the number of packets processed per second */
-			printf("num_pkts %d TID %d %.2f, sample = %d\n", NUM_PKTS, tid,
-				NUM_PKTS / (time * 1000000), pkts[iter % NUM_PKTS]);
+			printf("TID %d (%d streams) %.2f, sample = %d\n",
+				tid, CPU_NUM_STREAMS,
+				(CPU_NUM_STREAMS * CPU_ITERS) / (time * 1000000),
+				streams[iter % CPU_NUM_STREAMS]);
+			
+			clock_gettime(CLOCK_REALTIME, &start);
+
+			iter = 0;
 		}
 	}
 }
 
 int main(int argc, char *argv[])
 {
-	pthread_t thread[MAX_THREADS];
+	pthread_t thread[CPU_MAX_THREADS];
 	int i, num_threads;
 	int *log;
 
 	assert(argc == 2);
 	num_threads = atoi(argv[1]);
-	assert(num_threads >= 1 && num_threads <= MAX_THREADS);
+	assert(num_threads >= 1 && num_threads <= CPU_MAX_THREADS);
 
-	/**< The method of dependent pointer chasing used here can lead to cycles
-	  *  (that improve cache hit rate) with very large depth. */
-	assert(DEPTH <= 10);
-	assert(NUM_PKTS % 8 == 0);
+	/**< We follow 8 streams in one shot */
+	assert(CPU_NUM_STREAMS % 8 == 0);
 
 	/**< Initialize hugepage log for all CPU threads */
 	red_printf("Allocating host log of size %lu bytes\n", LOG_CAP * sizeof(int));
@@ -84,9 +83,7 @@ int main(int argc, char *argv[])
 	log = (int *) shmat(sid, 0, 0);
 	assert(log != NULL);
 
-	for(i = 0; i < LOG_CAP; i ++) {
-		log[i] = rand() % LOG_CAP;
-	}
+	init_ht_log(log, LOG_CAP);
 
 	/**< Start all CPU threads */
 	for(i = 0; i < num_threads; i ++) {

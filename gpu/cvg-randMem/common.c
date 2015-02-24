@@ -37,3 +37,25 @@ void red_printf(const char *format, ...)
 
     va_end(args);
 }
+
+/**< The log used in random memory rate tests is a random permutation */
+void init_ht_log(int *log, int n)
+{
+	printf("\tCreating a rand permutation of 0-%d. This takes time..\n", n);
+	fflush(stdout);
+
+	int i, j;
+	assert(log != NULL && n >= 1);
+
+	for(i = 0; i < n; i ++) {
+		log[i] = i;
+	}
+
+	/**< Shuffle to create a random permutation */
+	for(i = n - 1; i >= 1; i --) {
+		j = rand() % (i + 1);
+		int temp = log[i];
+		log[i] = log[j];
+		log[j] = temp;
+	}
+}
