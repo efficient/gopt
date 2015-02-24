@@ -12,5 +12,5 @@ blue "Re-compiline cpu code"
 make clean
 make cpu
 
-num_threads=1
+num_threads=8
 sudo taskset -c 0,2,4,6,8,10,12,14 ./cpu $num_threads

@@ -6,8 +6,8 @@
 #define GPU_ITERS 10 /**< Iters to average GPU measurements */
 
 #define CPU_MAX_THREADS 8
-#define CPU_NUM_STREAMS 8192 /**< Number of concurrent streams for CPU */
-#define CPU_ITERS 1000 /**< Iters to average CPU measurements */
+#define CPU_NUM_STREAMS 16 /**< Number of concurrent streams for CPU */
+#define CPU_ITERS 10000000 /**< Iters to average CPU measurements */
 
 #define LOG_KEY 1
 #define LOG_CAP (256 * 1024 * 1024)		/**< 1 GB */
