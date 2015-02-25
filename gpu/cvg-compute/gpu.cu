@@ -1,16 +1,33 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
-#include <cuda_runtime.h>
-#include <time.h>
-#include "common.h"
+#include <sys/ipc.h>
+#include <sys/shm.h>
 
 extern "C" {
 #include "city.h"
+#include "common.h"
 }
 
 cudaStream_t myStream;
+
+void printDeviceProperties()
+{
+	struct cudaDeviceProp deviceProp;
+	int ret = cudaGetDeviceProperties(&deviceProp, 0);
+	CPE(ret != cudaSuccess, "Get Device Properties failed\n", -1);
+
+	printf("\n=================DEVICE PROPERTIES=================\n");
+	printf("\tDevice name: %s\n", deviceProp.name);
+	printf("\tTotal global memory: %lu bytes\n", deviceProp.totalGlobalMem);
+	printf("\tWarp size: %d\n", deviceProp.warpSize);
+	printf("\tCompute capability: %d.%d\n", deviceProp.major, deviceProp.minor);
+
+	printf("\tMulti-processor count: %d\n", deviceProp.multiProcessorCount);
+	printf("\tThreads per multi-processor: %d\n", deviceProp.maxThreadsPerMultiProcessor);
+
+	printf("\n");
+}
 
 /** < Functions for hashing from within a CUDA kernel */
 static const uint32_t cu_c1 = 0xcc9e2d51;
@@ -125,7 +142,6 @@ double gpu_run(int *h_pkts, int *d_pkts, int num_pkts)
 	struct timespec start, end;
 	int err = cudaSuccess;
 
-
 	/**< Copy packets to device */
 	err = cudaMemcpy(d_pkts, h_pkts, num_pkts * sizeof(int), 
 		cudaMemcpyHostToDevice);
@@ -164,31 +180,31 @@ int main(int argc, char *argv[])
 	int err = cudaSuccess;
 	int i;
 	int *h_pkts_cpu;
-	/** <Separate packet buffer to compare GPU's result with the CPU's */
+	/**< Separate packet buffer to compare GPU's result with the CPU's */
 	int *h_pkts_gpu, *d_pkts_gpu;
 
 	srand(time(NULL));
 
 	printDeviceProperties();
 
-	/** <Initialize a cudaStream for async calls */
+	/**< Initialize a cudaStream for async calls */
 	err = cudaStreamCreate(&myStream);
 	CPE(err != cudaSuccess, "Failed to create cudaStream\n", -1);
 
-	/** <Initialize the packet arrays for CPU and GPU code */
+	/**< Initialize the packet arrays for CPU and GPU code */
 	h_pkts_cpu =  (int *) malloc(MAX_PKTS * sizeof(int));
 
-	/** <The host packet-array for GPU code should be pinned */
+	/**< The host packet-array for GPU code should be pinned */
 	err = cudaMallocHost((void **) &h_pkts_gpu, MAX_PKTS * sizeof(int));
 	err = cudaMalloc((void **) &d_pkts_gpu, MAX_PKTS * sizeof(int));
 
-	/** <Test for different batch sizes */
+	/**< Test for different batch sizes */
 	assert(MAX_PKTS % 128 == 0);
 	for(int num_pkts = 16; num_pkts < MAX_PKTS; num_pkts *= 4) {
 
 		double cpu_time = 0, gpu_time = 0;
 
-		/** <Initialize packets */
+		/**< Initialize packets */
 		for(i = 0; i < num_pkts; i ++) {
 			h_pkts_cpu[i] = rand();
 			h_pkts_gpu[i] = h_pkts_cpu[i];
@@ -203,7 +219,7 @@ int main(int argc, char *argv[])
 		cpu_time = cpu_time / ITERS;
 		gpu_time = gpu_time / ITERS;
 	
-		/** <Verify that the result vector is correct */
+		/**< Verify that the result vector is correct */
 		for(int i = 0; i < num_pkts; i ++) {
 			if (h_pkts_cpu[i] != h_pkts_gpu[i]) {
 				fprintf(stderr, "Result verification failed at element %d!\n", i);
@@ -218,22 +234,17 @@ int main(int argc, char *argv[])
 			num_pkts / (cpu_time * 1000000),
 			num_pkts / (gpu_time * 1000000));
 
-		/** <Emit the results to stderr. Use only space for delimiting */
-		fprintf(stderr, "Batch size  %d CPU %f GPU %f CPU/GPU %f\n",
-			num_pkts, cpu_time, gpu_time, cpu_time / gpu_time);
-
 		printf("\n");
-	
 	}
 
-	// Free device memory
+	/**< Free device memory */
 	cudaFree(d_pkts_gpu);
 
-	// Free host memory
+	/**< Free host memory */
 	free(h_pkts_cpu);
 	cudaFreeHost(h_pkts_gpu);
 
-	// Reset the device and exit
+	/**< Reset the device and exit */
 	err = cudaDeviceReset();
 	CPE(err != cudaSuccess, "Failed to de-initialize the device\n", -1);
 
