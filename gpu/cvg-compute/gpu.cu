@@ -29,7 +29,7 @@ void printDeviceProperties()
 	printf("\n");
 }
 
-/** < Functions for hashing from within a CUDA kernel */
+/**< Functions for hashing from within a CUDA kernel */
 static const uint32_t cu_c1 = 0xcc9e2d51;
 static const uint32_t cu_c2 = 0x1b873593;
 
@@ -69,7 +69,7 @@ __device__ uint32_t Hash32Len0to4(char *s, int len)
 	}
 	return cu_fmix(cu_Mur(b, cu_Mur(len, c)));
 }
-/** < Hashing functions for CUDA kernels end here */
+/**< Hashing functions for CUDA kernels end here */
 
 __global__ void
 vectorAdd(int *pkts, int num_pkts)
@@ -77,18 +77,24 @@ vectorAdd(int *pkts, int num_pkts)
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < num_pkts) {
-		pkts[i] = Hash32Len0to4((char *) &pkts[i], 4);
+		int j;
+
+		for(j = 0; j < DEPTH; j ++) {
+			pkts[i] = Hash32Len0to4((char *) &pkts[i], 4);
+		}
 	}
 }
 
 double cpu_run(int *pkts, int num_pkts)
 {
-	int i;
+	int i, j;
 	struct timespec start, end;
 	clock_gettime(CLOCK_REALTIME, &start);
 
-	for(i = 0; i < num_pkts; i += 1) {
-		pkts[i] = CityHash32((char *) &pkts[i], 4);
+	for(i = 0; i < num_pkts; i ++) {
+		for(j = 0; j < DEPTH; j ++) {
+			pkts[i] = CityHash32((char *) &pkts[i], 4);
+		}
 	}
 
 	clock_gettime(CLOCK_REALTIME, &end);
@@ -192,15 +198,15 @@ int main(int argc, char *argv[])
 	CPE(err != cudaSuccess, "Failed to create cudaStream\n", -1);
 
 	/**< Initialize the packet arrays for CPU and GPU code */
-	h_pkts_cpu =  (int *) malloc(MAX_PKTS * sizeof(int));
+	h_pkts_cpu =  (int *) malloc(GPU_MAX_PKTS * sizeof(int));
 
 	/**< The host packet-array for GPU code should be pinned */
-	err = cudaMallocHost((void **) &h_pkts_gpu, MAX_PKTS * sizeof(int));
-	err = cudaMalloc((void **) &d_pkts_gpu, MAX_PKTS * sizeof(int));
+	err = cudaMallocHost((void **) &h_pkts_gpu, GPU_MAX_PKTS * sizeof(int));
+	err = cudaMalloc((void **) &d_pkts_gpu, GPU_MAX_PKTS * sizeof(int));
 
 	/**< Test for different batch sizes */
-	assert(MAX_PKTS % 128 == 0);
-	for(int num_pkts = 16; num_pkts < MAX_PKTS; num_pkts *= 4) {
+	assert(GPU_MAX_PKTS % 128 == 0);
+	for(int num_pkts = 16; num_pkts < GPU_MAX_PKTS; num_pkts *= 4) {
 
 		double cpu_time = 0, gpu_time = 0;
 
@@ -211,13 +217,13 @@ int main(int argc, char *argv[])
 		}
 	
 		/** Perform several measurements for averaging */
-		for(i = 0; i < ITERS; i ++) {
+		for(i = 0; i < GPU_ITERS; i ++) {
 			cpu_time += cpu_run(h_pkts_cpu, num_pkts);
 			gpu_time += gpu_run(h_pkts_gpu, d_pkts_gpu, num_pkts);
 		}
 		
-		cpu_time = cpu_time / ITERS;
-		gpu_time = gpu_time / ITERS;
+		cpu_time = cpu_time / GPU_ITERS;
+		gpu_time = gpu_time / GPU_ITERS;
 	
 		/**< Verify that the result vector is correct */
 		for(int i = 0; i < num_pkts; i ++) {

@@ -86,11 +86,11 @@ int main(int argc, char *argv[])
 	init_ht_log(log, LOG_CAP);
 
 	/**< Start all CPU threads */
+	struct thread_info ti[CPU_MAX_THREADS];
 	for(i = 0; i < num_threads; i ++) {
-		struct thread_info ti;
-		ti.tid = i;
-		ti.log = log;
-		pthread_create(&thread[i], NULL, cpu_func, (void *) &ti);
+		ti[i].tid = i;
+		ti[i].log = log;
+		pthread_create(&thread[i], NULL, cpu_func, (void *) &ti[i]);
 
 		/**< Allow threads to go out of sync */
 		usleep(100000);

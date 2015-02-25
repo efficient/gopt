@@ -80,6 +80,7 @@ double gpu_run(int *h_pkts, int *d_pkts, int *d_log, int num_pkts)
 	/**< Copy packets to device */
 	err = cudaMemcpyAsync(d_pkts, h_pkts, num_pkts * sizeof(int), 
 		cudaMemcpyHostToDevice, myStream);
+	CPE(err != cudaSuccess, "Failed to copy to device memory\n", -1);
 
 	/**< Kernel launch */
 	int threadsPerBlock = 256;
@@ -115,6 +116,7 @@ double gpu_run(int *h_pkts, int *d_pkts, int *d_log, int num_pkts)
 	/**< Copy packets to device */
 	err = cudaMemcpy(d_pkts, h_pkts, num_pkts * sizeof(int), 
 		cudaMemcpyHostToDevice);
+	CPE(err != cudaSuccess, "Failed to copy to device memory\n", -1);
 
 	/**< Memcpy has completed: start timer */
 	clock_gettime(CLOCK_REALTIME, &start);
@@ -156,10 +158,6 @@ int main(int argc, char *argv[])
 	srand(time(NULL));
 
 	printDeviceProperties();
-
-	/**< The method of dependent pointer chasing used here can lead to cycles
-	  *  (that improve cache hit rate) with very large depth. */
-	assert(DEPTH <= 10);
 
 	/**< Initialize a cudaStream for async calls */
 	err = cudaStreamCreate(&myStream);
