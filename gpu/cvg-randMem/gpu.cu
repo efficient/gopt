@@ -89,7 +89,8 @@ double gpu_run(int *h_pkts, int *d_pkts, int *d_log, int num_pkts)
 	randMem<<<blocksPerGrid, threadsPerBlock, 0, myStream>>>(d_pkts, 
 		d_log, num_pkts);
 	err = cudaGetLastError();
-	CPE(err != cudaSuccess, "Failed to launch randMem kernel\n", -1);
+	CPE(err != cudaSuccess, "Failed to launch randMem kernel. This can happen "
+		"if the GPU does not have compute 3.5\n", -1);
 
 	/**< Copy back the results */
 	err = cudaMemcpyAsync(h_pkts, d_pkts, num_pkts * sizeof(int),
