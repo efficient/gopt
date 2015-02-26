@@ -192,11 +192,6 @@ main(int argc, char **argv)
 		print_mac_arr(l2fwd_ports_eth_addr[port_id].addr_bytes);
 		printf("\n");
 
-		/**< The server acts as an L2 switch: it should accept all dst macs */
-		if(!is_client) {
-			rte_eth_promiscuous_enable(port_id);
-		}
-
 		ret = rte_eth_dev_start(port_id);
 		CPE2(ret < 0, "rte_eth_dev_start: %d, %u\n", ret, (unsigned) port_id);
 

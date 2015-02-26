@@ -9,7 +9,7 @@ rm master
 
 # Test if the IPv6 lookup kernel is working properly
 blue "Re-compiling master's CUDA code"
-nvcc -O3 -o master -gencode arch=compute_30,code=compute_30 util.c city.c ndn.c master.cu -lrt
+nvcc -O3 -o master -gencode arch=compute_35,code=compute_35 util.c city.c ndn.c master.cu -lrt
 
 blue "Killing existing GPU-master processes"
 sudo killall master
