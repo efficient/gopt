@@ -75,11 +75,7 @@ static uint32 UNALIGNED_LOAD32(const char *p) {
 #endif  // WORDS_BIGENDIAN
 
 #if !defined(LIKELY)
-#if HAVE_BUILTIN_EXPECT
 #define LIKELY(x) (__builtin_expect(!!(x), 1))
-#else
-#define LIKELY(x) (x)
-#endif
 #endif
 
 static uint64 Fetch64(const char *p) {

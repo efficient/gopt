@@ -68,10 +68,11 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 {
 	int batch_index = 0, hdr_size = 36;
 
-	struct ether_hdr *eth_hdr;
-
 	LL head = lc_wmq->head;
 	LL *srv_tsc;
+
+	struct ether_hdr *eth_hdr;
+	char *data_ptr, *name;
 
 	foreach(batch_index, nb_pkts) {
 
@@ -79,18 +80,19 @@ void process_batch_gpu(struct rte_mbuf **pkts, int nb_pkts, int port_id,
 			rte_prefetch0(pkts[batch_index + 1]->pkt.data);
 		}
 
-		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
-
 		/**< Timestamp (client) STAMPed pkts before putting on work queue */
+		eth_hdr = (struct ether_hdr *) pkts[batch_index]->pkt.data;
 		if(unlikely(eth_hdr->s_addr.addr_bytes[0] != 0xef)) {
 			srv_tsc = (LL *) (rte_pktmbuf_mtod(pkts[batch_index], char *) +
 				hdr_size + 12);
 			srv_tsc[0] = rte_rdtsc();
 		}
 
-		/**< Copy the MAC address to wm queue */
-		rte_memcpy((uint8_t *) &(lc_wmq->reqs[head & WM_QUEUE_CAP_].addr_bytes),
-			(char *) eth_hdr->d_addr.addr_bytes, WM_REQ_SIZE);
+		/**< Copy the trace to wm queue */
+		data_ptr = (char *) pkts[batch_index]->pkt.data;
+		name = data_ptr + 36 + sizeof(int) + sizeof(LL);
+		rte_memcpy((uint8_t *) &(lc_wmq->reqs[head & WM_QUEUE_CAP_].bytes),
+			name, WM_REQ_SIZE);
 
 		lc_wmq->mbufs[head & WM_QUEUE_CAP_] = (void *) pkts[batch_index];
 

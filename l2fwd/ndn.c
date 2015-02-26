@@ -191,7 +191,7 @@ int lookup_one_component_gpu_only(char *trace, struct ndn_bucket *ht)
   *  null-terminated strings. */
 int ndn_lookup_gpu_only(struct ndn_trace *t, struct ndn_bucket *ht)
 {
-	char *trace = t->bytes;
+	char *trace = (char *) t->bytes;
 
 	int fwd_port = -1;
 	int c_i, i;	/**< URL char iterator and slot iterator */

@@ -14,7 +14,7 @@ extern "C" {
 #include "util.h"
 }
 
-#define MASTER_TEST_GPU 1	/**< Test NDN hash table impl and exit */
+#define MASTER_TEST_GPU 0	/**< Test NDN hash table impl and exit */
 
 /**< CityHash64 CUDA functions */
 static const uint64_t k0 = 0xc3a5c85c97cb3127ULL;
@@ -274,6 +274,132 @@ void master_gpu(volatile struct wm_queue *wmq, cudaStream_t my_stream,
 	struct ndn_bucket *d_ht,	/**< NDN hash table */
 	int num_workers, int *worker_lcores)
 {
+	assert(num_workers != 0);
+	assert(worker_lcores != NULL);
+	assert(num_workers <= WM_MAX_LCORE);
+	
+	/**< A circular queue iterator. This needs to be 64 bit to go from the old
+	  *  queue head to the new head. */
+	long long cq_i;
+	int err;
+
+	/**< Variables for batch-size and latency averaging measurements */
+	int msr_iter = 0;			/**< Number of kernel launches */
+	long long msr_tot_req = 0;	/**< Total packet serviced by the master */
+	struct timespec msr_start, msr_end;
+	double msr_tot_us = 0;		/**< Total microseconds over all iterations */
+
+	/**< The GPU-buffer (h_reqs) start index for a worker's packets during a
+	  *  kernel launch. */
+	int req_lo[WM_MAX_LCORE] = {0};
+
+	/**< Number of requests that we'll send to the GPU = nb_req. We don't need
+	  *  to worry about nb_req overflowing the capacity of h_reqs because it
+	  *  fits all WM_MAX_LCORE. */
+	int nb_req = 0;
+
+	/**< Value of the queue-head from an lcore during the last iteration*/
+	long long prev_head[WM_MAX_LCORE] = {0}, new_head[WM_MAX_LCORE] = {0};
+	
+	int w_i, w_lid;		/**< A worker-iterator and the worker's lcore-id */
+	volatile struct wm_queue *lc_wmq;	/**< Work queue of one worker */
+
+	clock_gettime(CLOCK_REALTIME, &msr_start);
+
+	while(1) {
+
+		/**< Copy all the requests supplied by workers into the contiguous 
+		  *  h_reqs buffer. */
+		for(w_i = 0; w_i < num_workers; w_i ++) {
+			w_lid = worker_lcores[w_i];		/**< Don't use w_i after this */
+			lc_wmq = &wmq[w_lid];
+			
+			/**< Snapshot this worker queue's head. lc_wmq->head is the number
+			  *  entries queued by this worker, so the entries in the queue up
+			  *  to index (lc_wmq->head - 1) are definitely valid. */
+			new_head[w_lid] = lc_wmq->head;
+
+			/**< Record the beginning of the GPU req. buffer for this lcore */
+			req_lo[w_lid] = nb_req;
+
+			/**< Add the new requests from this worker to the GPU req. buffer */
+			for(cq_i = prev_head[w_lid]; cq_i < new_head[w_lid]; cq_i ++) {
+				int q_i = cq_i & WM_QUEUE_CAP_;	/**< Actual queue offset */
+
+				memcpy((uint8_t *) &h_reqs[nb_req],
+					(uint8_t *) lc_wmq->reqs[q_i].bytes, WM_REQ_SIZE);
+				nb_req ++;
+			}
+		}
+
+		if(nb_req == 0) {	/**< No new packets from any worker? */
+			continue;
+		}
+
+		/**< Copy requests to device */
+		err = cudaMemcpyAsync(d_reqs, h_reqs, nb_req * WM_REQ_SIZE,
+			cudaMemcpyHostToDevice, my_stream);
+		CPE(err != cudaSuccess, "Failed to copy requests h2d\n");
+
+		/**< Kernel launch */
+		int threadsPerBlock = 256;
+		int blocksPerGrid = (nb_req + threadsPerBlock - 1) / threadsPerBlock;
+	
+		ndnGpu<<<blocksPerGrid, threadsPerBlock, 0, my_stream>>>(d_reqs, 
+			d_resps, d_ht, nb_req);
+		err = cudaGetLastError();
+		CPE(err != cudaSuccess, "Failed to launch ndnGpu kernel\n");
+
+		/**< Copy responses from device */
+		err = cudaMemcpyAsync(h_resps, d_resps, nb_req * WM_RESP_SIZE,
+			cudaMemcpyDeviceToHost, my_stream);
+		CPE(err != cudaSuccess, "Failed to copy responses d2h\n");
+
+		/**< Synchronize all CUDA operations */
+		cudaStreamSynchronize(my_stream);
+		
+		/**< Copy the responses back to worker queues */
+		for(w_i = 0; w_i < num_workers; w_i ++) {
+			w_lid = worker_lcores[w_i];		/**< Don't use w_i after this */
+			lc_wmq = &wmq[w_lid];
+
+			for(cq_i = prev_head[w_lid]; cq_i < new_head[w_lid]; cq_i ++) {
+				/**< Offset in this workers' queue and the GPU req. buffer */
+				int q_i = cq_i & WM_QUEUE_CAP_;				
+				int req_i = req_lo[w_lid] + (cq_i - prev_head[w_lid]);
+				lc_wmq->resps[q_i] = h_resps[req_i];
+			}
+
+			prev_head[w_lid] = new_head[w_lid];
+		
+			/**< Update tail for this worker: the master has processed packets
+			  *  up to index (new_head[w_lid] - 1) for this worker, so total
+			  *  number of processed packets is new_head[w_lid]. */
+			lc_wmq->tail = new_head[w_lid];
+		}
+
+		/**< Do some GPU-specific measurements */
+		msr_iter ++;
+		msr_tot_req += nb_req;
+
+		if(msr_iter == 100000) {
+			clock_gettime(CLOCK_REALTIME, &msr_end);
+			msr_tot_us = (msr_end.tv_sec - msr_start.tv_sec) * 1000000 +
+				(msr_end.tv_nsec - msr_start.tv_nsec) / 1000;
+
+			blue_printf("\tGPU master: average batch size = %lld\n"
+				"\t\tAverage time for GPU communication = %f us\n",
+				msr_tot_req / msr_iter, msr_tot_us / msr_iter);
+
+			msr_iter = 0;
+			msr_tot_req = 0;
+
+			/**< Start the next measurement */
+			clock_gettime(CLOCK_REALTIME, &msr_start);
+		}
+
+		nb_req = 0;
+	}
 }
 
 /**< Test the CUDA kernel by comparing outputs with NDN lib

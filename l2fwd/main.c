@@ -8,6 +8,11 @@ ULL *mac_addrs;
 static struct ether_addr l2fwd_ports_eth_addr[RTE_MAX_ETHPORTS]; /**< MACs */
 struct rte_mempool *l2fwd_pktmbuf_pool[RTE_MAX_LCORE];	/**< Per lcore mempools */
 
+/**< Global NDN data structures */
+struct ndn_bucket *ht;
+struct ndn_name *name_arr;
+int nb_names;
+
 /**< Disable all offload features */
 static const struct rte_eth_conf port_conf = {
 	.rxmode = {
@@ -51,7 +56,7 @@ static int
 l2fwd_launch_one_lcore(__attribute__((unused)) void *dummy)
 {
 	if(is_client) {
-		run_client(client_id, mac_addrs, l2fwd_pktmbuf_pool);
+		run_client(client_id, name_arr, nb_names, l2fwd_pktmbuf_pool);
 	} else {
 		run_server(wmq);
 	}
@@ -73,8 +78,8 @@ main(int argc, char **argv)
 		client_id = atoi(argv[6]);
 
 		red_printf("Counting and reading NDN names..\n");
-		nb_names = ndn_get_num_lines(NAME_FILE);
-		name_arr = ndn_get_name_array(NAME_FILE);
+		nb_names = ndn_get_num_lines(NDN_NAME_FILE);
+		name_arr = ndn_get_name_array(NDN_NAME_FILE);
 		red_printf("\tReading %d NDN probe names.\n", nb_names);
 	} else {
 		is_client = 0;

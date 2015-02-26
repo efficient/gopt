@@ -14,7 +14,7 @@ APP = l2fwd
 SRCS-y := main.c common.c server.c client.c ndn.c city.c util.c
 
 CFLAGS += -O3
-CFLAGS += $(WERROR_FLAGS) -Wno-missing-prototypes -Wno-missing-declarations
+CFLAGS += $(WERROR_FLAGS) -Wno-missing-prototypes -Wno-missing-declarations -Wno-unused-result
 
 include $(RTE_SDK)/mk/rte.extapp.mk
 
