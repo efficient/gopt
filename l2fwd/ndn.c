@@ -83,7 +83,7 @@ int ndn_ht_insert(const char *prefix, int len,
 	int is_terminal, int dst_port, struct ndn_bucket *ht) 
 {
 	/**< A prefix ends with a '/', so it contains at least 2 characters */
-	assert(len >= 2 && len <= NDN_MAX_URL_LENGTH && len < 256);
+	assert(len >= 2 && len <= NDN_MAX_NAME_LENGTH && len < 256);
 	assert(prefix[len - 1] == '/');
 
 	assert(is_terminal == 0 || is_terminal == 1);
@@ -134,10 +134,148 @@ int ndn_ht_insert(const char *prefix, int len,
 	return -1;
 }
 
+/**< Try to find a match for the 1st component of this trace in the hash
+  *  table. This function gets called when the clever matching trick of
+  *  starting from 2nd component matches fails.
+  *
+  *  This is a specialized function that works for fixed length traces of
+  *  length NDN_TRACE_LEN. The corresponding function in the CPU-only NDN
+  *  implementation works for null-terminatd traces. */
+int lookup_one_component_gpu_only(char *trace, struct ndn_bucket *ht)
+{
+	int c_i, i;	/**< URL char iterator and slot iterator */
+	int bkt_num, bkt_1, bkt_2;
+
+	for(c_i = 0; c_i < NDN_TRACE_LEN; c_i ++) {
+		if(trace[c_i] == '/') {
+			break;
+		}
+	}
+
+	/**< c_i is now at the boundary of the 1st component */
+	uint64_t prefix_hash = CityHash64(trace, c_i + 1);
+	uint16_t tag = prefix_hash >> 48;
+
+	struct ndn_slot *slots;
+
+	/**< trace[0] -> trace[c_i] is a prefix of length c_i + 1 */
+	for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
+		if(bkt_num == 1) {
+			bkt_1 = prefix_hash & NDN_NUM_BKT_;
+			slots = ht[bkt_1].slots;
+		} else {
+			bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
+			slots = ht[bkt_2].slots;
+		}
+
+		/**< Now, "slots" points to an ndn_bucket. Find a valid slot
+		  *  that contains the same hash. */
+		for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+			int8_t _dst_port = slots[i].dst_port;
+			uint64_t _hash = slots[i].cityhash;
+
+			if(_dst_port >= 0 && _hash == prefix_hash) {
+
+				/**< As we're only matching this component, we're done! */
+				return slots[i].dst_port;
+			}
+		}
+	}
+
+	/**< No match even for the 1st component? */
+	return -1;
+}
+
+/**< A specialized NDN lookup function that works for fixed-size traces of
+  *  length NDN_TRACE_LEN bytes. The general function works for
+  *  null-terminated strings. */
+int ndn_lookup_gpu_only(struct ndn_trace *t, struct ndn_bucket *ht)
+{
+	char *trace = (char *) t->bytes;
+
+	int fwd_port = -1;
+	int c_i, i;	/**< URL char iterator and slot iterator */
+	int bkt_num, bkt_1 = 0, bkt_2;
+
+	int terminate = 0;			/**< Stop processing this URL? */
+	int prefix_match_found = 0;	/**< Stop this hash-table lookup ? */
+
+	/**< Completely ignore 1-component matches */		
+	for(c_i = 0; c_i < NDN_TRACE_LEN; c_i ++) {
+		if(trace[c_i] == '/') {
+			break;
+		}
+	}
+	c_i ++;
+
+	for(; c_i < NDN_TRACE_LEN; c_i ++) {
+		if(trace[c_i] != '/') {
+			continue;
+		}
+
+		/**< c_i is now at the boundary of a component longer than the 1st */
+		uint64_t prefix_hash = CityHash64(trace, c_i + 1);
+		uint16_t tag = prefix_hash >> 48;
+
+		struct ndn_slot *slots;
+
+		/**< trace[0] -> trace[c_i] is a prefix of length c_i + 1 */
+		for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
+			if(bkt_num == 1) {
+				bkt_1 = prefix_hash & NDN_NUM_BKT_;
+				slots = ht[bkt_1].slots;
+			} else {
+				bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
+				slots = ht[bkt_2].slots;
+			}
+
+			/**< Now, "slots" points to an ndn_bucket. Find a valid slot
+			  *  that contains the same hash. */
+			for(i = 0; i < NDN_NUM_SLOTS; i ++) {
+				int8_t _dst_port = slots[i].dst_port;
+				uint64_t _hash = slots[i].cityhash;
+
+				if(_dst_port >= 0 && _hash == prefix_hash) {
+
+					/**< Record the dst port: this may get overwritten by
+					  *  longer prefix matches later */
+					fwd_port = slots[i].dst_port;
+
+					if(slots[i].is_terminal == 1) {
+						/**< A terminal FIB entry: we're done! */
+						terminate = 1;
+					}
+
+					prefix_match_found = 1;
+					break;
+				}
+			}
+
+			/**< Stop the hash-table lookup for trace[0 ... c_i] */
+			if(prefix_match_found == 1) {
+				break;
+			}
+		}
+
+		/**< Stop processing the trace if we found a terminal FIB entry */
+		if(terminate == 1) {
+			break;
+		}
+	}	/**< Loop over trace characters ends here */
+
+	/**< We failed to match with prefixes that contain 2 or more
+	  *  components. Try matching the 1st component of this trace now */
+	if(fwd_port == -1) {
+		fwd_port = lookup_one_component_gpu_only(trace, ht);
+	}
+
+	return fwd_port;
+}
+
 void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 {
 	int i, j, nb_urls = 0;
-	char url[NDN_MAX_URL_LENGTH] = {0};
+	char url[NDN_MAX_NAME_LENGTH] = {0};
 	int shm_flags = IPC_CREAT | 0666 | SHM_HUGETLB;
 
 	int index_size = (int) (NDN_NUM_BKT * sizeof(struct ndn_bucket));
@@ -175,7 +313,7 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 
 		int url_len = strlen(url);
 		assert(url[url_len - 1] == '/' && url[url_len] == 0);
-		assert(url_len < NDN_MAX_URL_LENGTH - 3);	/**< Plenty of headroom */
+		assert(url_len < NDN_MAX_NAME_LENGTH - 3);	/**< Plenty of headroom */
 
 		/**< The destination port for all prefixes from this URL */
 		int dst_port = port_arr[rand() % num_active_ports];
@@ -207,7 +345,7 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 			}
 		}
 		
-		memset(url, 0, NDN_MAX_URL_LENGTH * sizeof(char));
+		memset(url, 0, NDN_MAX_NAME_LENGTH * sizeof(char));
 		nb_urls ++;
 
 		if((nb_urls & K_512_) == 0) {
@@ -217,48 +355,6 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht)
 
 	red_printf("ndn: Total urls = %d. Fails = %d.\n", nb_urls, nb_fail);
 
-}
-
-/**< Check if all the URLs in "urls_file" are inserted in the hash table.
-  *  WARNING: Will mess up the hash table's log (is_terminal and dst port) */
-void ndn_check(const char *urls_file, struct ndn_bucket *ht)
-{
-	int nb_urls = 0;
-	char url[NDN_MAX_URL_LENGTH] = {0};
-
-	FILE *url_fp = fopen(urls_file, "r");
-	assert(url_fp != NULL);
-
-	int is_terminal = 0, dst_port = -1, len;
-	while(1) {
-
-		/**< Read a new URL from the file and check if its valid */
-		fscanf(url_fp, "%s", url);
-		if(url[0] == 0) {
-			break;
-		}
-
-		assert(url[NDN_MAX_URL_LENGTH - 1] == 0);
-
-		int i;
-		for(i = 0; i < NDN_MAX_URL_LENGTH - 1; i ++) {
-			if(url[i] == '/') {
-				len = i + 1;
-				if(ndn_contains(url, len, is_terminal, dst_port, ht) == 0) {
-					printf("ndn: Prefix %s absent.\n",
-						ndn_get_prefix(url, i + 1));
-					assert(0);
-				}
-			}
-		}
-		
-		memset(url, 0, NDN_MAX_URL_LENGTH);
-		nb_urls ++;
-
-		if((nb_urls & K_512_) == 0) {
-			printf("ndn: Checked %d URLs.\n", nb_urls);
-		}
-	}
 }
 
 /**< Return the number of lines in a file */
@@ -323,14 +419,14 @@ struct ndn_name *ndn_get_name_array(const char *names_file)
 		if(temp_name[0] == 0) {
 			break;
 		}
-		assert(temp_name[NDN_MAX_URL_LENGTH - 1] == 0);
+		assert(temp_name[NDN_MAX_NAME_LENGTH - 1] == 0);
 
 		int len = strlen(temp_name);
 		tot_len += len;
 
 		/**< The file's names should end with a '/' */
 		assert(temp_name[len - 1] == '/');
-		memcpy(name_arr[i].name, temp_name, len);
+		memcpy(name_arr[i].bytes, temp_name, len);
 		memset(temp_name, 0, NDN_MAX_NAME_LENGTH);
 	}
 
@@ -355,9 +451,9 @@ void ndn_print_url_stats(const char *urls_file)
 {
 	int i;
 
-	/**< Maximum number of components = 5 */
-	int components_stats[NDN_MAX_URL_LENGTH + 1] = {0};
-	char url[NDN_MAX_URL_LENGTH] = {0};
+	/**< Maximum number of components = 15 */
+	int components_stats[NDN_MAX_NAME_LENGTH + 1] = {0};
+	char url[NDN_MAX_NAME_LENGTH] = {0};
 
 	FILE *url_fp = fopen(urls_file, "r");
 	assert(url_fp != NULL);
@@ -367,13 +463,13 @@ void ndn_print_url_stats(const char *urls_file)
 		if(url[0] == 0) {
 			break;
 		}
-		assert(url[NDN_MAX_URL_LENGTH - 1] == 0);
+		assert(url[NDN_MAX_NAME_LENGTH - 1] == 0);
 
 		int num_components = ndn_num_components(url);
 		assert(num_components <= NDN_MAX_COMPONENTS);
 		components_stats[num_components] ++;
 	
-		memset(url, 0, NDN_MAX_URL_LENGTH);
+		memset(url, 0, NDN_MAX_NAME_LENGTH);
 	}
 
 	red_printf("ndn: URL stats:\n");
@@ -387,7 +483,7 @@ void ndn_print_url_stats(const char *urls_file)
 inline int ndn_num_components(const char *url)
 {
 	int i, num_slash = 0;
-	for(i = 0; i < NDN_MAX_URL_LENGTH; i ++) {
+	for(i = 0; i < NDN_MAX_NAME_LENGTH; i ++) {
 		if(url[i] == '/') {
 			num_slash ++;
 		}

@@ -74,14 +74,14 @@ main(int argc, char **argv)
 		client_id = atoi(argv[6]);
 
 		red_printf("Counting and reading NDN names..\n");
-		nb_names = ndn_get_num_lines(NAME_FILE);
-		name_arr = ndn_get_name_array(NAME_FILE);
+		nb_names = ndn_get_num_lines(NDN_NAME_FILE);
+		name_arr = ndn_get_name_array(NDN_NAME_FILE);
 		red_printf("\tReading %d NDN probe names.\n", nb_names);
 	} else {
 		is_client = 0;
 
 		red_printf("Creating NDN hash index..\n");
-		ndn_init(URL_FILE, XIA_R2_PORT_MASK, &ht);
+		ndn_init(NDN_NAME_FILE, XIA_R2_PORT_MASK, &ht);
 		red_printf("\tCreating NDN hash index done!\n");
 	}
 

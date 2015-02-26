@@ -60,7 +60,7 @@ int lookup_one_component(char *name, struct ndn_bucket *ht)
 	int c_i, i;	/**< URL char iterator and slot iterator */
 	int bkt_num, bkt_1, bkt_2;
 
-	for(c_i = 0; c_i < NDN_MAX_URL_LENGTH; c_i ++) {
+	for(c_i = 0; c_i < NDN_MAX_NAME_LENGTH; c_i ++) {
 		if(name[c_i] == '/') {
 			break;
 		}

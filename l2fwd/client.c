@@ -69,6 +69,8 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 			ip_hdr = (struct ipv4_hdr *) ((char *) eth_hdr + sizeof(struct ether_hdr));
 		
 			src_mac_ptr = &eth_hdr->s_addr.addr_bytes[0];
+
+			/**< Occassionally, put the correct src mac address */
 			if((fastrand(&rss_seed) & 0xff) == 0) {
 				set_mac(src_mac_ptr, src_mac_arr[client_id][port_id]);
 			} else {
@@ -99,22 +101,22 @@ void run_client(int client_id, struct ndn_name *name_arr, int nb_names,
 			char *name_ptr = data_ptr + hdr_size + sizeof(int) + sizeof(LL);
 
 			/**< Copy name to pkt. Adds the terminating 0 char. */
-			strcpy(name_ptr, name_arr[name_i + i].name);
+			strcpy(name_ptr, (char *) name_arr[name_i + i].bytes);
 
 			/**< Extend or truncate the name to exactly 32 bytes */
 			int name_len = strlen(name_ptr);
-			if(name_len <= NDN_NAME_LEN) {
+			if(name_len <= NDN_TRACE_LEN) {
 				int c_i;
-				for(c_i = name_len; c_i < NDN_NAME_LEN; c_i ++) {
+				for(c_i = name_len; c_i < NDN_TRACE_LEN; c_i ++) {
 					name_ptr[c_i] = 'a' + (fastrand(&rss_seed) & 0xf);
 				}
-				name_ptr[NDN_NAME_LEN] = 0;
+				name_ptr[NDN_TRACE_LEN] = 0;
 			} else {
-				name_ptr[NDN_NAME_LEN] = 0;
+				name_ptr[NDN_TRACE_LEN] = 0;
 			}
 
 			int pkt_size = hdr_size + sizeof(int) + sizeof(long long) +
-				NDN_NAME_LEN + 1;	/**< Include the null terminator. */
+				NDN_TRACE_LEN + 1;	/**< Include the null terminator. */
 
 			tx_pkts_burst[i]->pkt.nb_segs = 1;
 			tx_pkts_burst[i]->pkt.pkt_len = pkt_size;

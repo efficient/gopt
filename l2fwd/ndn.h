@@ -3,29 +3,28 @@
 #define NDN_DEBUG 0
 
 #if NDN_DEBUG == 1
-#define URL_FILE "../data_dump/ndn/fib_test"
-#define NAME_FILE "../data_dump/ndn/name_test"
+#define NDN_NAME_FILE "../data_dump/ndn/fib_test"
+#define NDN_TRACE_FILE "../data_dump/ndn/name_test"
 #else
-#define URL_FILE "../data_dump/ndn/fib_1010"
-#define NAME_FILE "../data_dump/ndn/fib_1010"
+#define NDN_NAME_FILE "../data_dump/ndn/fib_1010"
+#define NDN_TRACE_FILE "../data_dump/ndn/fib_1010"
 #endif
 
 #define NDN_SEED 3185
 
-/**< SHM key for the hash-table index */
+/**< SHM key for the NDN hash table */
 #define NDN_HT_INDEX_KEY 1
 
 /**< SHM key for for the names array */
 #define NDN_NAMES_KEY 2
 
-/**< The longest URL in Tsinghua's 10M FIB is 97 bytes*/
-#define NDN_MAX_URL_LENGTH 150
-#define NDN_LOG_HEADROOM (NDN_MAX_URL_LENGTH * 3)
+/**< The longest name in Tsinghua's 10M FIB is 97 bytes*/
+#define NDN_MAX_NAME_LENGTH 150
+#define NDN_LOG_HEADROOM (NDN_MAX_NAME_LENGTH * 3)
 
 /**< More than 98% of URLs in Tsinghua's FIB have length <= 32 bytes */
-#define NDN_NAME_LEN 32
+#define NDN_TRACE_LEN 32
 
-#define NDN_MAX_NAME_LENGTH 192		/**< For struct ndn_name */
 #define NDN_MAX_LINE_LENGTH 10000	/**< For ndn_get_num_lines() */
 
 /**< The maximum number of components is Tsinghua's 10M FIB is 13 */
@@ -65,10 +64,16 @@ struct ndn_bucket
 	struct ndn_slot slots[NDN_NUM_SLOTS];
 };
 
-/**< For storing URLs linearly */
+/**< For representing NDN traces in fixed-size slots */
+struct ndn_trace
+{
+	uint8_t bytes[NDN_TRACE_LEN];
+};
+
+/**< For representing NDN names (prefixes) in fixed-size slots*/
 struct ndn_name
 {
-	char name[NDN_MAX_NAME_LENGTH];
+	uint8_t bytes[NDN_MAX_NAME_LENGTH];
 };
 
 /**< These macros should be safe for use with the ANTLR code */
@@ -86,9 +91,6 @@ void ndn_init(const char *urls_file, int portmask, struct ndn_bucket **ht);
 int ndn_ht_insert(const char *url, int len, 
 	int is_terminal, int dst_port_id, struct ndn_bucket *ht);
 
-/**< Check if all the URLs in "urls_file" are inserted in the hash table */
-void ndn_check(const char *urls_file, struct ndn_bucket *ht);
-
 /**< Return the number of lines in a file */
 int ndn_get_num_lines(const char *file_name);
 
@@ -104,3 +106,4 @@ inline int ndn_num_components(const char *url);
 /**< Create a mutable prefix from a URL */
 char *ndn_get_prefix(const char *url, int len);
 
+int ndn_lookup_gpu_only(struct ndn_trace *t, struct ndn_bucket *ht);
