@@ -8,7 +8,7 @@ function blue() {
 blue "Removing hugepage key LOG_KEY"
 sudo ipcrm -M 1
 
-blue "Re-compiline cpu code"
+blue "Re-compiling cpu code"
 make clean
 make cpu
 
