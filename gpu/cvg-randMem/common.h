@@ -5,7 +5,7 @@
 #define GPU_MAX_PKTS (32768 * 128) /**< Max packets to use for GPU */
 #define GPU_ITERS 10 /**< Iters to average GPU measurements */
 
-#define CPU_MAX_THREADS 8
+#define CPU_MAX_THREADS 14
 #define CPU_NUM_STREAMS 16 /**< Number of concurrent streams for CPU */
 #define CPU_ITERS 10000000 /**< Iters to average CPU measurements */
 
