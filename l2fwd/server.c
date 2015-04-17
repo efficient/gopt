@@ -76,11 +76,9 @@ int lookup_one_component(char *name, struct ndn_bucket *ht)
 	for(bkt_num = 1; bkt_num <= 2; bkt_num ++) {
 		if(bkt_num == 1) {
 			bkt_1 = prefix_hash & NDN_NUM_BKT_;
-			FPP_EXPENSIVE(&ht[bkt_1]);
 			slots = ht[bkt_1].slots;
 		} else {
 			bkt_2 = (bkt_1 ^ CityHash64((char *) &tag, 2)) & NDN_NUM_BKT_;
-			FPP_EXPENSIVE(&ht[bkt_2]);
 			slots = ht[bkt_2].slots;
 		}
 
