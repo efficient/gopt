@@ -17,4 +17,4 @@ sudo taskset -c 0,2,4,6,8,10,12,14 ./cpu $num_threads
 
 # 2697 v3
 # num_threads=14
-# sudo taskset -c 0,1,2,3,4,5,6,7,8,9,10,11,12,13 ./cpu $num_threads
+# sudo taskset -c 0,2,4,6,8,10,12,14,16,18,20,22,24,26 ./cpu $num_threads
