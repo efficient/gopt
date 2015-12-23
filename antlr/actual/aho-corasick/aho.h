@@ -8,9 +8,9 @@
 #define AHO_ALPHA_SIZE 256
 
 /* Just some reasonable numbers */
-#define AHO_MAX_PATTERNS (128 * 1024)
+#define AHO_MAX_PATTERNS (32 * 1024)
 #define AHO_MAX_PATTERN_LEN (1024)
-#define AHO_MAX_THREADS 16
+#define AHO_MAX_THREADS 28
 
 #define AHO_MAX_DFA 450
 
@@ -21,7 +21,7 @@
 #define AHO_PATTERN_FILE "../../../data_dump/snort/snort_dfa_patterns"
 
 #define AHO_PACKET_FILE "../../../data_dump/snort/snort_packets"
-#define AHO_MAX_PKTS (32 * 1024)	/* Reading 2M packets takes a long time */
+#define AHO_MAX_PKTS (128 * 1024)	/* Reading 2M packets takes a long time */
 
 struct aho_dfa {
 	int id;
@@ -48,7 +48,15 @@ struct aho_pattern {
 	uint8_t *content;		/* Contents of this pattern */
 };
 
+/* Per-thread stats */
+struct stat_t {
+	long long pad[7];
+	double tput;
+};
+
 struct aho_ctrl_blk {
+	struct stat_t *stats;			/* A pointer to shared statistics array */
+	int tot_threads;				/* Total number of threads used */
 	int tid;						/* Thread ID */
 	struct aho_dfa *dfa_arr;		/* The shared DFAs */
 

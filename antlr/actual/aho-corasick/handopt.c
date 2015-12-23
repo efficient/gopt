@@ -1,6 +1,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
+#include<malloc.h>
 #include<assert.h>
 #include<unistd.h>
 #include<time.h>
@@ -84,8 +85,10 @@ void process_batch_same_dfa_and_len(const struct aho_dfa *dfa,
 			int count = st_arr[state[I]].output.count;
 
 			if(count != 0) {
-				/* This state matches some patterns: copy the pattern IDs
-				  *  to the output */
+				/*
+				 * This state matches some patterns: copy the pattern IDs
+				 * to the output
+				 */
 				int offset = mp_list[I].num_match;
 				memcpy(&mp_list[I].ptrn_id[offset],
 					st_arr[state[I]].out_arr, count * sizeof(uint16_t));
@@ -116,8 +119,10 @@ void process_batch_diff(const struct aho_dfa *dfa_arr,
 			int count = st_arr[state].output.count;
 
 			if(count != 0) {
-				/* This state matches some patterns: copy the pattern IDs
-				  *  to the output */
+				/*
+				 * This state matches some patterns: copy the pattern IDs
+				 * to the output
+				 */
 				int offset = mp_list[I].num_match;
 				memcpy(&mp_list[I].ptrn_id[offset],
 					st_arr[state].out_arr, count * sizeof(uint16_t));
@@ -154,7 +159,7 @@ void *ids_func(void *ptr)
 	}
 
 	/* Being paranoid about GCC optimization: ensure that the memcpys in
-	  *  process_batch functions don't get optimized out */
+	 * process_batch functions don't get optimized out */
 	int matched_pat_sum = 0;
 
 	int tot_proc = 0;		/* How many packets did we actually match ? */
@@ -248,9 +253,25 @@ void *ids_func(void *ptr)
 
 		double ns = (end.tv_sec - start.tv_sec) * 1000000000 +
 			(double) (end.tv_nsec - start.tv_nsec);
-		red_printf("ID %d: Rate = %.2f Gbps. tot_success = %d\n", id,
+
+		cb->stats[id].tput = (double) (tot_bytes * 8) / ns;
+
+		/* Thread 0 prints total throughput, all threads print their own */
+		if(id == 0) {
+			double total_rate = 0;
+			int thread_i = 0;
+			for(thread_i = 0; thread_i < cb->tot_threads; thread_i++) {
+				total_rate += cb->stats[thread_i].tput;
+			}
+				
+			red_printf("Thread 0: Total rate across all threads = %.2f Gbps. "
+				"Average rate per thread = %.2f Gbps\n",
+				total_rate, total_rate / cb->tot_threads);
+		}
+	
+		printf("ID %d: Rate = %.2f Gbps. tot_success = %d\n", id,
 			((double) tot_bytes * 8) / ns, tot_success);
-		red_printf("num_pkts = %d, tot_proc = %d, matched_pat_sum = %d\n"
+		printf("num_pkts = %d, tot_proc = %d, matched_pat_sum = %d\n"
 			"same_dfa_and_len %d, same_dfa = %d, diff = %d\n",
 			num_pkts, tot_proc, matched_pat_sum,
 			tot_same_dfa_and_len, tot_same_dfa, tot_diff);
@@ -275,10 +296,15 @@ int main(int argc, char *argv[])
 	assert(argc == 2);
 	assert(BIG_BATCH_SIZE % BATCH_SIZE == 0);
 
+	int num_patterns, num_pkts, i;
+	
 	int num_threads = atoi(argv[1]);
 	assert(num_threads >= 1 && num_threads <= AHO_MAX_THREADS);
 
-	int num_patterns, num_pkts, i;
+	struct stat_t *stats = memalign(64, num_threads * sizeof(struct stat_t));
+	for(i = 0; i < num_threads; i++) {
+		stats[i].tput = 0;
+	}
 
 	struct aho_pattern *patterns;
 	struct aho_pkt *pkts;
@@ -315,6 +341,8 @@ int main(int argc, char *argv[])
 	pkts = aho_get_pkts(AHO_PACKET_FILE, &num_pkts);
 	
 	for(i = 0; i < num_threads; i++) {
+		worker_cb[i].stats = stats;
+		worker_cb[i].tot_threads = num_threads;
 		worker_cb[i].tid = i;
 		worker_cb[i].dfa_arr = dfa_arr;
 		worker_cb[i].pkts = pkts;
@@ -323,7 +351,7 @@ int main(int argc, char *argv[])
 		pthread_create(&worker_threads[i], NULL, ids_func, &worker_cb[i]);
 
 		/* Ensure that threads don't use the same packets close in time */
-		sleep(1);
+		sleep(.1);
 	}
 
 	for(i = 0; i < num_threads; i++) {

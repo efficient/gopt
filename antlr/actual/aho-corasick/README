@@ -1,0 +1,5 @@
+Single-socket pattern matching tput (no network I/O)
+
+Machine		Threads		Total throughput (Gbps)		Thread average (Gbps)
+2697-v3		14			61.8						4.42
+2697-v3		28			77.59						2.77
