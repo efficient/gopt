@@ -14,4 +14,4 @@ do {\
 #define BATCH_SIZE 4
 #define BATCH_SIZE_ 3
 
-#define foreach(i, n) for(i = 0; i < n; i ++)
+#define foreach(i, n) for(i = 0; i < n; i++)

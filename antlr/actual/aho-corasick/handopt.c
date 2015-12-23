@@ -13,16 +13,16 @@
 #define BIG_BATCH_SIZE (8 * 1024)
 #define DEBUG 0
 
-/**< Maximum number of patterns a packet can match during its DFA traversal */
+/* Maximum number of patterns a packet can match during its DFA traversal */
 #define MAX_MATCH 8192
 
-/**< A list of patterns matched by a packet */
+/* A list of patterns matched by a packet */
 struct mp_list_t {
 	int num_match;
 	uint16_t ptrn_id[MAX_MATCH];
 };
 
-/**< Sort packets by DFA id. For packets with same dfa_id, sort by length */
+/* Sort packets by DFA id. For packets with same dfa_id, sort by length */
 int compare(const void *p1, const void *p2)
 {
 	const struct aho_pkt *pkt_1 = p1;
@@ -45,12 +45,12 @@ void process_batch_same_dfa(const struct aho_dfa *dfa,
 	struct aho_state *st_arr = dfa->root;
 
 	int max_len = 0;
-	for(I = 0; I < BATCH_SIZE; I ++) {
+	for(I = 0; I < BATCH_SIZE; I++) {
 		max_len = pkts[I].len > max_len ? pkts[I].len : max_len;
 	}
 
-	for(j = 0; j < max_len; j ++) {
-		for(I = 0; I < BATCH_SIZE; I ++) {
+	for(j = 0; j < max_len; j++) {
+		for(I = 0; I < BATCH_SIZE; I++) {
 			if(j >= pkts[I].len) {
 				continue;
 			}
@@ -58,7 +58,7 @@ void process_batch_same_dfa(const struct aho_dfa *dfa,
 			int count = st_arr[state[I]].output.count;
 
 			if(count != 0) {
-				/**< This state matches some patterns: copy the pattern IDs
+				/* This state matches some patterns: copy the pattern IDs
 				  *  to the output */
 				int offset = mp_list[I].num_match;
 				memcpy(&mp_list[I].ptrn_id[offset],
@@ -79,12 +79,12 @@ void process_batch_same_dfa_and_len(const struct aho_dfa *dfa,
 	int j = 0, I = 0, state[BATCH_SIZE] = {0};
 	struct aho_state *st_arr = dfa->root;
 
-	for(j = 0; j < len; j ++) {
-		for(I = 0; I < BATCH_SIZE; I ++) {
+	for(j = 0; j < len; j++) {
+		for(I = 0; I < BATCH_SIZE; I++) {
 			int count = st_arr[state[I]].output.count;
 
 			if(count != 0) {
-				/**< This state matches some patterns: copy the pattern IDs
+				/* This state matches some patterns: copy the pattern IDs
 				  *  to the output */
 				int offset = mp_list[I].num_match;
 				memcpy(&mp_list[I].ptrn_id[offset],
@@ -99,24 +99,24 @@ void process_batch_same_dfa_and_len(const struct aho_dfa *dfa,
 	}
 }
 
-/**< Same as noopt's batch-processing function */
+/* Same as noopt's batch-processing function */
 void process_batch_diff(const struct aho_dfa *dfa_arr,
 	const struct aho_pkt *pkts, struct mp_list_t *mp_list)
 {
 	int I, j;
 
-	for(I = 0; I < BATCH_SIZE; I ++) {
+	for(I = 0; I < BATCH_SIZE; I++) {
 		int dfa_id = pkts[I].dfa_id;
 		int len = pkts[I].len;
 		struct aho_state *st_arr = dfa_arr[dfa_id].root;
 		
 		int state = 0;
 
-		for(j = 0; j < len; j ++) {
+		for(j = 0; j < len; j++) {
 			int count = st_arr[state].output.count;
 
 			if(count != 0) {
-				/**< This state matches some patterns: copy the pattern IDs
+				/* This state matches some patterns: copy the pattern IDs
 				  *  to the output */
 				int offset = mp_list[I].num_match;
 				memcpy(&mp_list[I].ptrn_id[offset],
@@ -142,24 +142,24 @@ void *ids_func(void *ptr)
 
 	red_printf("Starting thread %d\n", id);
 
-	/**< Big batch variables */
+	/* Big batch variables */
 	int bb_i = 0;
 	struct aho_pkt *bbatch = malloc(BIG_BATCH_SIZE * sizeof(struct aho_pkt));
 	memset(bbatch, 0, BIG_BATCH_SIZE * sizeof(struct aho_pkt));
 
-	/**< Per-batch matched patterns */
+	/* Per-batch matched patterns */
 	struct mp_list_t mp_list[BATCH_SIZE];
-	for(i = 0; i < BATCH_SIZE; i ++) {
+	for(i = 0; i < BATCH_SIZE; i++) {
 		mp_list[i].num_match = 0;
 	}
 
-	/**< Being paranoid about GCC optimization: ensure that the memcpys in
+	/* Being paranoid about GCC optimization: ensure that the memcpys in
 	  *  process_batch functions don't get optimized out */
 	int matched_pat_sum = 0;
 
-	int tot_proc = 0;		/**< How many packets did we actually match ? */
-	int tot_success = 0;	/**< Packets that matched a DFA state */ 
-	int tot_bytes = 0;		/**< Total bytes matched through DFAs */
+	int tot_proc = 0;		/* How many packets did we actually match ? */
+	int tot_success = 0;	/* Packets that matched a DFA state */ 
+	int tot_bytes = 0;		/* Total bytes matched through DFAs */
 
 	int tot_same_dfa_and_len = 0;
 	int tot_same_dfa = 0;
@@ -169,14 +169,14 @@ void *ids_func(void *ptr)
 		struct timespec start, end;
 		clock_gettime(CLOCK_REALTIME, &start);
 
-		for(i = 0; i < num_pkts; i ++) {
+		for(i = 0; i < num_pkts; i++) {
 
-			/**< Add the new packet to the big batch */
-			bbatch[bb_i] = pkts[i];		/**< Shallow copy */
-			bb_i ++;
+			/* Add the new packet to the big batch */
+			bbatch[bb_i] = pkts[i];		/* Shallow copy */
+			bb_i++;
 
 			if(bb_i == BIG_BATCH_SIZE) {
-				/**< The big batch is full */
+				/* The big batch is full */
 				qsort(bbatch, BIG_BATCH_SIZE, sizeof(struct aho_pkt), compare);
 
 				for(j = 0; j < BIG_BATCH_SIZE; j += BATCH_SIZE) {
@@ -184,7 +184,7 @@ void *ids_func(void *ptr)
 					int _len = bbatch[j].len;
 					int _dfa_id = bbatch[j].dfa_id;
 
-					for(k = j; k < j + BATCH_SIZE; k ++) {
+					for(k = j; k < j + BATCH_SIZE; k++) {
 						if(bbatch[k].len != _len) {
 							same_dfa_and_len = 0;
 						}
@@ -197,24 +197,24 @@ void *ids_func(void *ptr)
 					}
 
 					if(same_dfa_and_len == 1) {
-						tot_same_dfa_and_len ++;
+						tot_same_dfa_and_len++;
 						process_batch_same_dfa_and_len(&dfa_arr[_dfa_id],
 							&bbatch[j], mp_list, _len);
 					} else if(same_dfa == 1) {
-						tot_same_dfa ++;
+						tot_same_dfa++;
 						process_batch_same_dfa(&dfa_arr[_dfa_id],
 							&bbatch[j], mp_list);
 					} else {
-						tot_diff ++;
+						tot_diff++;
 						process_batch_diff(dfa_arr, &bbatch[j], mp_list);
 					}
 
-					for(k = 0; k < BATCH_SIZE; k ++) {
+					for(k = 0; k < BATCH_SIZE; k++) {
 						int num_match = mp_list[k].num_match;
 						assert(num_match < MAX_MATCH);
 
 						tot_success += (num_match == 0 ? 0 : 1);
-						tot_proc ++;
+						tot_proc++;
 						tot_bytes += bbatch[j + k].len;
 
 						int pat_i;
@@ -222,24 +222,24 @@ void *ids_func(void *ptr)
 						#if DEBUG == 1
 						printf("Pkt %d matched: ", bbatch[j + k].pkt_id);
 
-						for(pat_i = 0; pat_i < num_match; pat_i ++) {
+						for(pat_i = 0; pat_i < num_match; pat_i++) {
 							printf("%d ", mp_list[k].ptrn_id[pat_i]);
 							matched_pat_sum += mp_list[k].ptrn_id[pat_i];
 						}
 
 						printf("\n");
 						#else
-						for(pat_i = 0; pat_i < num_match; pat_i ++) {
+						for(pat_i = 0; pat_i < num_match; pat_i++) {
 							matched_pat_sum += mp_list[k].ptrn_id[pat_i];
 						}
 						#endif
 
-						/**< Re-initialize for next iteration */
+						/* Re-initialize for next iteration */
 						mp_list[k].num_match = 0;
 					}
 				}
 
-				/**< Reset big batch index */
+				/* Reset big batch index */
 				bb_i = 0;
 			}
 		}
@@ -259,12 +259,12 @@ void *ids_func(void *ptr)
 		tot_same_dfa = 0;
 		tot_diff = 0;
 
-		matched_pat_sum = 0;	/**< Sum of all matched pattern IDs */
+		matched_pat_sum = 0;	/* Sum of all matched pattern IDs */
 		tot_success = 0;
 		tot_bytes = 0;
 		tot_proc = 0;
 
-		#if DEBUG == 1		/**< Print matched states only once */
+		#if DEBUG == 1		/* Print matched states only once */
 		exit(0);
 		#endif
 	}
@@ -284,14 +284,14 @@ int main(int argc, char *argv[])
 	struct aho_pkt *pkts;
 	struct aho_dfa dfa_arr[AHO_MAX_DFA];
 
-	/**< Thread structures */
+	/* Thread structures */
 	pthread_t worker_threads[AHO_MAX_THREADS];
 	struct aho_ctrl_blk worker_cb[AHO_MAX_THREADS];
 
 	red_printf("State size = %lu\n", sizeof(struct aho_state));
 
-	/**< Initialize the shared DFAs */
-	for(i = 0; i < AHO_MAX_DFA; i ++) {
+	/* Initialize the shared DFAs */
+	for(i = 0; i < AHO_MAX_DFA; i++) {
 		printf("Initializing DFA %d\n", i);
 		aho_init(&dfa_arr[i], i);
 	}
@@ -300,13 +300,13 @@ int main(int argc, char *argv[])
 	patterns = aho_get_patterns(AHO_PATTERN_FILE,
 		&num_patterns);
 
-	for(i = 0; i < num_patterns; i ++) {
+	for(i = 0; i < num_patterns; i++) {
 		int dfa_id = patterns[i].dfa_id;
 		aho_add_pattern(&dfa_arr[dfa_id], &patterns[i], i);
 	}
 
 	red_printf("Building AC failure function\n");
-	for(i = 0; i < AHO_MAX_DFA; i ++) {
+	for(i = 0; i < AHO_MAX_DFA; i++) {
 		aho_build_ff(&dfa_arr[i]);
 		aho_preprocess_dfa(&dfa_arr[i]);
 	}
@@ -314,7 +314,7 @@ int main(int argc, char *argv[])
 	red_printf("Reading packets from file\n");
 	pkts = aho_get_pkts(AHO_PACKET_FILE, &num_pkts);
 	
-	for(i = 0; i < num_threads; i ++) {
+	for(i = 0; i < num_threads; i++) {
 		worker_cb[i].tid = i;
 		worker_cb[i].dfa_arr = dfa_arr;
 		worker_cb[i].pkts = pkts;
@@ -322,15 +322,15 @@ int main(int argc, char *argv[])
 
 		pthread_create(&worker_threads[i], NULL, ids_func, &worker_cb[i]);
 
-		/**< Ensure that threads don't use the same packets close in time */
+		/* Ensure that threads don't use the same packets close in time */
 		sleep(1);
 	}
 
-	for(i = 0; i < num_threads; i ++) {
+	for(i = 0; i < num_threads; i++) {
 		pthread_join(worker_threads[i], NULL);
 	}
 
-	/**< The work never ends */
+	/* The work never ends */
 	assert(0);
 
 	return 0;

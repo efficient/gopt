@@ -16,14 +16,14 @@ void ds_queue_add(struct ds_queue *q, int data)
 {
 	ds_queue_printf("ds_queue: Adding data %d to ds_queue %p\n", data, q);
 
-	/**< Create a new null-terminated node */
+	/* Create a new null-terminated node */
 	struct ds_qnode *new_node = malloc(sizeof(struct ds_qnode));
 	assert(new_node != NULL);
 
 	new_node->data = data;
 	new_node->next = NULL;
 
-	/**< If the queue is empty */
+	/* If the queue is empty */
 	if(q->head == NULL) {
 		q->head = new_node;
 		q->tail = new_node;
@@ -47,7 +47,7 @@ int ds_queue_remove(struct ds_queue *q)
 	data = old_head->data;
 
 	q->head = q->head->next;
-	q->count --;
+	q->count--;
 
 	if(q->head == NULL) {
 		assert(q->count == 0);

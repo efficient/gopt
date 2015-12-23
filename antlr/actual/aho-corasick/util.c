@@ -18,7 +18,7 @@ void red_printf(const char *format, ...)
 	vsnprintf(buf1, RED_LIM, format, args);
 
 	// Probably a bad check for buffer overflow
-	for(i = RED_LIM - 1; i >= RED_LIM - 50; i --) {
+	for(i = RED_LIM - 1; i >= RED_LIM - 50; i--) {
 		assert(buf1[i] == 0);
 	}
 
@@ -26,7 +26,7 @@ void red_printf(const char *format, ...)
 	snprintf(buf2, 1000, "\033[31m%s\033[0m", buf1);
 
 	// Probably another bad check for buffer overflow
-	for(i = RED_LIM - 1; i >= RED_LIM - 50; i --) {
+	for(i = RED_LIM - 1; i >= RED_LIM - 50; i--) {
 		assert(buf2[i] == 0);
 	}
 
@@ -94,7 +94,7 @@ int bitcount(int n)
 {
 	int count = 0;
 	while(n > 0) {
-		count ++;
+		count++;
 		n = n & (n - 1);
 	}
 	return count;
@@ -111,7 +111,7 @@ int *get_active_bits(int mask)
 	for(i = 0; i < 31; i++) {			// Check all (int) bits
 		if(ISSET(mask, i)) {
 			active_bits[pos] = i;
-			pos ++;
+			pos++;
 		}
 	}
 
@@ -146,7 +146,7 @@ inline ULL get_mac(uint8_t *mac_ptr)
 inline void swap_mac(uint8_t *src_mac_ptr, uint8_t *dst_mac_ptr)
 {
 	int i = 0;
-	for(i = 0; i < 6; i ++) {
+	for(i = 0; i < 6; i++) {
 		uint8_t temp = src_mac_ptr[i];
 		src_mac_ptr[i] = dst_mac_ptr[i];
 		dst_mac_ptr[i] = temp;
