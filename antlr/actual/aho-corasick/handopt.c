@@ -351,7 +351,7 @@ int main(int argc, char *argv[])
 		pthread_create(&worker_threads[i], NULL, ids_func, &worker_cb[i]);
 
 		/* Ensure that threads don't use the same packets close in time */
-		sleep(.1);
+		sleep(2);
 	}
 
 	for(i = 0; i < num_threads; i++) {

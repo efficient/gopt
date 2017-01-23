@@ -7,6 +7,13 @@
 #include<sys/shm.h>
 
 #include "aho.h"
+#include "util.h"
+
+/*
+ * DARPA dataset has a lot of packets with identical payload. Enable this
+ * to use random bytes in packets.
+ */
+#define USE_RANDOM_PAYLOAD 1
 
 /* Initialize the state transition table and o/p queues */
 void aho_init(struct aho_dfa *dfa, int id)
@@ -249,6 +256,10 @@ struct aho_pattern
  */
 struct aho_pkt *aho_get_pkts(const char *pkt_file, int *num_pkts)
 {
+#if USE_RANDOM_PAYLOAD == 1
+  uint64_t seed = 0xdeadbeef;
+#endif
+
 	assert(pkt_file != NULL && num_pkts != NULL);
 
 	int i, j;
@@ -298,6 +309,11 @@ struct aho_pkt *aho_get_pkts(const char *pkt_file, int *num_pkts)
 			fscanf(pkt_fp, "%d", &cur_byte);
 			assert(cur_byte >= 0 && cur_byte <= 255);
 			pkts[i].content[j] = (uint8_t) cur_byte;
+
+#if USE_RANDOM_PAYLOAD == 1
+      uint64_t rand = fastrand(&seed);
+			pkts[i].content[j] = (uint8_t) rand;
+#endif
 		}
 
 
